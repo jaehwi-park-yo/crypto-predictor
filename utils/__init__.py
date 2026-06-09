@@ -1,5 +1,6 @@
-"""유틸 패키지 - 빗썸 API 래퍼 + 통계 헬퍼."""
+"""유틸 패키지 - 빗썸 API 래퍼 + 통계 헬퍼 + 장기 히스토리 수집."""
 from utils import bithumb_api
+from utils import historical_data
 from utils.statistics import (
     compute_log_returns,
     daily_volatility,

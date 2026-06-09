@@ -5,6 +5,7 @@ from .box_predictor import BoxPredictorAgent
 from .grid_optimizer import GridOptimizerAgent
 from .reward_calculator import RewardCalculatorAgent
 from .risk_monitor import RiskMonitorAgent
+from .backtester import BacktestAgent
 
 __all__ = [
     "DataCollectorAgent",
@@ -13,4 +14,5 @@ __all__ = [
     "GridOptimizerAgent",
     "RewardCalculatorAgent",
     "RiskMonitorAgent",
+    "BacktestAgent",
 ]

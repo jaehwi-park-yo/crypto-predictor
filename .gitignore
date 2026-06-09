@@ -5,8 +5,9 @@ __pycache__/
 .venv/
 venv/
 
-# 생성된 월간 리포트 (산출물)
+# 생성된 리포트 (산출물)
 reports/*.txt
+reports/*.csv
 
 # OS / IDE
 .DS_Store
