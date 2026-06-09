@@ -1,0 +1,717 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BTC/KRW 박스권 예측 시스템</title>
+<script src="https://cdn.plot.ly/plotly-2.35.0.min.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #0e1117; --panel: #1a1d23; --card: #23262f;
+    --border: #2e3240; --accent: #4f8ef7; --green: #2ca02c;
+    --orange: #ff7f0e; --red: #d62728; --yellow: #f5c518;
+    --text: #e8eaf0; --muted: #8b929e; --font: 'Noto Sans KR', system-ui, sans-serif;
+  }
+  body { background: var(--bg); color: var(--text); font-family: var(--font); min-height: 100vh; }
+  header {
+    background: linear-gradient(135deg, #1a1d23 0%, #23262f 100%);
+    border-bottom: 1px solid var(--border);
+    padding: 18px 32px; display: flex; align-items: center; justify-content: space-between;
+  }
+  header h1 { font-size: 1.25rem; font-weight: 700; letter-spacing: -.3px; }
+  header h1 span { color: var(--accent); }
+  .badge { background: #1e3a5f; color: var(--accent); border: 1px solid #2c5282;
+           font-size: .7rem; padding: 3px 10px; border-radius: 20px; }
+  .notice { background: #1e2a1a; border: 1px solid #2d5a1a; border-radius: 8px;
+            padding: 10px 18px; color: #86c96e; font-size: .8rem; margin: 0 32px 0 0; }
+
+  .layout { display: flex; min-height: calc(100vh - 57px); }
+
+  /* 사이드바 */
+  aside {
+    width: 260px; min-width: 220px; background: var(--panel);
+    border-right: 1px solid var(--border); padding: 24px 18px;
+    display: flex; flex-direction: column; gap: 20px; flex-shrink: 0;
+  }
+  .sb-title { font-size: .72rem; font-weight: 700; color: var(--muted);
+              text-transform: uppercase; letter-spacing: .08em; margin-bottom: 6px; }
+  .sb-group { display: flex; flex-direction: column; gap: 12px; }
+  .sb-item label { font-size: .78rem; color: var(--muted); display: block; margin-bottom: 5px; }
+  .sb-item input[type=range] { width: 100%; accent-color: var(--accent); cursor: pointer; }
+  .sb-item .val { font-size: .85rem; font-weight: 600; color: var(--text); }
+  .sb-item select, .sb-item input[type=number] {
+    width: 100%; background: var(--card); border: 1px solid var(--border);
+    color: var(--text); border-radius: 6px; padding: 6px 10px;
+    font-size: .82rem; font-family: var(--font); cursor: pointer;
+  }
+  .radio-group { display: flex; flex-direction: column; gap: 6px; }
+  .radio-group label { display: flex; align-items: center; gap: 8px;
+    font-size: .82rem; color: var(--text); cursor: pointer; }
+  .radio-group input[type=radio] { accent-color: var(--accent); }
+  .divider { border: none; border-top: 1px solid var(--border); }
+
+  /* 메인 */
+  main { flex: 1; overflow: auto; padding: 24px 28px; display: flex; flex-direction: column; gap: 20px; }
+
+  /* 탭 */
+  .tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--border); margin-bottom: 4px; }
+  .tab {
+    padding: 8px 20px; font-size: .85rem; font-weight: 500; cursor: pointer;
+    border-bottom: 2px solid transparent; color: var(--muted); transition: all .2s;
+    border-radius: 6px 6px 0 0;
+  }
+  .tab.active { color: var(--accent); border-bottom-color: var(--accent); background: rgba(79,142,247,.07); }
+  .tab:hover:not(.active) { color: var(--text); background: var(--card); }
+  .tab-panel { display: none; }
+  .tab-panel.active { display: block; }
+
+  /* 메트릭 카드 */
+  .metrics { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+  .metric {
+    background: var(--card); border: 1px solid var(--border); border-radius: 10px;
+    padding: 14px 16px;
+  }
+  .metric .label { font-size: .72rem; color: var(--muted); margin-bottom: 6px; }
+  .metric .value { font-size: 1.15rem; font-weight: 700; }
+  .metric .sub { font-size: .72rem; color: var(--muted); margin-top: 3px; }
+  .metric.green .value { color: #4ec94e; }
+  .metric.blue  .value { color: var(--accent); }
+  .metric.orange .value { color: var(--orange); }
+  .metric.red .value { color: var(--red); }
+
+  /* 차트 컨테이너 */
+  .chart-box {
+    background: var(--panel); border: 1px solid var(--border); border-radius: 12px;
+    padding: 4px; overflow: hidden;
+  }
+
+  /* 정보 패널 2열 */
+  .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .info-card {
+    background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 16px;
+  }
+  .info-card h3 { font-size: .82rem; color: var(--muted); margin-bottom: 12px;
+                  text-transform: uppercase; letter-spacing: .06em; }
+  table.data { width: 100%; border-collapse: collapse; font-size: .82rem; }
+  table.data tr { border-bottom: 1px solid var(--border); }
+  table.data tr:last-child { border-bottom: none; }
+  table.data td { padding: 7px 4px; }
+  table.data td:first-child { color: var(--muted); }
+  table.data td:last-child { text-align: right; font-weight: 600; }
+
+  /* 상태 배너 */
+  .status-banner {
+    border-radius: 8px; padding: 12px 18px; font-size: .85rem;
+    display: flex; align-items: center; gap: 12px; border: 1px solid;
+  }
+  .status-banner.green  { background: #1a2e1a; border-color: #2d5a1a; color: #86c96e; }
+  .status-banner.yellow { background: #2e2a10; border-color: #5a4a10; color: #d4b44a; }
+  .status-banner.red    { background: #2e1a1a; border-color: #5a1a1a; color: #c96e6e; }
+  .status-banner.blue   { background: #1a222e; border-color: #1a3a5f; color: #6ea8c9; }
+
+  /* 프로그레스 바 */
+  .progress-wrap { background: var(--card); border-radius: 8px; padding: 12px 16px;
+                   border: 1px solid var(--border); }
+  .progress-label { font-size: .78rem; color: var(--muted); margin-bottom: 8px;
+                    display: flex; justify-content: space-between; }
+  .progress-bar { height: 8px; background: var(--border); border-radius: 4px; overflow: hidden; }
+  .progress-fill { height: 100%; background: linear-gradient(90deg, var(--accent), #38e8c8);
+                   border-radius: 4px; transition: width .5s; }
+
+  /* 피드백 폼 */
+  .feedback-section {
+    background: var(--card); border: 1px solid var(--border); border-radius: 12px;
+    padding: 24px; display: flex; flex-direction: column; gap: 14px;
+  }
+  .feedback-section h2 { font-size: 1rem; font-weight: 700; }
+  .feedback-section p { font-size: .82rem; color: var(--muted); line-height: 1.6; }
+  .feedback-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .form-group { display: flex; flex-direction: column; gap: 6px; }
+  .form-group label { font-size: .78rem; color: var(--muted); }
+  .form-group input, .form-group textarea, .form-group select {
+    background: var(--panel); border: 1px solid var(--border); color: var(--text);
+    border-radius: 8px; padding: 9px 13px; font-size: .85rem; font-family: var(--font);
+    resize: vertical; outline: none; transition: border .2s;
+  }
+  .form-group input:focus, .form-group textarea:focus, .form-group select:focus {
+    border-color: var(--accent);
+  }
+  .form-group.full { grid-column: 1 / -1; }
+  .q-row { display: flex; flex-direction: column; gap: 8px; }
+  .q-row label { font-size: .82rem; color: var(--text); font-weight: 500; }
+  .stars { display: flex; gap: 6px; }
+  .stars span { font-size: 1.5rem; cursor: pointer; color: var(--border); transition: color .15s; }
+  .stars span.on, .stars span:hover { color: var(--yellow); }
+  .submit-btn {
+    background: linear-gradient(135deg, #2563eb, #1d4ed8);
+    color: #fff; border: none; border-radius: 8px; padding: 11px 28px;
+    font-size: .9rem; font-weight: 700; cursor: pointer; align-self: flex-start;
+    font-family: var(--font); transition: opacity .2s;
+  }
+  .submit-btn:hover { opacity: .85; }
+  .submit-confirm { display: none; color: #4ec94e; font-size: .85rem; align-items: center; gap: 8px; }
+
+  /* 반응형 */
+  @media (max-width: 900px) {
+    .metrics { grid-template-columns: repeat(2, 1fr); }
+    .info-grid { grid-template-columns: 1fr; }
+    .feedback-grid { grid-template-columns: 1fr; }
+    aside { width: 200px; }
+  }
+  @media (max-width: 640px) {
+    .layout { flex-direction: column; }
+    aside { width: 100%; border-right: none; border-bottom: 1px solid var(--border); padding: 16px; }
+    main { padding: 16px; }
+    .metrics { grid-template-columns: repeat(2, 1fr); }
+    header { padding: 12px 16px; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>📊 BTC/KRW <span>박스권 예측</span> & 그리드 매매 기획 시스템</h1>
+  <div style="display:flex;align-items:center;gap:12px">
+    <div class="notice">⚠️ 합성 데이터 기반 데모 — 실데이터 연동 시 수치 변경됨</div>
+    <span class="badge">Beta v0.1</span>
+  </div>
+</header>
+
+<div class="layout">
+  <!-- 사이드바 -->
+  <aside>
+    <div>
+      <div class="sb-title">⚙️ 파라미터 조정</div>
+      <div style="font-size:.72rem;color:#666;margin-top:4px">※ 데모: 값 조정 시 아래 수치 갱신</div>
+    </div>
+
+    <div class="sb-group">
+      <div class="sb-item">
+        <label>투입 자본 (원)</label>
+        <input type="number" id="capital" value="40000000" step="1000000"
+               style="width:100%" onchange="updateMetrics()">
+      </div>
+      <div class="sb-item">
+        <label>KRW 현금 비중: <span class="val" id="krwVal">30%</span></label>
+        <input type="range" id="krwHold" min="30" max="70" value="30" step="5"
+               oninput="document.getElementById('krwVal').textContent=this.value+'%';updateMetrics()">
+      </div>
+    </div>
+
+    <hr class="divider">
+
+    <div class="sb-group">
+      <div class="sb-item">
+        <label>박스 σ 레벨</label>
+        <div class="radio-group">
+          <label><input type="radio" name="sigma" value="1" checked onchange="updateMetrics()"> 1σ (68.3% 신뢰)</label>
+          <label><input type="radio" name="sigma" value="2" onchange="updateMetrics()"> 2σ (95.5% 신뢰)</label>
+          <label><input type="radio" name="sigma" value="auto" onchange="updateMetrics()"> 자동 (변동성 기반)</label>
+        </div>
+      </div>
+    </div>
+
+    <hr class="divider">
+
+    <div class="sb-group">
+      <div class="sb-item">
+        <label>그리드 공격성</label>
+        <select id="aggr" onchange="updateMetrics()">
+          <option value="conservative">보수 (1.0% 간격)</option>
+          <option value="balanced" selected>균형 (0.5% 간격)</option>
+          <option value="aggressive">공격 (0.3% 간격)</option>
+        </select>
+      </div>
+    </div>
+
+    <hr class="divider">
+
+    <div style="font-size:.72rem;color:var(--muted);line-height:1.6">
+      <div style="margin-bottom:6px;font-weight:600;color:var(--text)">📌 핵심 원칙</div>
+      왕복수수료 <b style="color:#f87">0.08%</b> &gt; 리워드 최대 <b style="color:#8cf">0.02%</b><br>
+      → 실수익원: 그리드 스프레드<br>
+      → 리워드: 수수료 환급 성격<br><br>
+      하방 이탈 시: 30% 손절<br>
+      + KRW 예비금으로 회복 그리드
+    </div>
+  </aside>
+
+  <!-- 메인 -->
+  <main>
+    <!-- 탭 -->
+    <div>
+      <div class="tabs">
+        <div class="tab active" onclick="switchTab('predict',this)">📈 예측 워크벤치</div>
+        <div class="tab" onclick="switchTab('monitor',this)">📡 실시간 모니터</div>
+        <div class="tab" onclick="switchTab('feedback',this)">💬 피드백</div>
+      </div>
+
+      <!-- 탭1: 예측 워크벤치 -->
+      <div id="tab-predict" class="tab-panel active">
+        <div style="margin-top:16px">
+          <div style="font-size:.8rem;color:var(--muted);margin-bottom:12px">
+            기준 시점: <b>2026-04-30</b> → 대상 월: <b>2026-05</b>
+          </div>
+          <div class="metrics" id="metrics-predict">
+            <div class="metric blue">
+              <div class="label">기준가 (4/30 종가)</div>
+              <div class="value" id="m-ref">313,439,106원</div>
+            </div>
+            <div class="metric green">
+              <div class="label">권장 박스 (1σ)</div>
+              <div class="value" id="m-box">폭 35.4%</div>
+              <div class="sub" id="m-box-range">269M ~ 364M원</div>
+            </div>
+            <div class="metric orange">
+              <div class="label">월간 변동성 (σ)</div>
+              <div class="value" id="m-sigma">15.2%</div>
+              <div class="sub" id="m-dsigma">일간 2.77%</div>
+            </div>
+            <div class="metric">
+              <div class="label">예측 신뢰도</div>
+              <div class="value" id="m-conf">68.3%</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="chart-box" style="margin-top:16px">
+          <div id="chart-predict" style="height:480px"></div>
+        </div>
+
+        <div class="info-grid" style="margin-top:16px">
+          <div class="info-card">
+            <h3>📦 박스권 상세</h3>
+            <table class="data">
+              <tr><td>1σ 상단</td><td id="t-u1">364,748,527원</td></tr>
+              <tr><td>1σ 하단</td><td id="t-l1">269,347,415원</td></tr>
+              <tr><td>2σ 상단</td><td id="t-u2">424,457,210원</td></tr>
+              <tr><td>2σ 하단</td><td id="t-l2">231,458,132원</td></tr>
+              <tr><td>권장 상단</td><td id="t-ru" style="color:#4ec94e">364,748,527원</td></tr>
+              <tr><td>권장 하단</td><td id="t-rl" style="color:#4ec94e">269,347,415원</td></tr>
+            </table>
+          </div>
+          <div class="info-card">
+            <h3>🤖 그리드 봇 설정</h3>
+            <table class="data">
+              <tr><td>그리드 간격</td><td id="t-gi">0.50% (1,567,195원)</td></tr>
+              <tr><td>봇 수</td><td id="t-bots">71개</td></tr>
+              <tr><td>그리드 투입</td><td id="t-dep">28,000,000원</td></tr>
+              <tr><td>KRW 예비금</td><td id="t-res">12,000,000원</td></tr>
+              <tr><td>봇당 자본</td><td id="t-pbot">394,366원</td></tr>
+              <tr><td>예상 월거래량</td><td id="t-vol">69.8억</td></tr>
+              <tr><td>예상 리워드</td><td id="t-rew">1,046,258원</td></tr>
+            </table>
+          </div>
+        </div>
+
+        <div class="info-grid" style="margin-top:0">
+          <div class="info-card" style="background:#1a2e1a;border-color:#2d5a1a">
+            <h3 style="color:#6ec96e">🎯 안전 목표 (리워드)</h3>
+            <div style="font-size:.9rem;font-weight:700;margin-bottom:6px">10억 거래량 → 리워드 150,000원</div>
+            <div style="font-size:.78rem;color:#86c96e">필요 일회전율 0.83배 — 여유롭게 달성 가능</div>
+          </div>
+          <div class="info-card" style="background:#2e2a10;border-color:#5a4a10">
+            <h3 style="color:#d4b44a">🚀 스트레치 목표 (리워드)</h3>
+            <div style="font-size:.9rem;font-weight:700;margin-bottom:6px">100억 거래량 → 리워드 1,800,000원</div>
+            <div style="font-size:.78rem;color:#d4b44a">필요 일회전율 8.33배 — 공격적 운영 필요</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 탭2: 실시간 모니터 -->
+      <div id="tab-monitor" class="tab-panel">
+        <div style="margin-top:16px;display:flex;flex-direction:column;gap:14px">
+          <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+            <h2 style="font-size:1rem">📡 2026-05 예측→측정 전환 모니터</h2>
+            <span style="background:#1e3a5f;color:var(--accent);border:1px solid #2c5282;
+                         border-radius:20px;padding:3px 12px;font-size:.75rem">
+              🟢 ON_TRACK
+            </span>
+            <span style="font-size:.8rem;color:var(--muted)">기준일: 2026-05-15 | 데이터: 히스토리(합성)</span>
+          </div>
+
+          <div class="progress-wrap">
+            <div class="progress-label">
+              <span>예측 → 측정 전환</span>
+              <span id="prog-label">15 / 31일 완료 (48%)</span>
+            </div>
+            <div class="progress-bar">
+              <div class="progress-fill" id="prog-fill" style="width:48%"></div>
+            </div>
+          </div>
+
+          <div class="status-banner green">
+            <span style="font-size:1.2rem">✅</span>
+            <div>
+              <div style="font-weight:700">15/31일 경과 (48%) — Containment 100%</div>
+              <div style="font-size:.78rem;margin-top:3px;opacity:.8">정상 운영 유지.</div>
+            </div>
+          </div>
+
+          <div style="background:#1a222e;border:1px solid #1a3a5f;border-radius:8px;padding:12px 16px;font-size:.82rem;color:#6ea8c9">
+            💱 현재가 (히스토리 폴백): <b style="color:#fff;font-size:.9rem">337,454,075원</b>
+            &nbsp;|&nbsp; 원본 기준가: 313,439,106원
+            &nbsp;|&nbsp; <span style="color:#4ec94e">+7.7%</span>
+          </div>
+
+          <div class="metrics">
+            <div class="metric green">
+              <div class="label">측정 Containment</div>
+              <div class="value">100%</div>
+              <div class="sub">경과일 모두 박스 내</div>
+            </div>
+            <div class="metric">
+              <div class="label">경고 구간 일수</div>
+              <div class="value">0일</div>
+            </div>
+            <div class="metric">
+              <div class="label">σ 변화 (수정예측)</div>
+              <div class="value" style="color:#4f8ef7">-8.7%</div>
+              <div class="sub">변동성 하향 재추정</div>
+            </div>
+            <div class="metric">
+              <div class="label">박스 중심 이동</div>
+              <div class="value" style="color:#ff7f0e">-3.04%</div>
+              <div class="sub">수정 박스 하향</div>
+            </div>
+          </div>
+
+          <div class="chart-box">
+            <div id="chart-monitor" style="height:480px"></div>
+          </div>
+
+          <div class="info-grid">
+            <div class="info-card">
+              <h3>📐 수정 예측 vs 원본 비교</h3>
+              <table class="data">
+                <tr><td></td><td style="color:var(--muted)">원본</td><td style="color:var(--orange)">수정</td></tr>
+                <tr><td>일간 σ</td><td>2.77%</td><td>2.53%</td></tr>
+                <tr><td>권장 상단</td><td style="color:var(--green)">364,748,527원</td><td style="color:var(--orange)">338,382,104원</td></tr>
+                <tr><td>권장 하단</td><td style="color:var(--green)">269,347,415원</td><td style="color:var(--orange)">276,444,233원</td></tr>
+                <tr><td>박스 중심</td><td>기준</td><td style="color:var(--orange)">-3.04%</td></tr>
+              </table>
+            </div>
+            <div class="info-card">
+              <h3>ℹ️ 수정 예측 근거</h3>
+              <div style="font-size:.8rem;color:var(--muted);line-height:1.7">
+                <b style="color:var(--text)">원본:</b> 4/30 이전 31일 σ 추정<br>
+                <b style="color:var(--text)">수정:</b> 원본 + 실제 5/1~5/15 (15일) 포함<br><br>
+                더 긴 데이터 → <b style="color:#4ec94e">σ 추정 정밀도 향상</b><br>
+                실제 변동이 예측보다 작아<br>
+                → σ -8.7% 하향, 박스 소폭 수렴<br><br>
+                <b style="color:var(--accent)">남은 16일:</b> 수정 박스(주황)로 운영
+              </div>
+            </div>
+          </div>
+
+          <div class="info-card">
+            <h3>📅 일별 측정 내역 (2026-05-01 ~ 2026-05-15)</h3>
+            <div style="overflow-x:auto">
+              <table class="data" style="min-width:500px">
+                <thead>
+                  <tr style="border-bottom:2px solid var(--border)">
+                    <td style="color:var(--text);font-weight:700">날짜</td>
+                    <td style="color:var(--text);font-weight:700;text-align:right">종가</td>
+                    <td style="color:var(--text);font-weight:700;text-align:right">상태</td>
+                    <td style="color:var(--text);font-weight:700;text-align:right">이탈폭</td>
+                  </tr>
+                </thead>
+                <tbody id="meas-table"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 탭3: 피드백 -->
+      <div id="tab-feedback" class="tab-panel">
+        <div style="margin-top:16px" class="feedback-section">
+          <h2>💬 피드백을 남겨주세요</h2>
+          <p>
+            이 시스템은 빗썸 원화마켓(BTC/KRW)에서 박스권 그리드 매매를 기획하기 위한 프로토타입입니다.<br>
+            아직 실데이터 연동이 제한적이며, 여러분의 피드백으로 개선해 나가겠습니다.
+          </p>
+
+          <div class="q-row">
+            <label>1. 전반적인 완성도는 어떻게 느껴지시나요?</label>
+            <div class="stars" id="stars-1">
+              <span onclick="setStar(1,1)">★</span><span onclick="setStar(1,2)">★</span>
+              <span onclick="setStar(1,3)">★</span><span onclick="setStar(1,4)">★</span>
+              <span onclick="setStar(1,5)">★</span>
+            </div>
+          </div>
+          <div class="q-row">
+            <label>2. 박스권 예측의 직관성은 어떤가요?</label>
+            <div class="stars" id="stars-2">
+              <span onclick="setStar(2,1)">★</span><span onclick="setStar(2,2)">★</span>
+              <span onclick="setStar(2,3)">★</span><span onclick="setStar(2,4)">★</span>
+              <span onclick="setStar(2,5)">★</span>
+            </div>
+          </div>
+          <div class="q-row">
+            <label>3. 그리드 매매 전략 기획 도구로서 유용할 것 같나요?</label>
+            <div class="stars" id="stars-3">
+              <span onclick="setStar(3,1)">★</span><span onclick="setStar(3,2)">★</span>
+              <span onclick="setStar(3,3)">★</span><span onclick="setStar(3,4)">★</span>
+              <span onclick="setStar(3,5)">★</span>
+            </div>
+          </div>
+
+          <hr class="divider">
+
+          <div class="feedback-grid">
+            <div class="form-group">
+              <label>이름 (선택)</label>
+              <input type="text" id="fb-name" placeholder="홍길동">
+            </div>
+            <div class="form-group">
+              <label>배경 (선택)</label>
+              <select id="fb-bg">
+                <option value="">선택안함</option>
+                <option>코인 투자 경험자</option>
+                <option>그리드 매매 경험자</option>
+                <option>개발자 / 데이터 분석가</option>
+                <option>투자 초보자</option>
+                <option>기타</option>
+              </select>
+            </div>
+            <div class="form-group full">
+              <label>가장 유용하게 느낀 기능은?</label>
+              <input type="text" id="fb-good" placeholder="예: 1σ/2σ 박스 시각화, 그리드 라인 오버레이 등">
+            </div>
+            <div class="form-group full">
+              <label>개선이 필요하다고 느낀 점은?</label>
+              <textarea id="fb-improve" rows="3" placeholder="예: 실데이터 연동, UI 개선 아이디어, 추가 지표 등"></textarea>
+            </div>
+            <div class="form-group full">
+              <label>추가 의견 / 아이디어</label>
+              <textarea id="fb-extra" rows="3" placeholder="자유롭게 작성해 주세요"></textarea>
+            </div>
+          </div>
+
+          <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap">
+            <button class="submit-btn" onclick="submitFeedback()">피드백 제출 →</button>
+            <div class="submit-confirm" id="submit-ok">
+              ✅ 감사합니다! 피드백이 기록되었습니다.
+            </div>
+          </div>
+
+          <div style="background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:14px;
+                      font-size:.78rem;color:var(--muted);line-height:1.7">
+            <b style="color:var(--text)">📌 현재 시스템 상태</b><br>
+            • 데이터: 합성 BTC/KRW (실데이터 연동 준비 중 — 업비트 API)<br>
+            • 배포: 프로토타입 데모 (로컬/클라우드 Streamlit 앱 별도 운영)<br>
+            • 주의: 본 시스템은 매매 기획 보조 도구이며, 실제 주문 실행 기능은 포함되지 않습니다.
+          </div>
+        </div>
+      </div>
+    </div><!-- /탭 컨테이너 -->
+  </main>
+</div><!-- /layout -->
+
+<script>
+// ─── 차트 데이터 ───────────────────────────────────
+const D = {"snap": {"as_of": "2026-04-30", "target": "2026-05", "ref": 313439106, "u1": 364748527.77978504, "l1": 269347415.2399967, "u2": 424457210.25480664, "l2": 231458132.40185544, "ru": 364748527.77978504, "rl": 269347415.2399967, "sigma": 1.0, "range_pct": 35.4, "monthly_sigma": 15.2, "daily_sigma": 2.77, "confidence": 68.3, "gi_pct": 0.5, "gi_krw": 1567195, "bots": 71, "deployed": 28000000, "reserve": 12000000, "per_bot": 394366, "volume": 6975058425.017568, "reward": 1046258, "capital": 40000000}, "mon": {"elapsed": 15, "total": 31, "progress": 48.4, "containment": 100.0, "status": "ON_TRACK", "detail": "15/31\uc77c \uacbd\uacfc (48%) \u2014 containment 100%", "sigma_change": -8.7, "box_shift": -3.04, "cur_price": 337454075, "rev_ru": 338382104, "rev_rl": 276444233, "rev_u2": 374375407, "rev_l2": 249866255}, "pre_x": ["2026-01-31", "2026-02-01", "2026-02-02", "2026-02-03", "2026-02-04", "2026-02-05", "2026-02-06", "2026-02-07", "2026-02-08", "2026-02-09", "2026-02-10", "2026-02-11", "2026-02-12", "2026-02-13", "2026-02-14", "2026-02-15", "2026-02-16", "2026-02-17", "2026-02-18", "2026-02-19", "2026-02-20", "2026-02-21", "2026-02-22", "2026-02-23", "2026-02-24", "2026-02-25", "2026-02-26", "2026-02-27", "2026-02-28", "2026-03-01", "2026-03-02", "2026-03-03", "2026-03-04", "2026-03-05", "2026-03-06", "2026-03-07", "2026-03-08", "2026-03-09", "2026-03-10", "2026-03-11", "2026-03-12", "2026-03-13", "2026-03-14", "2026-03-15", "2026-03-16", "2026-03-17", "2026-03-18", "2026-03-19", "2026-03-20", "2026-03-21", "2026-03-22", "2026-03-23", "2026-03-24", "2026-03-25", "2026-03-26", "2026-03-27", "2026-03-28", "2026-03-29", "2026-03-30", "2026-03-31", "2026-04-01", "2026-04-02", "2026-04-03", "2026-04-04", "2026-04-05", "2026-04-06", "2026-04-07", "2026-04-08", "2026-04-09", "2026-04-10", "2026-04-11", "2026-04-12", "2026-04-13", "2026-04-14", "2026-04-15", "2026-04-16", "2026-04-17", "2026-04-18", "2026-04-19", "2026-04-20", "2026-04-21", "2026-04-22", "2026-04-23", "2026-04-24", "2026-04-25", "2026-04-26", "2026-04-27", "2026-04-28", "2026-04-29", "2026-04-30"], "pre_o": [414392518, 414418331, 415095448, 418639387, 418340515, 426027649, 425143882, 426160271, 414528563, 402756884, 397467921, 403796558, 405648989, 412569702, 432641795, 433413681, 421093641, 419056305, 425570476, 417681430, 441599217, 448141551, 453809339, 454126068, 463518841, 456558076, 449460831, 455869457, 463645035, 473243852, 490559201, 488420699, 505652306, 491745338, 485628029, 467404663, 459564730, 438067735, 429799043, 432294931, 417357315, 428298120, 433555908, 424914800, 418035711, 401509536, 407937055, 401582253, 410013511, 399089475, 374833152, 366647450, 364667015, 353645116, 341504901, 334945715, 338452787, 336690117, 334452957, 320182171, 322821168, 320140677, 327642960, 324115666, 325545319, 334348036, 333343789, 333929329, 308904000, 287912202, 298124131, 299579590, 303359483, 297578073, 296071840, 297750551, 293646146, 304080503, 294716080, 295496137, 302858640, 301115252, 314829850, 308833711, 295807033, 299389107, 302133059, 303306633, 305311580, 310996357], "pre_h": [421707614, 427832980, 419756376, 421037211, 426423633, 428193940, 444514551, 432565167, 417346630, 406075335, 409485462, 410158066, 418867403, 434187460, 443817155, 440191856, 424477418, 426685312, 433719758, 446214612, 452407281, 456461285, 457910969, 472973771, 475225486, 464968679, 464857898, 485817122, 478096523, 506306969, 502851594, 521851629, 509799739, 492926029, 497479272, 480212334, 464532505, 452722897, 441253585, 438702266, 437468567, 440441993, 444468882, 425613913, 420748635, 410002749, 416228271, 413774935, 410922511, 401412528, 375097937, 374876906, 367621207, 364508964, 346791214, 349756863, 341484060, 344528044, 338999200, 332784308, 325502875, 334747345, 328079810, 328517824, 337729903, 338173401, 335818237, 340530073, 311322329, 302551797, 308115770, 304552063, 304248972, 300313096, 309832294, 300481998, 308232147, 304785752, 302967506, 304253059, 304991080, 329981296, 318985360, 309058125, 305080934, 302903128, 317783242, 306616610, 311117249, 317403992], "pre_l": [407103235, 401680799, 413978459, 415942691, 417944531, 422977591, 406789602, 408123667, 399938817, 394149470, 391779016, 399287480, 399351287, 411024037, 422238320, 414315466, 415672527, 417941469, 409532148, 413066035, 437333487, 445489605, 450024439, 444671138, 444851431, 441050229, 440472390, 433697370, 458792364, 457496084, 476128306, 472221376, 487597905, 484447338, 455553420, 446757060, 433099960, 415143881, 420840389, 410949980, 408186868, 421412034, 414001825, 417336597, 398796611, 399443842, 393291037, 397820828, 398180475, 372510099, 366382665, 356437560, 350690925, 330641054, 329659402, 323641639, 333658843, 326615030, 315635927, 310219030, 317458970, 313036291, 323678816, 321143161, 322163452, 329518424, 331454882, 302303256, 285493872, 283484536, 289587951, 298387011, 296688584, 293336818, 283990098, 290914700, 289494501, 294010830, 287244710, 294101717, 298982812, 285963806, 304678200, 295582618, 290115206, 298619039, 287656450, 302001603, 305190688, 307031470], "pre_c": [414418331, 415095448, 418639387, 418340515, 426027649, 425143882, 426160271, 414528563, 402756884, 397467921, 403796558, 405648989, 412569702, 432641795, 433413681, 421093641, 419056305, 425570476, 417681430, 441599217, 448141551, 453809339, 454126068, 463518841, 456558076, 449460831, 455869457, 463645035, 473243852, 490559201, 488420699, 505652306, 491745338, 485628029, 467404663, 459564730, 438067735, 429799043, 432294931, 417357315, 428298120, 433555908, 424914800, 418035711, 401509536, 407937055, 401582253, 410013511, 399089475, 374833152, 366647450, 364667015, 353645116, 341504901, 334945715, 338452787, 336690117, 334452957, 320182171, 322821168, 320140677, 327642960, 324115666, 325545319, 334348036, 333343789, 333929329, 308904000, 287912202, 298124131, 299579590, 303359483, 297578073, 296071840, 297750551, 293646146, 304080503, 294716080, 295496137, 302858640, 301115252, 314829850, 308833711, 295807033, 299389107, 302133059, 303306633, 305311580, 310996357, 313439106], "fut": ["2026-05-01", "2026-05-02", "2026-05-03", "2026-05-04", "2026-05-05", "2026-05-06", "2026-05-07", "2026-05-08", "2026-05-09", "2026-05-10", "2026-05-11", "2026-05-12", "2026-05-13", "2026-05-14", "2026-05-15", "2026-05-16", "2026-05-17", "2026-05-18", "2026-05-19", "2026-05-20", "2026-05-21", "2026-05-22", "2026-05-23", "2026-05-24", "2026-05-25", "2026-05-26", "2026-05-27", "2026-05-28", "2026-05-29", "2026-05-30", "2026-05-31"], "fut_rem": ["2026-05-16", "2026-05-17", "2026-05-18", "2026-05-19", "2026-05-20", "2026-05-21", "2026-05-22", "2026-05-23", "2026-05-24", "2026-05-25", "2026-05-26", "2026-05-27", "2026-05-28", "2026-05-29", "2026-05-30", "2026-05-31"], "glines": [269347415, 270694152, 272047623, 273407861, 274774900, 276148775, 277529518, 278917166, 280311752, 281713311, 283121877, 284537487, 285960174, 287389975, 288826925, 290271059, 291722415, 293181027, 294646932, 296120166, 297600767, 299088771, 300584215, 302087136, 303597572, 305115560, 306641137, 308174343, 309715215, 311263791, 312820110, 314384210, 315956131, 317535912, 319123592, 320719210, 322322806, 323934420, 325554092, 327181862, 328817772, 330461860, 332114170, 333774741, 335443614, 337120832, 338806437, 340500469, 342202971, 343913986, 345633556, 347361724, 349098532, 350844025, 352598245, 354361236, 356133043, 357913708, 359703276, 361501793, 363309302], "meas_in": {"x": ["2026-05-01", "2026-05-02", "2026-05-03", "2026-05-04", "2026-05-05", "2026-05-06", "2026-05-07", "2026-05-08", "2026-05-09", "2026-05-10", "2026-05-11", "2026-05-12", "2026-05-13", "2026-05-14", "2026-05-15"], "o": [313439106, 311426745, 318687533, 316321316, 307085492, 307441083, 297469268, 299296483, 305237743, 307667958, 295148243, 290085301, 288445520, 310353066, 307655858], "h": [314376512, 320824220, 322304736, 319829512, 313639564, 309118100, 302711698, 307224708, 314050240, 310359167, 297246649, 297125386, 313248469, 312882159, 308581164], "l": [310489339, 309290058, 312704113, 303577296, 300887010, 295792251, 294054053, 297309518, 298855461, 292457033, 287986894, 281405436, 285550118, 305126766, 304923973], "c": [311426745, 318687533, 316321316, 307085492, 307441083, 297469268, 299296483, 305237743, 307667958, 295148243, 290085301, 288445520, 310353066, 307655858, 305849279]}, "meas_w": {"x": [], "o": [], "h": [], "l": [], "c": []}, "meas_bu": {"x": [], "o": [], "h": [], "l": [], "c": []}, "meas_bl": {"x": [], "o": [], "h": [], "l": [], "c": []}};
+
+// ─── 탭 전환 ────────────────────────────────────────
+function switchTab(id, el) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+  el.classList.add('active');
+  document.getElementById('tab-'+id).classList.add('active');
+  if (id === 'predict' && !window._chartP) buildPredictChart();
+  if (id === 'monitor' && !window._chartM) buildMonitorChart();
+}
+
+// ─── 메트릭 갱신 (사이드바 조정) ─────────────────────
+function updateMetrics() {
+  const cap = +document.getElementById('capital').value || 40000000;
+  const krw = +document.getElementById('krwHold').value / 100;
+  const aggr = document.getElementById('aggr').value;
+  const giMap = {conservative:1.0, balanced:0.5, aggressive:0.3};
+  const gi = giMap[aggr] || 0.5;
+  const dep = Math.round(cap * (1 - krw));
+  const res = Math.round(cap * krw);
+  const snap = D.snap;
+  const bots = Math.max(1, Math.min(1000, Math.ceil(snap.range_pct / gi)));
+  const perBot = Math.round(dep / bots);
+  const giKrw = Math.round(snap.ref * gi / 100);
+  // 거래량 근사: 일왕복 ≈ (변동폭/gi)*효율*30*배치*2
+  const dailyRT = Math.min(snap.range_pct / gi, snap.range_pct / gi) * 0.5;
+  const vol = dailyRT * 30 * dep * 2;
+  const reward = vol >= 1e10 ? Math.min(vol*0.0002, 3000000)
+               : vol >= 1e9  ? Math.min(vol*0.00018, 3000000)
+               : vol >= 1e8  ? Math.min(vol*0.00015, 3000000)
+               : vol >= 1e7  ? Math.min(vol*0.00008, 3000000) : 0;
+
+  document.getElementById('t-gi').textContent = gi.toFixed(2)+'% ('+fmt(giKrw)+'원)';
+  document.getElementById('t-bots').textContent = bots+'개';
+  document.getElementById('t-dep').textContent = fmt(dep)+'원';
+  document.getElementById('t-res').textContent = fmt(res)+'원';
+  document.getElementById('t-pbot').textContent = fmt(perBot)+'원';
+  document.getElementById('t-vol').textContent = (vol/1e8).toFixed(1)+'억';
+  document.getElementById('t-rew').textContent = fmt(Math.round(reward))+'원';
+}
+
+function fmt(n) { return Math.round(n).toLocaleString('ko-KR'); }
+
+// ─── 예측 차트 ────────────────────────────────────────
+function buildPredictChart() {
+  window._chartP = true;
+  const s = D.snap;
+  const bandX = [D.pre_x[D.pre_x.length-1], ...D.fut];
+
+  const traces = [
+    // 캔들
+    {type:'candlestick', x:D.pre_x, open:D.pre_o, high:D.pre_h, low:D.pre_l, close:D.pre_c,
+     name:'BTC/KRW', increasing:{line:{color:'#d24f45'}}, decreasing:{line:{color:'#4169e1'}}},
+    // 2σ 음영
+    {type:'scatter', x:[...bandX,...[...bandX].reverse()],
+     y:[...bandX.map(()=>s.u2),...[...bandX].reverse().map(()=>s.l2)],
+     fill:'toself', fillcolor:'rgba(255,165,0,0.08)', line:{width:0}, name:'2σ 밴드', hoverinfo:'skip'},
+    // 1σ 음영
+    {type:'scatter', x:[...bandX,...[...bandX].reverse()],
+     y:[...bandX.map(()=>s.u1),...[...bandX].reverse().map(()=>s.l1)],
+     fill:'toself', fillcolor:'rgba(65,105,225,0.11)', line:{width:0}, name:'1σ 밴드', hoverinfo:'skip'},
+    // 박스 라인
+    ...[
+      [s.u2,'orange','2σ 상단','dot',1],[s.l2,'orange','2σ 하단','dot',1],
+      [s.u1,'#4169e1','1σ 상단','dash',1.5],[s.l1,'#4169e1','1σ 하단','dash',1.5],
+      [s.ru,'#2ca02c','권장 상단','solid',2.5],[s.rl,'#2ca02c','권장 하단','solid',2.5],
+      [s.ref,'#888','기준가','dot',1],
+    ].map(([y,color,name,dash,width])=>({
+      type:'scatter', x:bandX, y:bandX.map(()=>y), mode:'lines',
+      line:{color,width,dash}, name,
+    })),
+    // 그리드 라인
+    ...D.glines.slice(0,60).map((gl,i)=>({
+      type:'scatter', x:D.fut, y:D.fut.map(()=>gl), mode:'lines',
+      line:{color:'rgba(80,80,80,0.18)',width:0.5},
+      showlegend:i===0, name:i===0?'그리드 라인':null, hoverinfo:'skip',
+    })),
+  ];
+
+  Plotly.newPlot('chart-predict', traces, {
+    paper_bgcolor:'#1a1d23', plot_bgcolor:'#1a1d23',
+    font:{color:'#e0e0e0'}, height:480,
+    xaxis:{rangeslider:{visible:false}, gridcolor:'rgba(80,80,80,0.2)',
+           type:'date', range:[D.pre_x[D.pre_x.length-60], D.fut[D.fut.length-1]]},
+    yaxis:{title:'가격 (KRW)', tickformat:',.0f', gridcolor:'rgba(80,80,80,0.3)'},
+    legend:{orientation:'h', yanchor:'bottom', y:1.01, bgcolor:'rgba(30,33,40,0.8)',
+            bordercolor:'#444', borderwidth:1, font:{size:11}},
+    margin:{l:70,r:20,t:20,b:40},
+  }, {responsive:true});
+}
+
+// ─── 모니터 차트 ────────────────────────────────────────
+function buildMonitorChart() {
+  window._chartM = true;
+  const s = D.snap; const m = D.mon;
+  const pre30 = {x:D.pre_x.slice(-30),o:D.pre_o.slice(-30),h:D.pre_h.slice(-30),
+                 l:D.pre_l.slice(-30),c:D.pre_c.slice(-30)};
+
+  const traces = [
+    // 사전 히스토리
+    {type:'candlestick', x:pre30.x, open:pre30.o, high:pre30.h, low:pre30.l, close:pre30.c,
+     name:'사전 히스토리', opacity:0.3,
+     increasing:{line:{color:'#d24f45'}}, decreasing:{line:{color:'#4169e1'}}},
+    // 측정 캔들
+    ...[
+      [D.meas_in,'#2ca02c','🟢 박스 내'],
+      [D.meas_w,'#ff7f0e','🟡 경고'],
+      [D.meas_bu,'#d62728','🔴 상방이탈'],
+      [D.meas_bl,'#8b0000','🔴 하방이탈'],
+    ].filter(([d])=>d.x.length).map(([d,color,name])=>({
+      type:'candlestick', x:d.x, open:d.o, high:d.h, low:d.l, close:d.c,
+      name, increasing:{line:{color}}, decreasing:{line:{color}},
+    })),
+    // 수정 예측 2σ 음영
+    ...(D.fut_rem.length ? [{
+      type:'scatter', x:[...D.fut_rem,...[...D.fut_rem].reverse()],
+      y:[...D.fut_rem.map(()=>m.rev_u2),...[...D.fut_rem].reverse().map(()=>m.rev_l2)],
+      fill:'toself', fillcolor:'rgba(255,165,0,0.08)', line:{width:0}, name:'수정 2σ', hoverinfo:'skip',
+    }] : []),
+    // 원본 박스 점선 + 수정 박스 실선
+    ...D.fut_rem.length ? [
+      [s.ru,'#2ca02c','원본 권장 상단','dot',1.5],
+      [s.rl,'#2ca02c','원본 권장 하단','dot',1.5],
+      [m.rev_ru,'#ff7f0e','수정 권장 상단','solid',2.5],
+      [m.rev_rl,'#ff7f0e','수정 권장 하단','solid',2.5],
+    ].map(([y,color,name,dash,width])=>({
+      type:'scatter', x:D.fut_rem, y:D.fut_rem.map(()=>y), mode:'lines',
+      line:{color,width,dash}, name,
+    })) : [],
+    // 현재가 마커
+    {type:'scatter', x:['2026-05-15'], y:[m.cur_price], mode:'markers+text',
+     marker:{size:12, color:'gold', symbol:'diamond'},
+     text:['  현재가<br>  '+fmt(m.cur_price)+'원'], textposition:'middle right',
+     name:'현재가'},
+  ];
+
+  Plotly.newPlot('chart-monitor', traces, {
+    paper_bgcolor:'#1a1d23', plot_bgcolor:'#1a1d23',
+    font:{color:'#e0e0e0'}, height:480,
+    xaxis:{rangeslider:{visible:false}, gridcolor:'rgba(80,80,80,0.2)', type:'date'},
+    yaxis:{title:'가격 (KRW)', tickformat:',.0f', gridcolor:'rgba(80,80,80,0.3)'},
+    legend:{orientation:'h', yanchor:'bottom', y:1.01, bgcolor:'rgba(30,33,40,0.8)',
+            bordercolor:'#444', borderwidth:1, font:{size:11}},
+    margin:{l:70,r:20,t:20,b:40},
+    shapes:[{type:'line', x0:'2026-05-15', x1:'2026-05-15',
+             y0:0, y1:1, yref:'paper',
+             line:{color:'rgba(150,150,150,0.5)', width:1, dash:'dash'}}],
+  }, {responsive:true});
+}
+
+// ─── 일별 측정 테이블 ──────────────────────────────────
+(function buildMeasTable() {
+  const tbody = document.getElementById('meas-table');
+  const inner_set = new Set(D.meas_in.x);
+  const warn_set  = new Set(D.meas_w.x);
+  const bu_set    = new Set(D.meas_bu.x);
+  const bl_set    = new Set(D.meas_bl.x);
+  const closes = {};
+  D.meas_in.x.forEach((d,i)=>closes[d]=D.meas_in.c[i]);
+  D.meas_w.x.forEach((d,i)=>closes[d]=D.meas_w.c[i]);
+  D.meas_bu.x.forEach((d,i)=>closes[d]=D.meas_bu.c[i]);
+  D.meas_bl.x.forEach((d,i)=>closes[d]=D.meas_bl.c[i]);
+
+  const allDates = [...D.meas_in.x,...D.meas_w.x,...D.meas_bu.x,...D.meas_bl.x].sort();
+  allDates.forEach(d=>{
+    const c = closes[d]||0;
+    let icon='🟢 박스 내', dev='-', style='';
+    if (bu_set.has(d)) {icon='🔴 상방이탈'; style='color:#c96e6e';}
+    else if (bl_set.has(d)) {icon='🔴 하방이탈'; style='color:#c96e6e';}
+    else if (warn_set.has(d)) {icon='🟡 경고'; style='color:#d4b44a';}
+    tbody.innerHTML += '<tr style="'+style+'"><td>'+d+'</td><td style="text-align:right">'+fmt(c)+'원</td><td style="text-align:right">'+icon+'</td><td style="text-align:right">'+dev+'</td></tr>';
+  });
+})();
+
+// ─── 별점 ────────────────────────────────────────────
+const starRatings = {};
+function setStar(q, val) {
+  starRatings[q] = val;
+  const stars = document.querySelectorAll('#stars-'+q+' span');
+  stars.forEach((s,i)=>s.classList.toggle('on', i<val));
+}
+
+// ─── 피드백 제출 (로컬 로그) ───────────────────────────
+function submitFeedback() {
+  const fb = {
+    name: document.getElementById('fb-name').value,
+    bg: document.getElementById('fb-bg').value,
+    good: document.getElementById('fb-good').value,
+    improve: document.getElementById('fb-improve').value,
+    extra: document.getElementById('fb-extra').value,
+    stars: starRatings,
+    ts: new Date().toISOString(),
+  };
+  console.log('📋 Feedback:', JSON.stringify(fb, null, 2));
+  document.getElementById('submit-ok').style.display = 'flex';
+  setTimeout(()=>document.getElementById('submit-ok').style.display='none', 5000);
+}
+
+// ─── 초기화 ──────────────────────────────────────────
+window.onload = () => { buildPredictChart(); };
+</script>
+</body>
+</html>
