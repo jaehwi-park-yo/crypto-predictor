@@ -289,7 +289,11 @@
       자본 투입, 큰 스윙 포착<br><br>
       <b style="color:#f87">왕복수수료 0.08%</b> &gt;<br>
       리워드 최대 <b style="color:#8cf">0.02%</b><br>
-      → 실수익원: 그리드 스프레드
+      → 실수익원: 그리드 스프레드<br><br>
+      <b style="color:#adf">BTC 비대칭 간격:</b><br>
+      보수: 매수0.5%/매도1.0%<br>
+      공격: 매수0.3%/매도0.5%<br>
+      <span style="color:#8b929e">(매도간격→수익, 매수간격→거래량)</span>
     </div>
   </aside>
 
@@ -339,25 +343,25 @@
                 </div>
                 <table class="sc-tbl">
                   <tr><td>투입 자본</td><td id="si-btci-cap">14.4M원</td></tr>
-                  <tr><td>그리드 간격</td><td>1.0%</td></tr>
+                  <tr><td>매수/매도 간격</td><td title="매도간격이 수익 결정, 매수간격이 거래량 결정">매수 0.5% / 매도 1.0%</td></tr>
                   <tr><td>봇 수 (추정)</td><td id="si-btci-bots">35개</td></tr>
                   <tr><td>봇당 자본</td><td id="si-btci-pbot">411,428원</td></tr>
                   <tr><td>월 거래량</td><td>~8억</td></tr>
-                  <tr><td>예상 월 순익</td><td id="si-btci-net" class="pos">+296만원</td></tr>
+                  <tr><td>예상 월 순익</td><td id="si-btci-net" class="pos">+370만원</td></tr>
                 </table>
               </div>
               <!-- BTC outer -->
               <div class="strat-card outer" id="card-btc-outer">
                 <div class="sc-head">
                   <div class="sc-title">₿ BTC 2σ 공격</div>
-                  <div class="sc-badge">외부존</div>
+                  <div class="sc-badge">외부존 · 거래량 파밍</div>
                 </div>
                 <table class="sc-tbl">
                   <tr><td>투입 자본</td><td id="si-btco-cap">9.6M원</td></tr>
-                  <tr><td>그리드 간격</td><td>0.5%</td></tr>
+                  <tr><td>매수/매도 간격</td><td title="매도간격이 수익 결정, 매수간격이 거래량 결정">매수 0.3% / 매도 0.5%</td></tr>
                   <tr><td>봇 수 (추정)</td><td id="si-btco-bots">35개</td></tr>
                   <tr><td>봇당 자본</td><td id="si-btco-pbot">274,285원</td></tr>
-                  <tr><td>월 거래량</td><td>~3억</td></tr>
+                  <tr><td>월 거래량</td><td>~3억 (거래량↑ 리워드 파밍)</td></tr>
                   <tr><td>예상 월 순익</td><td id="si-btco-net" class="pos">+96만원</td></tr>
                 </table>
               </div>
@@ -380,11 +384,11 @@
               <div class="strat-card outer" id="card-usdt-outer">
                 <div class="sc-head">
                   <div class="sc-title">💵 USDT 2σ 공격</div>
-                  <div class="sc-badge">외부존</div>
+                  <div class="sc-badge">외부존 · 볼륨 파밍</div>
                 </div>
                 <table class="sc-tbl">
                   <tr><td>투입 자본</td><td id="si-usdto-cap">6.4M원</td></tr>
-                  <tr><td>매수/매도 간격</td><td>1원/1원</td></tr>
+                  <tr><td>매수/매도 간격</td><td>1원/1원 (볼륨 파밍)</td></tr>
                   <tr><td>봇 수 (추정)</td><td id="si-usdto-bots">30개</td></tr>
                   <tr><td>봇당 자본</td><td id="si-usdto-pbot">213,333원</td></tr>
                   <tr><td>월 거래량</td><td>~5억</td></tr>
@@ -407,10 +411,10 @@
                 </thead>
                 <tbody>
                   <tr class="inner-row">
-                    <td><span style="color:var(--btc)">₿</span> BTC 1σ보수</td>
+                    <td><span style="color:var(--btc)">₿</span> BTC 1σ보수 *</td>
                     <td>14.4M</td><td>8억</td>
-                    <td class="pos">+240만</td><td class="neg">-64만</td><td class="pos">+120만</td>
-                    <td class="pos">+296만</td>
+                    <td class="pos">+370만</td><td class="neg">-64만</td><td class="pos">+120만</td>
+                    <td class="pos">+426만</td>
                   </tr>
                   <tr class="outer-row">
                     <td><span style="color:var(--btc)">₿</span> BTC 2σ공격</td>
@@ -433,13 +437,13 @@
                   <tr class="total-row">
                     <td>합계</td>
                     <td>40M</td><td>31억</td>
-                    <td class="pos">+404만</td><td class="neg">-248만</td><td class="pos">+465만</td>
-                    <td class="pos" style="font-size:1rem">+621만</td>
+                    <td class="pos">+534만</td><td class="neg">-248만</td><td class="pos">+465만</td>
+                    <td class="pos" style="font-size:1rem">+751만</td>
                   </tr>
                 </tbody>
               </table>
             </div>
-            <div class="disclaimer">* 그리드 P&L = 왕복수 × 매도간격 × 봇당자본. 수수료 = 총거래량 × 0.08%. 리워드 티어: 10억→0.018%. 모두 추정치입니다.</div>
+            <div class="disclaimer">* BTC 비대칭: 매수간격→거래량, 매도간격→수익 결정. 총수익 = 매도간격 × 배치자본 × 효율 (매수간격 약분됨).<br>그리드 P&L = 왕복수 × 매도간격 × 봇당자본. 수수료 = 총거래량 × 0.08%. 리워드 티어: 10억→0.018%. 모두 추정치입니다.</div>
           </div>
 
           <!-- 전략 평가 -->
@@ -452,6 +456,7 @@
                   <li>가격 이탈 시 외부존 자본이 자연스럽게 추가 투입되어 기회를 포착</li>
                   <li>내부존(1σ)이 안정적 수익을 지속 생성하여 전체 포트폴리오 안정화</li>
                   <li>외부존(1σ~2σ)이 큰 스윙 구간을 포착해 수익 극대화 가능</li>
+                  <li>매도간격이 스프레드 수익 결정 (1.0% 매도 = 0.5% 대칭 대비 약 2× 순익), 좁은매수는 거래량·리워드 향상</li>
                 </ul>
               </div>
               <div class="eval-item">
@@ -495,7 +500,7 @@
               <table class="zone-tbl" style="background:var(--card);border-radius:10px;overflow:hidden;border:1px solid var(--border)">
                 <thead>
                   <tr>
-                    <th>존</th><th>범위</th><th>간격</th><th>자본</th>
+                    <th>존</th><th>범위</th><th>매수/매도 간격</th><th>자본</th>
                     <th>봇 수</th><th>봇당 자본</th><th>월거래량</th><th>예상 순익</th>
                   </tr>
                 </thead>
@@ -503,17 +508,17 @@
                   <tr class="inner-row">
                     <td><span style="color:var(--inner-border);font-weight:700">1σ 내부 (보수)</span></td>
                     <td>269M ~ 364M원</td>
-                    <td>1.0%</td>
+                    <td title="매도간격이 수익 결정, 매수간격이 거래량 결정">매수 0.5% / 매도 1.0%</td>
                     <td id="btc-inner-cap">14.4M</td>
                     <td id="btc-inner-bots">35개</td>
                     <td id="btc-inner-pbot">411,428원</td>
                     <td>~8억</td>
-                    <td class="pos">+296만원</td>
+                    <td class="pos">+370만원</td>
                   </tr>
                   <tr class="outer-row">
                     <td><span style="color:var(--outer-border);font-weight:700">1σ~2σ 외부 (공격)</span></td>
                     <td>231M~269M / 364M~424M</td>
-                    <td>0.5%</td>
+                    <td title="매도간격이 수익 결정, 매수간격이 거래량 결정">매수 0.3% / 매도 0.5%</td>
                     <td id="btc-outer-cap">9.6M</td>
                     <td id="btc-outer-bots">35개</td>
                     <td id="btc-outer-pbot">274,285원</td>
@@ -950,7 +955,7 @@ function updateMetrics() {
 
   // Update strategy cards
   const cards = [
-    ['si-btci-cap', innerBtc, 'si-btci-bots', btcInnerBots, 'si-btci-pbot', innerBtc/btcInnerBots, 'si-btci-net', innerBtc * 0.0206],
+    ['si-btci-cap', innerBtc, 'si-btci-bots', btcInnerBots, 'si-btci-pbot', innerBtc/btcInnerBots, 'si-btci-net', innerBtc * 0.0257],
     ['si-btco-cap', outerBtc, 'si-btco-bots', btcOuterBots, 'si-btco-pbot', outerBtc/btcOuterBots, 'si-btco-net', outerBtc * 0.01],
     ['si-usdti-cap', innerUsdt, 'si-usdti-bots', usdtInnerBots, 'si-usdti-pbot', innerUsdt/usdtInnerBots, 'si-usdti-net', innerUsdt * 0.0221],
     ['si-usdto-cap', outerUsdt, 'si-usdto-bots', usdtOuterBots, 'si-usdto-pbot', outerUsdt/usdtOuterBots, 'si-usdto-net', outerUsdt * 0.00266],
@@ -961,7 +966,7 @@ function updateMetrics() {
   setEl('si-btci-cap',  fmt(Math.round(innerBtc/1e4)/100 * 100)+'원');
   setEl('si-btci-bots', btcInnerBots + '개');
   setEl('si-btci-pbot', fmt(Math.round(innerBtc/btcInnerBots)) + '원');
-  setEl('si-btci-net',  '+' + Math.round(innerBtc * 0.0206 / 1e4) + '만원');
+  setEl('si-btci-net',  '+' + Math.round(innerBtc * 0.0257 / 1e4) + '만원');
 
   setEl('si-btco-cap',  fmt(Math.round(outerBtc/1e4)/100 * 100)+'원');
   setEl('si-btco-bots', btcOuterBots + '개');
@@ -1049,7 +1054,7 @@ function buildBTCChart() {
     ...D.glines.slice(0,60).map((gl,i)=>({
       type:'scatter', x:D.fut, y:D.fut.map(()=>gl), mode:'lines',
       line:{color:'rgba(79,142,247,0.15)',width:0.5},
-      showlegend:i===0, name:i===0?'그리드 라인':null, hoverinfo:'skip',
+      showlegend:i===0, name:i===0?'그리드 라인 (매수 0.5% 간격)':null, hoverinfo:'skip',
     })),
   ];
 
