@@ -3,8 +3,9 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>BTC/KRW 박스권 예측 시스템</title>
+<title>BTC/USDT 레이어드 그리드 예측 시스템</title>
 <script src="https://cdn.plot.ly/plotly-2.35.0.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&display=swap" rel="stylesheet">
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
   :root {
@@ -12,168 +13,239 @@
     --border: #2e3240; --accent: #4f8ef7; --green: #2ca02c;
     --orange: #ff7f0e; --red: #d62728; --yellow: #f5c518;
     --text: #e8eaf0; --muted: #8b929e; --font: 'Noto Sans KR', system-ui, sans-serif;
+    --btc: #f7931a; --usdt: #26a17b;
+    --inner-bg: #1a222e; --inner-border: #4f8ef7;
+    --outer-bg: #2e2a10; --outer-border: #ff7f0e;
   }
   body { background: var(--bg); color: var(--text); font-family: var(--font); min-height: 100vh; }
   header {
     background: linear-gradient(135deg, #1a1d23 0%, #23262f 100%);
     border-bottom: 1px solid var(--border);
-    padding: 18px 32px; display: flex; align-items: center; justify-content: space-between;
+    padding: 16px 28px; display: flex; align-items: center; justify-content: space-between;
+    flex-wrap: wrap; gap: 8px;
   }
-  header h1 { font-size: 1.25rem; font-weight: 700; letter-spacing: -.3px; }
-  header h1 span { color: var(--accent); }
+  header h1 { font-size: 1.1rem; font-weight: 700; letter-spacing: -.3px; }
+  header h1 .btc { color: var(--btc); }
+  header h1 .usdt { color: var(--usdt); }
   .badge { background: #1e3a5f; color: var(--accent); border: 1px solid #2c5282;
            font-size: .7rem; padding: 3px 10px; border-radius: 20px; }
   .notice { background: #1e2a1a; border: 1px solid #2d5a1a; border-radius: 8px;
-            padding: 10px 18px; color: #86c96e; font-size: .8rem; margin: 0 32px 0 0; }
+            padding: 8px 14px; color: #86c96e; font-size: .78rem; }
 
   .layout { display: flex; min-height: calc(100vh - 57px); }
 
-  /* 사이드바 */
   aside {
-    width: 260px; min-width: 220px; background: var(--panel);
-    border-right: 1px solid var(--border); padding: 24px 18px;
-    display: flex; flex-direction: column; gap: 20px; flex-shrink: 0;
+    width: 240px; min-width: 200px; background: var(--panel);
+    border-right: 1px solid var(--border); padding: 20px 16px;
+    display: flex; flex-direction: column; gap: 16px; flex-shrink: 0;
   }
-  .sb-title { font-size: .72rem; font-weight: 700; color: var(--muted);
-              text-transform: uppercase; letter-spacing: .08em; margin-bottom: 6px; }
-  .sb-group { display: flex; flex-direction: column; gap: 12px; }
-  .sb-item label { font-size: .78rem; color: var(--muted); display: block; margin-bottom: 5px; }
+  .sb-title { font-size: .7rem; font-weight: 700; color: var(--muted);
+              text-transform: uppercase; letter-spacing: .08em; margin-bottom: 4px; }
+  .sb-group { display: flex; flex-direction: column; gap: 10px; }
+  .sb-item label { font-size: .76rem; color: var(--muted); display: block; margin-bottom: 4px; }
   .sb-item input[type=range] { width: 100%; accent-color: var(--accent); cursor: pointer; }
-  .sb-item .val { font-size: .85rem; font-weight: 600; color: var(--text); }
-  .sb-item select, .sb-item input[type=number] {
+  .sb-item .val { font-size: .83rem; font-weight: 600; color: var(--text); }
+  .sb-item input[type=number] {
     width: 100%; background: var(--card); border: 1px solid var(--border);
     color: var(--text); border-radius: 6px; padding: 6px 10px;
-    font-size: .82rem; font-family: var(--font); cursor: pointer;
+    font-size: .82rem; font-family: var(--font);
   }
-  .radio-group { display: flex; flex-direction: column; gap: 6px; }
-  .radio-group label { display: flex; align-items: center; gap: 8px;
-    font-size: .82rem; color: var(--text); cursor: pointer; }
-  .radio-group input[type=radio] { accent-color: var(--accent); }
   .divider { border: none; border-top: 1px solid var(--border); }
+  .sb-note {
+    font-size: .7rem; color: var(--muted); line-height: 1.6;
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 8px; padding: 10px 12px;
+  }
+  .sb-note b { color: var(--text); }
 
-  /* 메인 */
-  main { flex: 1; overflow: auto; padding: 24px 28px; display: flex; flex-direction: column; gap: 20px; }
+  main { flex: 1; overflow: auto; padding: 20px 24px; display: flex; flex-direction: column; gap: 16px; }
 
-  /* 탭 */
-  .tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--border); margin-bottom: 4px; }
+  .tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--border); margin-bottom: 4px; flex-wrap: wrap; }
   .tab {
-    padding: 8px 20px; font-size: .85rem; font-weight: 500; cursor: pointer;
+    padding: 8px 18px; font-size: .83rem; font-weight: 500; cursor: pointer;
     border-bottom: 2px solid transparent; color: var(--muted); transition: all .2s;
-    border-radius: 6px 6px 0 0;
+    border-radius: 6px 6px 0 0; white-space: nowrap;
   }
   .tab.active { color: var(--accent); border-bottom-color: var(--accent); background: rgba(79,142,247,.07); }
   .tab:hover:not(.active) { color: var(--text); background: var(--card); }
   .tab-panel { display: none; }
   .tab-panel.active { display: block; }
 
-  /* 메트릭 카드 */
-  .metrics { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
-  .metric {
-    background: var(--card); border: 1px solid var(--border); border-radius: 10px;
-    padding: 14px 16px;
+  /* Strategy cards 2x2 */
+  .strategy-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .strat-card {
+    border-radius: 10px; padding: 16px; border: 1px solid;
   }
-  .metric .label { font-size: .72rem; color: var(--muted); margin-bottom: 6px; }
-  .metric .value { font-size: 1.15rem; font-weight: 700; }
-  .metric .sub { font-size: .72rem; color: var(--muted); margin-top: 3px; }
-  .metric.green .value { color: #4ec94e; }
-  .metric.blue  .value { color: var(--accent); }
-  .metric.orange .value { color: var(--orange); }
-  .metric.red .value { color: var(--red); }
+  .strat-card.inner { background: var(--inner-bg); border-color: var(--inner-border); }
+  .strat-card.outer { background: var(--outer-bg); border-color: var(--outer-border); }
+  .strat-card .sc-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+  .strat-card .sc-title { font-size: .82rem; font-weight: 700; }
+  .strat-card.inner .sc-title { color: var(--inner-border); }
+  .strat-card.outer .sc-title { color: var(--outer-border); }
+  .strat-card .sc-badge { font-size: .66rem; padding: 2px 8px; border-radius: 12px; }
+  .inner .sc-badge { background: rgba(79,142,247,.2); color: var(--inner-border); }
+  .outer .sc-badge { background: rgba(255,127,14,.2); color: var(--outer-border); }
+  .strat-card table.sc-tbl { width: 100%; border-collapse: collapse; font-size: .78rem; }
+  .strat-card table.sc-tbl td { padding: 4px 2px; }
+  .strat-card table.sc-tbl td:first-child { color: var(--muted); }
+  .strat-card table.sc-tbl td:last-child { text-align: right; font-weight: 600; }
 
-  /* 차트 컨테이너 */
+  /* Total P&L summary */
+  .pnl-summary {
+    background: var(--card); border: 1px solid var(--border); border-radius: 10px;
+    padding: 16px; display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px;
+  }
+  .pnl-col { text-align: center; }
+  .pnl-col .pl { font-size: .7rem; color: var(--muted); margin-bottom: 4px; }
+  .pnl-col .pv { font-size: 1rem; font-weight: 700; }
+  .pnl-col .pv.pos { color: #4ec94e; }
+  .pnl-col .pv.neg { color: var(--red); }
+  .pnl-col .pv.accent { color: var(--accent); }
+  .pnl-col .pv.orange { color: var(--orange); }
+
+  /* Eval card */
+  .eval-card {
+    background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 18px;
+  }
+  .eval-card h3 { font-size: .92rem; font-weight: 700; margin-bottom: 14px; }
+  .eval-card .eval-row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .eval-item ul { list-style: none; padding: 0; margin-top: 6px; display: flex; flex-direction: column; gap: 6px; }
+  .eval-item ul li { font-size: .79rem; line-height: 1.5; color: var(--text); }
+  .eval-item h4 { font-size: .8rem; font-weight: 700; }
+  .eval-annualized { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); }
+  .eval-annualized h4 { font-size: .8rem; font-weight: 700; margin-bottom: 8px; }
+  .annual-grid { display: flex; flex-wrap: wrap; gap: 8px; }
+  .annual-chip {
+    background: var(--panel); border: 1px solid var(--border); border-radius: 6px;
+    padding: 6px 12px; font-size: .78rem;
+  }
+  .annual-chip span { color: #4ec94e; font-weight: 700; }
+
+  /* Donut SVG */
+  .donut-wrap {
+    background: var(--card); border: 1px solid var(--border); border-radius: 10px;
+    padding: 18px; display: flex; align-items: center; gap: 24px; flex-wrap: wrap;
+  }
+  .donut-legend { display: flex; flex-direction: column; gap: 8px; }
+  .leg-row { display: flex; align-items: center; gap: 8px; font-size: .8rem; }
+  .leg-dot { width: 12px; height: 12px; border-radius: 3px; flex-shrink: 0; }
+
+  /* Chart box */
   .chart-box {
     background: var(--panel); border: 1px solid var(--border); border-radius: 12px;
     padding: 4px; overflow: hidden;
   }
 
-  /* 정보 패널 2열 */
-  .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  /* Info grid */
+  .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
   .info-card {
     background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 16px;
   }
-  .info-card h3 { font-size: .82rem; color: var(--muted); margin-bottom: 12px;
+  .info-card h3 { font-size: .8rem; color: var(--muted); margin-bottom: 10px;
                   text-transform: uppercase; letter-spacing: .06em; }
-  table.data { width: 100%; border-collapse: collapse; font-size: .82rem; }
+  table.data { width: 100%; border-collapse: collapse; font-size: .81rem; }
   table.data tr { border-bottom: 1px solid var(--border); }
   table.data tr:last-child { border-bottom: none; }
-  table.data td { padding: 7px 4px; }
+  table.data td { padding: 6px 4px; }
   table.data td:first-child { color: var(--muted); }
   table.data td:last-child { text-align: right; font-weight: 600; }
 
-  /* 상태 배너 */
+  /* Zone tables */
+  .zone-table-wrap { overflow-x: auto; }
+  table.zone-tbl { width: 100%; border-collapse: collapse; font-size: .8rem; }
+  table.zone-tbl th { background: var(--panel); color: var(--muted); font-size: .72rem;
+                      padding: 7px 8px; text-align: left; border-bottom: 2px solid var(--border);
+                      font-weight: 600; }
+  table.zone-tbl td { padding: 7px 8px; border-bottom: 1px solid var(--border); }
+  table.zone-tbl tr:last-child td { border-bottom: none; }
+  table.zone-tbl tr.inner-row td { background: rgba(26,34,46,.5); }
+  table.zone-tbl tr.outer-row td { background: rgba(46,42,16,.5); }
+  table.zone-tbl td.pos { color: #4ec94e; font-weight: 700; }
+  table.zone-tbl td.neg { color: var(--red); font-weight: 700; }
+  table.zone-tbl tr.total-row { border-top: 2px solid var(--border); }
+  table.zone-tbl tr.total-row td { font-weight: 700; background: rgba(79,142,247,.07); }
+
+  /* Status / Progress */
   .status-banner {
-    border-radius: 8px; padding: 12px 18px; font-size: .85rem;
+    border-radius: 8px; padding: 12px 16px; font-size: .85rem;
     display: flex; align-items: center; gap: 12px; border: 1px solid;
   }
   .status-banner.green  { background: #1a2e1a; border-color: #2d5a1a; color: #86c96e; }
   .status-banner.yellow { background: #2e2a10; border-color: #5a4a10; color: #d4b44a; }
   .status-banner.red    { background: #2e1a1a; border-color: #5a1a1a; color: #c96e6e; }
   .status-banner.blue   { background: #1a222e; border-color: #1a3a5f; color: #6ea8c9; }
-
-  /* 프로그레스 바 */
-  .progress-wrap { background: var(--card); border-radius: 8px; padding: 12px 16px;
-                   border: 1px solid var(--border); }
-  .progress-label { font-size: .78rem; color: var(--muted); margin-bottom: 8px;
-                    display: flex; justify-content: space-between; }
+  .progress-wrap { background: var(--card); border-radius: 8px; padding: 12px 16px; border: 1px solid var(--border); }
+  .progress-label { font-size: .78rem; color: var(--muted); margin-bottom: 8px; display: flex; justify-content: space-between; }
   .progress-bar { height: 8px; background: var(--border); border-radius: 4px; overflow: hidden; }
-  .progress-fill { height: 100%; background: linear-gradient(90deg, var(--accent), #38e8c8);
-                   border-radius: 4px; transition: width .5s; }
+  .progress-fill { height: 100%; background: linear-gradient(90deg, var(--accent), #38e8c8); border-radius: 4px; transition: width .5s; }
 
-  /* 피드백 폼 */
+  /* Metrics */
+  .metrics { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+  .metric { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 13px 15px; }
+  .metric .label { font-size: .7rem; color: var(--muted); margin-bottom: 5px; }
+  .metric .value { font-size: 1.1rem; font-weight: 700; }
+  .metric .sub { font-size: .7rem; color: var(--muted); margin-top: 3px; }
+  .metric.green .value { color: #4ec94e; }
+  .metric.blue  .value { color: var(--accent); }
+  .metric.orange .value { color: var(--orange); }
+
+  /* Feedback */
   .feedback-section {
     background: var(--card); border: 1px solid var(--border); border-radius: 12px;
-    padding: 24px; display: flex; flex-direction: column; gap: 14px;
+    padding: 22px; display: flex; flex-direction: column; gap: 14px;
   }
   .feedback-section h2 { font-size: 1rem; font-weight: 700; }
   .feedback-section p { font-size: .82rem; color: var(--muted); line-height: 1.6; }
-  .feedback-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
-  .form-group { display: flex; flex-direction: column; gap: 6px; }
-  .form-group label { font-size: .78rem; color: var(--muted); }
+  .feedback-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .form-group { display: flex; flex-direction: column; gap: 5px; }
+  .form-group label { font-size: .76rem; color: var(--muted); }
   .form-group input, .form-group textarea, .form-group select {
     background: var(--panel); border: 1px solid var(--border); color: var(--text);
-    border-radius: 8px; padding: 9px 13px; font-size: .85rem; font-family: var(--font);
+    border-radius: 8px; padding: 8px 12px; font-size: .84rem; font-family: var(--font);
     resize: vertical; outline: none; transition: border .2s;
   }
-  .form-group input:focus, .form-group textarea:focus, .form-group select:focus {
-    border-color: var(--accent);
-  }
+  .form-group input:focus, .form-group textarea:focus, .form-group select:focus { border-color: var(--accent); }
   .form-group.full { grid-column: 1 / -1; }
-  .q-row { display: flex; flex-direction: column; gap: 8px; }
+  .q-row { display: flex; flex-direction: column; gap: 7px; }
   .q-row label { font-size: .82rem; color: var(--text); font-weight: 500; }
-  .stars { display: flex; gap: 6px; }
-  .stars span { font-size: 1.5rem; cursor: pointer; color: var(--border); transition: color .15s; }
+  .stars { display: flex; gap: 5px; }
+  .stars span { font-size: 1.4rem; cursor: pointer; color: var(--border); transition: color .15s; }
   .stars span.on, .stars span:hover { color: var(--yellow); }
   .submit-btn {
     background: linear-gradient(135deg, #2563eb, #1d4ed8);
-    color: #fff; border: none; border-radius: 8px; padding: 11px 28px;
-    font-size: .9rem; font-weight: 700; cursor: pointer; align-self: flex-start;
+    color: #fff; border: none; border-radius: 8px; padding: 10px 26px;
+    font-size: .88rem; font-weight: 700; cursor: pointer; align-self: flex-start;
     font-family: var(--font); transition: opacity .2s;
   }
   .submit-btn:hover { opacity: .85; }
-  .submit-confirm { display: none; color: #4ec94e; font-size: .85rem; align-items: center; gap: 8px; }
+  .submit-confirm { display: none; color: #4ec94e; font-size: .84rem; align-items: center; gap: 8px; }
 
-  /* 반응형 */
-  @media (max-width: 900px) {
+  .section-title { font-size: .85rem; font-weight: 700; color: var(--text); margin-bottom: 10px; }
+  .disclaimer { font-size: .7rem; color: var(--muted); margin-top: 4px; font-style: italic; }
+
+  @media (max-width: 960px) {
     .metrics { grid-template-columns: repeat(2, 1fr); }
+    .strategy-grid { grid-template-columns: 1fr; }
     .info-grid { grid-template-columns: 1fr; }
-    .feedback-grid { grid-template-columns: 1fr; }
-    aside { width: 200px; }
+    .pnl-summary { grid-template-columns: repeat(3, 1fr); }
   }
   @media (max-width: 640px) {
     .layout { flex-direction: column; }
-    aside { width: 100%; border-right: none; border-bottom: 1px solid var(--border); padding: 16px; }
-    main { padding: 16px; }
+    aside { width: 100%; border-right: none; border-bottom: 1px solid var(--border); padding: 14px; }
+    main { padding: 14px; }
     .metrics { grid-template-columns: repeat(2, 1fr); }
-    header { padding: 12px 16px; }
+    header { padding: 10px 14px; }
+    .feedback-grid { grid-template-columns: 1fr; }
+    .eval-card .eval-row { grid-template-columns: 1fr; }
   }
 </style>
 </head>
 <body>
 <header>
-  <h1>📊 BTC/KRW <span>박스권 예측</span> & 그리드 매매 기획 시스템</h1>
-  <div style="display:flex;align-items:center;gap:12px">
+  <h1>📊 <span class="btc">BTC</span>/<span class="usdt">USDT</span> 레이어드 그리드 예측 시스템</h1>
+  <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
     <div class="notice">⚠️ 합성 데이터 기반 데모 — 실데이터 연동 시 수치 변경됨</div>
-    <span class="badge">Beta v0.1</span>
+    <span class="badge">Beta v0.2</span>
   </div>
 </header>
 
@@ -182,147 +254,385 @@
   <aside>
     <div>
       <div class="sb-title">⚙️ 파라미터 조정</div>
-      <div style="font-size:.72rem;color:#666;margin-top:4px">※ 데모: 값 조정 시 아래 수치 갱신</div>
+      <div style="font-size:.7rem;color:#666;margin-top:3px">값 조정 시 카드 수치 갱신</div>
     </div>
 
     <div class="sb-group">
       <div class="sb-item">
         <label>투입 자본 (원)</label>
-        <input type="number" id="capital" value="40000000" step="1000000"
-               style="width:100%" onchange="updateMetrics()">
+        <input type="number" id="capital" value="40000000" step="1000000" onchange="updateMetrics()">
       </div>
       <div class="sb-item">
-        <label>KRW 현금 비중: <span class="val" id="krwVal">30%</span></label>
-        <input type="range" id="krwHold" min="30" max="70" value="30" step="5"
-               oninput="document.getElementById('krwVal').textContent=this.value+'%';updateMetrics()">
+        <label>BTC 비중: <span class="val" id="btcRatioVal">60%</span></label>
+        <input type="range" id="btcRatio" min="40" max="70" value="60" step="5"
+               oninput="document.getElementById('btcRatioVal').textContent=this.value+'%';updateMetrics()">
+      </div>
+      <div class="sb-item">
+        <label>내부존(1σ) 비율: <span class="val" id="innerRatioVal">60%</span></label>
+        <input type="range" id="innerRatio" min="40" max="70" value="60" step="5"
+               oninput="document.getElementById('innerRatioVal').textContent=this.value+'%';updateMetrics()">
+      </div>
+      <div class="sb-item">
+        <label>KRW 예비금: <span class="val" id="krwHoldVal">30%</span></label>
+        <input type="range" id="krwHold" min="20" max="50" value="30" step="5"
+               oninput="document.getElementById('krwHoldVal').textContent=this.value+'%';updateMetrics()">
       </div>
     </div>
 
     <hr class="divider">
 
-    <div class="sb-group">
-      <div class="sb-item">
-        <label>박스 σ 레벨</label>
-        <div class="radio-group">
-          <label><input type="radio" name="sigma" value="1" checked onchange="updateMetrics()"> 1σ (68.3% 신뢰)</label>
-          <label><input type="radio" name="sigma" value="2" onchange="updateMetrics()"> 2σ (95.5% 신뢰)</label>
-          <label><input type="radio" name="sigma" value="auto" onchange="updateMetrics()"> 자동 (변동성 기반)</label>
-        </div>
-      </div>
-    </div>
-
-    <hr class="divider">
-
-    <div class="sb-group">
-      <div class="sb-item">
-        <label>그리드 공격성</label>
-        <select id="aggr" onchange="updateMetrics()">
-          <option value="conservative">보수 (1.0% 간격)</option>
-          <option value="balanced" selected>균형 (0.5% 간격)</option>
-          <option value="aggressive">공격 (0.3% 간격)</option>
-        </select>
-      </div>
-    </div>
-
-    <hr class="divider">
-
-    <div style="font-size:.72rem;color:var(--muted);line-height:1.6">
-      <div style="margin-bottom:6px;font-weight:600;color:var(--text)">📌 핵심 원칙</div>
-      왕복수수료 <b style="color:#f87">0.08%</b> &gt; 리워드 최대 <b style="color:#8cf">0.02%</b><br>
-      → 실수익원: 그리드 스프레드<br>
-      → 리워드: 수수료 환급 성격<br><br>
-      하방 이탈 시: 30% 손절<br>
-      + KRW 예비금으로 회복 그리드
+    <div class="sb-note">
+      <b>📌 레이어드 그리드 전략</b><br><br>
+      <b>내부존 (1σ)</b>: 안정적 범위에서<br>
+      촘촘한 그리드로 꾸준한 수익<br><br>
+      <b>외부존 (1σ~2σ)</b>: 이탈 시 추가<br>
+      자본 투입, 큰 스윙 포착<br><br>
+      <b style="color:#f87">왕복수수료 0.08%</b> &gt;<br>
+      리워드 최대 <b style="color:#8cf">0.02%</b><br>
+      → 실수익원: 그리드 스프레드
     </div>
   </aside>
 
   <!-- 메인 -->
   <main>
-    <!-- 탭 -->
     <div>
       <div class="tabs">
-        <div class="tab active" onclick="switchTab('predict',this)">📈 예측 워크벤치</div>
-        <div class="tab" onclick="switchTab('monitor',this)">📡 실시간 모니터</div>
+        <div class="tab active" onclick="switchTab('portfolio',this)">📊 포트폴리오</div>
+        <div class="tab" onclick="switchTab('btc',this)">₿ BTC/KRW</div>
+        <div class="tab" onclick="switchTab('usdt',this)">💵 USDT/KRW</div>
+        <div class="tab" onclick="switchTab('monitor',this)">📡 모니터</div>
         <div class="tab" onclick="switchTab('feedback',this)">💬 피드백</div>
       </div>
 
-      <!-- 탭1: 예측 워크벤치 -->
-      <div id="tab-predict" class="tab-panel active">
-        <div style="margin-top:16px">
-          <div style="font-size:.8rem;color:var(--muted);margin-bottom:12px">
-            기준 시점: <b>2026-04-30</b> → 대상 월: <b>2026-05</b>
-          </div>
-          <div class="metrics" id="metrics-predict">
-            <div class="metric blue">
-              <div class="label">기준가 (4/30 종가)</div>
-              <div class="value" id="m-ref">313,439,106원</div>
-            </div>
-            <div class="metric green">
-              <div class="label">권장 박스 (1σ)</div>
-              <div class="value" id="m-box">폭 35.4%</div>
-              <div class="sub" id="m-box-range">269M ~ 364M원</div>
-            </div>
-            <div class="metric orange">
-              <div class="label">월간 변동성 (σ)</div>
-              <div class="value" id="m-sigma">15.2%</div>
-              <div class="sub" id="m-dsigma">일간 2.77%</div>
-            </div>
-            <div class="metric">
-              <div class="label">예측 신뢰도</div>
-              <div class="value" id="m-conf">68.3%</div>
-            </div>
-          </div>
-        </div>
+      <!-- ═══════════════════════════════════ 탭1: 포트폴리오 ═══════════════════════ -->
+      <div id="tab-portfolio" class="tab-panel active">
+        <div style="margin-top:16px;display:flex;flex-direction:column;gap:16px">
 
-        <div class="chart-box" style="margin-top:16px">
-          <div id="chart-predict" style="height:480px"></div>
-        </div>
+          <!-- 도넛 + 배분 -->
+          <div class="donut-wrap">
+            <div>
+              <svg id="donut-svg" width="160" height="160" viewBox="0 0 160 160">
+                <!-- drawn by JS -->
+              </svg>
+            </div>
+            <div>
+              <div style="font-size:.85rem;font-weight:700;margin-bottom:12px">자본 배분 (추정치)</div>
+              <div class="donut-legend" id="donut-legend">
+                <div class="leg-row"><div class="leg-dot" style="background:#4f8ef7"></div><span id="leg-btc-inner">BTC 내부존 (1σ) — 14.4M (36%)</span></div>
+                <div class="leg-row"><div class="leg-dot" style="background:#ff7f0e"></div><span id="leg-btc-outer">BTC 외부존 (2σ) — 9.6M (24%)</span></div>
+                <div class="leg-row"><div class="leg-dot" style="background:#26a17b"></div><span id="leg-usdt-inner">USDT 내부존 (1σ) — 9.6M (24%)</span></div>
+                <div class="leg-row"><div class="leg-dot" style="background:#a0d8a0"></div><span id="leg-usdt-outer">USDT 외부존 (2σ) — 6.4M (16%)</span></div>
+                <div class="leg-row"><div class="leg-dot" style="background:#444"></div><span id="leg-krw">KRW 예비금 — 별도</span></div>
+              </div>
+            </div>
+          </div>
 
-        <div class="info-grid" style="margin-top:16px">
-          <div class="info-card">
-            <h3>📦 박스권 상세</h3>
-            <table class="data">
-              <tr><td>1σ 상단</td><td id="t-u1">364,748,527원</td></tr>
-              <tr><td>1σ 하단</td><td id="t-l1">269,347,415원</td></tr>
-              <tr><td>2σ 상단</td><td id="t-u2">424,457,210원</td></tr>
-              <tr><td>2σ 하단</td><td id="t-l2">231,458,132원</td></tr>
-              <tr><td>권장 상단</td><td id="t-ru" style="color:#4ec94e">364,748,527원</td></tr>
-              <tr><td>권장 하단</td><td id="t-rl" style="color:#4ec94e">269,347,415원</td></tr>
-            </table>
+          <!-- 4 전략 카드 2x2 -->
+          <div>
+            <div class="section-title">🤖 4전략 상세 (추정치)</div>
+            <div class="strategy-grid">
+              <!-- BTC inner -->
+              <div class="strat-card inner" id="card-btc-inner">
+                <div class="sc-head">
+                  <div class="sc-title">₿ BTC 1σ 보수</div>
+                  <div class="sc-badge">내부존</div>
+                </div>
+                <table class="sc-tbl">
+                  <tr><td>투입 자본</td><td id="si-btci-cap">14.4M원</td></tr>
+                  <tr><td>그리드 간격</td><td>1.0%</td></tr>
+                  <tr><td>봇 수 (추정)</td><td id="si-btci-bots">35개</td></tr>
+                  <tr><td>봇당 자본</td><td id="si-btci-pbot">411,428원</td></tr>
+                  <tr><td>월 거래량</td><td>~8억</td></tr>
+                  <tr><td>예상 월 순익</td><td id="si-btci-net" class="pos">+296만원</td></tr>
+                </table>
+              </div>
+              <!-- BTC outer -->
+              <div class="strat-card outer" id="card-btc-outer">
+                <div class="sc-head">
+                  <div class="sc-title">₿ BTC 2σ 공격</div>
+                  <div class="sc-badge">외부존</div>
+                </div>
+                <table class="sc-tbl">
+                  <tr><td>투입 자본</td><td id="si-btco-cap">9.6M원</td></tr>
+                  <tr><td>그리드 간격</td><td>0.5%</td></tr>
+                  <tr><td>봇 수 (추정)</td><td id="si-btco-bots">35개</td></tr>
+                  <tr><td>봇당 자본</td><td id="si-btco-pbot">274,285원</td></tr>
+                  <tr><td>월 거래량</td><td>~3억</td></tr>
+                  <tr><td>예상 월 순익</td><td id="si-btco-net" class="pos">+96만원</td></tr>
+                </table>
+              </div>
+              <!-- USDT inner -->
+              <div class="strat-card inner" id="card-usdt-inner">
+                <div class="sc-head">
+                  <div class="sc-title">💵 USDT 1σ 보수</div>
+                  <div class="sc-badge">내부존</div>
+                </div>
+                <table class="sc-tbl">
+                  <tr><td>투입 자본</td><td id="si-usdti-cap">9.6M원</td></tr>
+                  <tr><td>매수/매도 간격</td><td>1원/2원</td></tr>
+                  <tr><td>봇 수 (추정)</td><td id="si-usdti-bots">30개</td></tr>
+                  <tr><td>봇당 자본</td><td id="si-usdti-pbot">320,000원</td></tr>
+                  <tr><td>월 거래량</td><td>~15억</td></tr>
+                  <tr><td>예상 월 순익</td><td id="si-usdti-net" class="pos">+212만원</td></tr>
+                </table>
+              </div>
+              <!-- USDT outer -->
+              <div class="strat-card outer" id="card-usdt-outer">
+                <div class="sc-head">
+                  <div class="sc-title">💵 USDT 2σ 공격</div>
+                  <div class="sc-badge">외부존</div>
+                </div>
+                <table class="sc-tbl">
+                  <tr><td>투입 자본</td><td id="si-usdto-cap">6.4M원</td></tr>
+                  <tr><td>매수/매도 간격</td><td>1원/1원</td></tr>
+                  <tr><td>봇 수 (추정)</td><td id="si-usdto-bots">30개</td></tr>
+                  <tr><td>봇당 자본</td><td id="si-usdto-pbot">213,333원</td></tr>
+                  <tr><td>월 거래량</td><td>~5억</td></tr>
+                  <tr><td>예상 월 순익</td><td id="si-usdto-net" class="pos">+17만원</td></tr>
+                </table>
+              </div>
+            </div>
           </div>
-          <div class="info-card">
-            <h3>🤖 그리드 봇 설정</h3>
-            <table class="data">
-              <tr><td>그리드 간격</td><td id="t-gi">0.50% (1,567,195원)</td></tr>
-              <tr><td>봇 수</td><td id="t-bots">71개</td></tr>
-              <tr><td>그리드 투입</td><td id="t-dep">28,000,000원</td></tr>
-              <tr><td>KRW 예비금</td><td id="t-res">12,000,000원</td></tr>
-              <tr><td>봇당 자본</td><td id="t-pbot">394,366원</td></tr>
-              <tr><td>예상 월거래량</td><td id="t-vol">69.8억</td></tr>
-              <tr><td>예상 리워드</td><td id="t-rew">1,046,258원</td></tr>
-            </table>
-          </div>
-        </div>
 
-        <div class="info-grid" style="margin-top:0">
-          <div class="info-card" style="background:#1a2e1a;border-color:#2d5a1a">
-            <h3 style="color:#6ec96e">🎯 안전 목표 (리워드)</h3>
-            <div style="font-size:.9rem;font-weight:700;margin-bottom:6px">10억 거래량 → 리워드 150,000원</div>
-            <div style="font-size:.78rem;color:#86c96e">필요 일회전율 0.83배 — 여유롭게 달성 가능</div>
+          <!-- 합계 P&L 테이블 -->
+          <div>
+            <div class="section-title">📋 월간 P&L 합계 (추정치)</div>
+            <div class="zone-table-wrap">
+              <table class="zone-tbl" style="background:var(--card);border-radius:10px;overflow:hidden;border:1px solid var(--border)">
+                <thead>
+                  <tr>
+                    <th>전략</th><th>자본</th><th>월 거래량</th>
+                    <th>그리드 P&L</th><th>수수료</th><th>리워드</th><th>순익</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr class="inner-row">
+                    <td><span style="color:var(--btc)">₿</span> BTC 1σ보수</td>
+                    <td>14.4M</td><td>8억</td>
+                    <td class="pos">+240만</td><td class="neg">-64만</td><td class="pos">+120만</td>
+                    <td class="pos">+296만</td>
+                  </tr>
+                  <tr class="outer-row">
+                    <td><span style="color:var(--btc)">₿</span> BTC 2σ공격</td>
+                    <td>9.6M</td><td>3억</td>
+                    <td class="pos">+75만</td><td class="neg">-24만</td><td class="pos">+45만</td>
+                    <td class="pos">+96만</td>
+                  </tr>
+                  <tr class="inner-row">
+                    <td><span style="color:var(--usdt)">₮</span> USDT 1σ보수</td>
+                    <td>9.6M</td><td>15억</td>
+                    <td class="pos">+107만</td><td class="neg">-120만</td><td class="pos">+225만</td>
+                    <td class="pos">+212만</td>
+                  </tr>
+                  <tr class="outer-row">
+                    <td><span style="color:var(--usdt)">₮</span> USDT 2σ공격</td>
+                    <td>6.4M</td><td>5억</td>
+                    <td class="neg">-18만</td><td class="neg">-40만</td><td class="pos">+75만</td>
+                    <td class="pos">+17만</td>
+                  </tr>
+                  <tr class="total-row">
+                    <td>합계</td>
+                    <td>40M</td><td>31억</td>
+                    <td class="pos">+404만</td><td class="neg">-248만</td><td class="pos">+465만</td>
+                    <td class="pos" style="font-size:1rem">+621만</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <div class="disclaimer">* 그리드 P&L = 왕복수 × 매도간격 × 봇당자본. 수수료 = 총거래량 × 0.08%. 리워드 티어: 10억→0.018%. 모두 추정치입니다.</div>
           </div>
-          <div class="info-card" style="background:#2e2a10;border-color:#5a4a10">
-            <h3 style="color:#d4b44a">🚀 스트레치 목표 (리워드)</h3>
-            <div style="font-size:.9rem;font-weight:700;margin-bottom:6px">100억 거래량 → 리워드 1,800,000원</div>
-            <div style="font-size:.78rem;color:#d4b44a">필요 일회전율 8.33배 — 공격적 운영 필요</div>
+
+          <!-- 전략 평가 -->
+          <div class="eval-card">
+            <h3>🔍 레이어드 그리드 전략 평가</h3>
+            <div class="eval-row">
+              <div class="eval-item">
+                <h4 style="color:#4ec94e">✅ 강점</h4>
+                <ul>
+                  <li>가격 이탈 시 외부존 자본이 자연스럽게 추가 투입되어 기회를 포착</li>
+                  <li>내부존(1σ)이 안정적 수익을 지속 생성하여 전체 포트폴리오 안정화</li>
+                  <li>외부존(1σ~2σ)이 큰 스윙 구간을 포착해 수익 극대화 가능</li>
+                </ul>
+              </div>
+              <div class="eval-item">
+                <h4 style="color:#d4b44a">⚠️ 유의점</h4>
+                <ul>
+                  <li>외부존 자본은 정상 범위에서 약 73% 시간 동안 유휴 상태로 대기</li>
+                  <li>2σ 돌파 지속 시 외부존 봇 재설정 및 손절 기준 점검 필요</li>
+                </ul>
+              </div>
+            </div>
+            <div class="eval-annualized">
+              <h4>📊 예상 연환산 수익률 (추정치)</h4>
+              <div class="annual-grid">
+                <div class="annual-chip">BTC 보수 <span>~20%</span>/년</div>
+                <div class="annual-chip">BTC 공격 <span>~12%</span>/년 (활성시)</div>
+                <div class="annual-chip">USDT 보수 <span>~26%</span>/년</div>
+                <div class="annual-chip">USDT 공격 <span>~3%</span>/년 (reward중심)</div>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- ═══════════════════════════════════ 탭2: BTC/KRW ═══════════════════════ -->
+      <div id="tab-btc" class="tab-panel">
+        <div style="margin-top:16px;display:flex;flex-direction:column;gap:16px">
+          <div style="font-size:.8rem;color:var(--muted)">
+            기준 시점: <b>2026-04-30</b> → 대상 월: <b>2026-05</b> &nbsp;|&nbsp;
+            기준가: <b style="color:var(--btc)">313,439,106원</b>
+          </div>
+
+          <div class="chart-box">
+            <div id="chart-btc" style="height:480px"></div>
+          </div>
+
+          <!-- BTC zone detail -->
+          <div>
+            <div class="section-title">₿ BTC/KRW 존별 그리드 상세 (추정치)</div>
+            <div class="zone-table-wrap">
+              <table class="zone-tbl" style="background:var(--card);border-radius:10px;overflow:hidden;border:1px solid var(--border)">
+                <thead>
+                  <tr>
+                    <th>존</th><th>범위</th><th>간격</th><th>자본</th>
+                    <th>봇 수</th><th>봇당 자본</th><th>월거래량</th><th>예상 순익</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr class="inner-row">
+                    <td><span style="color:var(--inner-border);font-weight:700">1σ 내부 (보수)</span></td>
+                    <td>269M ~ 364M원</td>
+                    <td>1.0%</td>
+                    <td id="btc-inner-cap">14.4M</td>
+                    <td id="btc-inner-bots">35개</td>
+                    <td id="btc-inner-pbot">411,428원</td>
+                    <td>~8억</td>
+                    <td class="pos">+296만원</td>
+                  </tr>
+                  <tr class="outer-row">
+                    <td><span style="color:var(--outer-border);font-weight:700">1σ~2σ 외부 (공격)</span></td>
+                    <td>231M~269M / 364M~424M</td>
+                    <td>0.5%</td>
+                    <td id="btc-outer-cap">9.6M</td>
+                    <td id="btc-outer-bots">35개</td>
+                    <td id="btc-outer-pbot">274,285원</td>
+                    <td>~3억</td>
+                    <td class="pos">+96만원</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="info-grid">
+            <div class="info-card">
+              <h3>📦 BTC 박스권 상세</h3>
+              <table class="data">
+                <tr><td>기준가</td><td style="color:var(--btc)">313,439,106원</td></tr>
+                <tr><td>1σ 상단</td><td>364,748,527원</td></tr>
+                <tr><td>1σ 하단</td><td>269,347,415원</td></tr>
+                <tr><td>1σ 범위</td><td>35.4%</td></tr>
+                <tr><td>2σ 상단</td><td>424,457,210원</td></tr>
+                <tr><td>2σ 하단</td><td>231,458,132원</td></tr>
+                <tr><td>월간 σ</td><td>15.2%</td></tr>
+              </table>
+            </div>
+            <div class="info-card">
+              <h3>🤖 BTC 그리드 운영 원칙</h3>
+              <table class="data">
+                <tr><td>내부존 자본 비중</td><td id="btc-inner-pct">60%</td></tr>
+                <tr><td>외부존 자본 비중</td><td id="btc-outer-pct">40%</td></tr>
+                <tr><td>리워드 티어 목표</td><td>10억/월</td></tr>
+                <tr><td>2σ 이탈 시</td><td>봇 재설정</td></tr>
+                <tr><td>하방 손절 기준</td><td>2σ 하단 이하 30일+</td></tr>
+              </table>
+            </div>
           </div>
         </div>
       </div>
 
-      <!-- 탭2: 실시간 모니터 -->
+      <!-- ═══════════════════════════════════ 탭3: USDT/KRW ═══════════════════════ -->
+      <div id="tab-usdt" class="tab-panel">
+        <div style="margin-top:16px;display:flex;flex-direction:column;gap:16px">
+          <div style="font-size:.8rem;color:var(--muted)">
+            기준 시점: <b>2026-05 합성 데이터</b> &nbsp;|&nbsp;
+            기준가: <b style="color:var(--usdt)">1,401원</b> &nbsp;|&nbsp;
+            1σ: <b>1,386~1,416원</b> (±2.2%) &nbsp;|&nbsp; 2σ: <b>1,371~1,430원</b> (±4.4%)
+          </div>
+
+          <div class="chart-box">
+            <div id="chart-usdt" style="height:400px"></div>
+          </div>
+
+          <!-- USDT zone detail -->
+          <div>
+            <div class="section-title">💵 USDT/KRW 존별 그리드 상세 (추정치)</div>
+            <div class="zone-table-wrap">
+              <table class="zone-tbl" style="background:var(--card);border-radius:10px;overflow:hidden;border:1px solid var(--border)">
+                <thead>
+                  <tr>
+                    <th>존</th><th>범위</th><th>매수/매도 간격</th><th>자본</th>
+                    <th>봇 수</th><th>봇당 자본</th><th>월거래량</th><th>예상 순익</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr class="inner-row">
+                    <td><span style="color:var(--inner-border);font-weight:700">1σ 내부 (보수)</span></td>
+                    <td>1,386 ~ 1,416원</td>
+                    <td>1원 / 2원</td>
+                    <td id="usdt-inner-cap">9.6M</td>
+                    <td id="usdt-inner-bots">30개</td>
+                    <td id="usdt-inner-pbot">320,000원</td>
+                    <td>~15억</td>
+                    <td class="pos">+212만원</td>
+                  </tr>
+                  <tr class="outer-row">
+                    <td><span style="color:var(--outer-border);font-weight:700">1σ~2σ 외부 (공격)</span></td>
+                    <td>1,371~1,386 / 1,416~1,430원</td>
+                    <td>1원 / 1원</td>
+                    <td id="usdt-outer-cap">6.4M</td>
+                    <td id="usdt-outer-bots">30개</td>
+                    <td id="usdt-outer-pbot">213,333원</td>
+                    <td>~5억</td>
+                    <td class="pos">+17만원</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="info-grid">
+            <div class="info-card">
+              <h3>📦 USDT 박스권 상세</h3>
+              <table class="data">
+                <tr><td>기준가</td><td style="color:var(--usdt)">1,401원</td></tr>
+                <tr><td>1σ 상단</td><td>1,416원 (+2.2%)</td></tr>
+                <tr><td>1σ 하단</td><td>1,386원 (-2.2%)</td></tr>
+                <tr><td>2σ 상단</td><td>1,430원 (+4.4%)</td></tr>
+                <tr><td>2σ 하단</td><td>1,371원 (-4.4%)</td></tr>
+                <tr><td>1σ 범위</td><td>30원 (2.2%)</td></tr>
+              </table>
+            </div>
+            <div class="info-card">
+              <h3>🤖 USDT 그리드 특성</h3>
+              <table class="data">
+                <tr><td>가격 변동성</td><td>매우 낮음 (±4.4% 2σ)</td></tr>
+                <tr><td>주 수익원</td><td>리워드 (거래량)</td></tr>
+                <tr><td>내부존 봇 활성률</td><td>~95%</td></tr>
+                <tr><td>외부존 봇 활성률</td><td>~27%</td></tr>
+                <tr><td>리워드 티어 목표</td><td>10억/월 이상</td></tr>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ═══════════════════════════════════ 탭4: 모니터 ═══════════════════════ -->
       <div id="tab-monitor" class="tab-panel">
         <div style="margin-top:16px;display:flex;flex-direction:column;gap:14px">
           <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
-            <h2 style="font-size:1rem">📡 2026-05 예측→측정 전환 모니터</h2>
+            <h2 style="font-size:1rem">📡 2026-05 예측→측정 전환 모니터 (BTC)</h2>
             <span style="background:#1e3a5f;color:var(--accent);border:1px solid #2c5282;
                          border-radius:20px;padding:3px 12px;font-size:.75rem">
               🟢 ON_TRACK
@@ -333,10 +643,10 @@
           <div class="progress-wrap">
             <div class="progress-label">
               <span>예측 → 측정 전환</span>
-              <span id="prog-label">15 / 31일 완료 (48%)</span>
+              <span>15 / 31일 완료 (48%)</span>
             </div>
             <div class="progress-bar">
-              <div class="progress-fill" id="prog-fill" style="width:48%"></div>
+              <div class="progress-fill" style="width:48%"></div>
             </div>
           </div>
 
@@ -423,12 +733,12 @@
         </div>
       </div>
 
-      <!-- 탭3: 피드백 -->
+      <!-- ═══════════════════════════════════ 탭5: 피드백 ═══════════════════════ -->
       <div id="tab-feedback" class="tab-panel">
         <div style="margin-top:16px" class="feedback-section">
           <h2>💬 피드백을 남겨주세요</h2>
           <p>
-            이 시스템은 빗썸 원화마켓(BTC/KRW)에서 박스권 그리드 매매를 기획하기 위한 프로토타입입니다.<br>
+            이 시스템은 빗썸 원화마켓(BTC/KRW, USDT/KRW)에서 레이어드 그리드 매매를 기획하기 위한 프로토타입입니다.<br>
             아직 실데이터 연동이 제한적이며, 여러분의 피드백으로 개선해 나가겠습니다.
           </p>
 
@@ -441,7 +751,7 @@
             </div>
           </div>
           <div class="q-row">
-            <label>2. 박스권 예측의 직관성은 어떤가요?</label>
+            <label>2. 레이어드 그리드 전략의 직관성은 어떤가요?</label>
             <div class="stars" id="stars-2">
               <span onclick="setStar(2,1)">★</span><span onclick="setStar(2,2)">★</span>
               <span onclick="setStar(2,3)">★</span><span onclick="setStar(2,4)">★</span>
@@ -477,7 +787,7 @@
             </div>
             <div class="form-group full">
               <label>가장 유용하게 느낀 기능은?</label>
-              <input type="text" id="fb-good" placeholder="예: 1σ/2σ 박스 시각화, 그리드 라인 오버레이 등">
+              <input type="text" id="fb-good" placeholder="예: 내외부존 시각화, 4전략 P&L 비교 등">
             </div>
             <div class="form-group full">
               <label>개선이 필요하다고 느낀 점은?</label>
@@ -491,107 +801,254 @@
 
           <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap">
             <button class="submit-btn" onclick="submitFeedback()">피드백 제출 →</button>
-            <div class="submit-confirm" id="submit-ok">
-              ✅ 감사합니다! 피드백이 기록되었습니다.
-            </div>
+            <div class="submit-confirm" id="submit-ok">✅ 감사합니다! 피드백이 기록되었습니다.</div>
           </div>
 
           <div style="background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:14px;
                       font-size:.78rem;color:var(--muted);line-height:1.7">
             <b style="color:var(--text)">📌 현재 시스템 상태</b><br>
-            • 데이터: 합성 BTC/KRW (실데이터 연동 준비 중 — 업비트 API)<br>
+            • 데이터: 합성 BTC/KRW, USDT/KRW (실데이터 연동 준비 중)<br>
             • 배포: 프로토타입 데모 (로컬/클라우드 Streamlit 앱 별도 운영)<br>
             • 주의: 본 시스템은 매매 기획 보조 도구이며, 실제 주문 실행 기능은 포함되지 않습니다.
           </div>
         </div>
       </div>
+
     </div><!-- /탭 컨테이너 -->
   </main>
-</div><!-- /layout -->
+</div>
 
 <script>
-// ─── 차트 데이터 ───────────────────────────────────
-const D = {"snap": {"as_of": "2026-04-30", "target": "2026-05", "ref": 313439106, "u1": 364748527.77978504, "l1": 269347415.2399967, "u2": 424457210.25480664, "l2": 231458132.40185544, "ru": 364748527.77978504, "rl": 269347415.2399967, "sigma": 1.0, "range_pct": 35.4, "monthly_sigma": 15.2, "daily_sigma": 2.77, "confidence": 68.3, "gi_pct": 0.5, "gi_krw": 1567195, "bots": 71, "deployed": 28000000, "reserve": 12000000, "per_bot": 394366, "volume": 6975058425.017568, "reward": 1046258, "capital": 40000000}, "mon": {"elapsed": 15, "total": 31, "progress": 48.4, "containment": 100.0, "status": "ON_TRACK", "detail": "15/31\uc77c \uacbd\uacfc (48%) \u2014 containment 100%", "sigma_change": -8.7, "box_shift": -3.04, "cur_price": 337454075, "rev_ru": 338382104, "rev_rl": 276444233, "rev_u2": 374375407, "rev_l2": 249866255}, "pre_x": ["2026-01-31", "2026-02-01", "2026-02-02", "2026-02-03", "2026-02-04", "2026-02-05", "2026-02-06", "2026-02-07", "2026-02-08", "2026-02-09", "2026-02-10", "2026-02-11", "2026-02-12", "2026-02-13", "2026-02-14", "2026-02-15", "2026-02-16", "2026-02-17", "2026-02-18", "2026-02-19", "2026-02-20", "2026-02-21", "2026-02-22", "2026-02-23", "2026-02-24", "2026-02-25", "2026-02-26", "2026-02-27", "2026-02-28", "2026-03-01", "2026-03-02", "2026-03-03", "2026-03-04", "2026-03-05", "2026-03-06", "2026-03-07", "2026-03-08", "2026-03-09", "2026-03-10", "2026-03-11", "2026-03-12", "2026-03-13", "2026-03-14", "2026-03-15", "2026-03-16", "2026-03-17", "2026-03-18", "2026-03-19", "2026-03-20", "2026-03-21", "2026-03-22", "2026-03-23", "2026-03-24", "2026-03-25", "2026-03-26", "2026-03-27", "2026-03-28", "2026-03-29", "2026-03-30", "2026-03-31", "2026-04-01", "2026-04-02", "2026-04-03", "2026-04-04", "2026-04-05", "2026-04-06", "2026-04-07", "2026-04-08", "2026-04-09", "2026-04-10", "2026-04-11", "2026-04-12", "2026-04-13", "2026-04-14", "2026-04-15", "2026-04-16", "2026-04-17", "2026-04-18", "2026-04-19", "2026-04-20", "2026-04-21", "2026-04-22", "2026-04-23", "2026-04-24", "2026-04-25", "2026-04-26", "2026-04-27", "2026-04-28", "2026-04-29", "2026-04-30"], "pre_o": [414392518, 414418331, 415095448, 418639387, 418340515, 426027649, 425143882, 426160271, 414528563, 402756884, 397467921, 403796558, 405648989, 412569702, 432641795, 433413681, 421093641, 419056305, 425570476, 417681430, 441599217, 448141551, 453809339, 454126068, 463518841, 456558076, 449460831, 455869457, 463645035, 473243852, 490559201, 488420699, 505652306, 491745338, 485628029, 467404663, 459564730, 438067735, 429799043, 432294931, 417357315, 428298120, 433555908, 424914800, 418035711, 401509536, 407937055, 401582253, 410013511, 399089475, 374833152, 366647450, 364667015, 353645116, 341504901, 334945715, 338452787, 336690117, 334452957, 320182171, 322821168, 320140677, 327642960, 324115666, 325545319, 334348036, 333343789, 333929329, 308904000, 287912202, 298124131, 299579590, 303359483, 297578073, 296071840, 297750551, 293646146, 304080503, 294716080, 295496137, 302858640, 301115252, 314829850, 308833711, 295807033, 299389107, 302133059, 303306633, 305311580, 310996357], "pre_h": [421707614, 427832980, 419756376, 421037211, 426423633, 428193940, 444514551, 432565167, 417346630, 406075335, 409485462, 410158066, 418867403, 434187460, 443817155, 440191856, 424477418, 426685312, 433719758, 446214612, 452407281, 456461285, 457910969, 472973771, 475225486, 464968679, 464857898, 485817122, 478096523, 506306969, 502851594, 521851629, 509799739, 492926029, 497479272, 480212334, 464532505, 452722897, 441253585, 438702266, 437468567, 440441993, 444468882, 425613913, 420748635, 410002749, 416228271, 413774935, 410922511, 401412528, 375097937, 374876906, 367621207, 364508964, 346791214, 349756863, 341484060, 344528044, 338999200, 332784308, 325502875, 334747345, 328079810, 328517824, 337729903, 338173401, 335818237, 340530073, 311322329, 302551797, 308115770, 304552063, 304248972, 300313096, 309832294, 300481998, 308232147, 304785752, 302967506, 304253059, 304991080, 329981296, 318985360, 309058125, 305080934, 302903128, 317783242, 306616610, 311117249, 317403992], "pre_l": [407103235, 401680799, 413978459, 415942691, 417944531, 422977591, 406789602, 408123667, 399938817, 394149470, 391779016, 399287480, 399351287, 411024037, 422238320, 414315466, 415672527, 417941469, 409532148, 413066035, 437333487, 445489605, 450024439, 444671138, 444851431, 441050229, 440472390, 433697370, 458792364, 457496084, 476128306, 472221376, 487597905, 484447338, 455553420, 446757060, 433099960, 415143881, 420840389, 410949980, 408186868, 421412034, 414001825, 417336597, 398796611, 399443842, 393291037, 397820828, 398180475, 372510099, 366382665, 356437560, 350690925, 330641054, 329659402, 323641639, 333658843, 326615030, 315635927, 310219030, 317458970, 313036291, 323678816, 321143161, 322163452, 329518424, 331454882, 302303256, 285493872, 283484536, 289587951, 298387011, 296688584, 293336818, 283990098, 290914700, 289494501, 294010830, 287244710, 294101717, 298982812, 285963806, 304678200, 295582618, 290115206, 298619039, 287656450, 302001603, 305190688, 307031470], "pre_c": [414418331, 415095448, 418639387, 418340515, 426027649, 425143882, 426160271, 414528563, 402756884, 397467921, 403796558, 405648989, 412569702, 432641795, 433413681, 421093641, 419056305, 425570476, 417681430, 441599217, 448141551, 453809339, 454126068, 463518841, 456558076, 449460831, 455869457, 463645035, 473243852, 490559201, 488420699, 505652306, 491745338, 485628029, 467404663, 459564730, 438067735, 429799043, 432294931, 417357315, 428298120, 433555908, 424914800, 418035711, 401509536, 407937055, 401582253, 410013511, 399089475, 374833152, 366647450, 364667015, 353645116, 341504901, 334945715, 338452787, 336690117, 334452957, 320182171, 322821168, 320140677, 327642960, 324115666, 325545319, 334348036, 333343789, 333929329, 308904000, 287912202, 298124131, 299579590, 303359483, 297578073, 296071840, 297750551, 293646146, 304080503, 294716080, 295496137, 302858640, 301115252, 314829850, 308833711, 295807033, 299389107, 302133059, 303306633, 305311580, 310996357, 313439106], "fut": ["2026-05-01", "2026-05-02", "2026-05-03", "2026-05-04", "2026-05-05", "2026-05-06", "2026-05-07", "2026-05-08", "2026-05-09", "2026-05-10", "2026-05-11", "2026-05-12", "2026-05-13", "2026-05-14", "2026-05-15", "2026-05-16", "2026-05-17", "2026-05-18", "2026-05-19", "2026-05-20", "2026-05-21", "2026-05-22", "2026-05-23", "2026-05-24", "2026-05-25", "2026-05-26", "2026-05-27", "2026-05-28", "2026-05-29", "2026-05-30", "2026-05-31"], "fut_rem": ["2026-05-16", "2026-05-17", "2026-05-18", "2026-05-19", "2026-05-20", "2026-05-21", "2026-05-22", "2026-05-23", "2026-05-24", "2026-05-25", "2026-05-26", "2026-05-27", "2026-05-28", "2026-05-29", "2026-05-30", "2026-05-31"], "glines": [269347415, 270694152, 272047623, 273407861, 274774900, 276148775, 277529518, 278917166, 280311752, 281713311, 283121877, 284537487, 285960174, 287389975, 288826925, 290271059, 291722415, 293181027, 294646932, 296120166, 297600767, 299088771, 300584215, 302087136, 303597572, 305115560, 306641137, 308174343, 309715215, 311263791, 312820110, 314384210, 315956131, 317535912, 319123592, 320719210, 322322806, 323934420, 325554092, 327181862, 328817772, 330461860, 332114170, 333774741, 335443614, 337120832, 338806437, 340500469, 342202971, 343913986, 345633556, 347361724, 349098532, 350844025, 352598245, 354361236, 356133043, 357913708, 359703276, 361501793, 363309302], "meas_in": {"x": ["2026-05-01", "2026-05-02", "2026-05-03", "2026-05-04", "2026-05-05", "2026-05-06", "2026-05-07", "2026-05-08", "2026-05-09", "2026-05-10", "2026-05-11", "2026-05-12", "2026-05-13", "2026-05-14", "2026-05-15"], "o": [313439106, 311426745, 318687533, 316321316, 307085492, 307441083, 297469268, 299296483, 305237743, 307667958, 295148243, 290085301, 288445520, 310353066, 307655858], "h": [314376512, 320824220, 322304736, 319829512, 313639564, 309118100, 302711698, 307224708, 314050240, 310359167, 297246649, 297125386, 313248469, 312882159, 308581164], "l": [310489339, 309290058, 312704113, 303577296, 300887010, 295792251, 294054053, 297309518, 298855461, 292457033, 287986894, 281405436, 285550118, 305126766, 304923973], "c": [311426745, 318687533, 316321316, 307085492, 307441083, 297469268, 299296483, 305237743, 307667958, 295148243, 290085301, 288445520, 310353066, 307655858, 305849279]}, "meas_w": {"x": [], "o": [], "h": [], "l": [], "c": []}, "meas_bu": {"x": [], "o": [], "h": [], "l": [], "c": []}, "meas_bl": {"x": [], "o": [], "h": [], "l": [], "c": []}};
+// ─── 기존 BTC 차트 데이터 ────────────────────────────────────────────────────
+const D = {"snap": {"as_of": "2026-04-30", "target": "2026-05", "ref": 313439106, "u1": 364748527.77978504, "l1": 269347415.2399967, "u2": 424457210.25480664, "l2": 231458132.40185544, "ru": 364748527.77978504, "rl": 269347415.2399967, "sigma": 1.0, "range_pct": 35.4, "monthly_sigma": 15.2, "daily_sigma": 2.77, "confidence": 68.3, "gi_pct": 0.5, "gi_krw": 1567195, "bots": 71, "deployed": 28000000, "reserve": 12000000, "per_bot": 394366, "volume": 6975058425.017568, "reward": 1046258, "capital": 40000000}, "mon": {"elapsed": 15, "total": 31, "progress": 48.4, "containment": 100.0, "status": "ON_TRACK", "detail": "15/31일 경과 (48%) — containment 100%", "sigma_change": -8.7, "box_shift": -3.04, "cur_price": 337454075, "rev_ru": 338382104, "rev_rl": 276444233, "rev_u2": 374375407, "rev_l2": 249866255}, "pre_x": ["2026-01-31", "2026-02-01", "2026-02-02", "2026-02-03", "2026-02-04", "2026-02-05", "2026-02-06", "2026-02-07", "2026-02-08", "2026-02-09", "2026-02-10", "2026-02-11", "2026-02-12", "2026-02-13", "2026-02-14", "2026-02-15", "2026-02-16", "2026-02-17", "2026-02-18", "2026-02-19", "2026-02-20", "2026-02-21", "2026-02-22", "2026-02-23", "2026-02-24", "2026-02-25", "2026-02-26", "2026-02-27", "2026-02-28", "2026-03-01", "2026-03-02", "2026-03-03", "2026-03-04", "2026-03-05", "2026-03-06", "2026-03-07", "2026-03-08", "2026-03-09", "2026-03-10", "2026-03-11", "2026-03-12", "2026-03-13", "2026-03-14", "2026-03-15", "2026-03-16", "2026-03-17", "2026-03-18", "2026-03-19", "2026-03-20", "2026-03-21", "2026-03-22", "2026-03-23", "2026-03-24", "2026-03-25", "2026-03-26", "2026-03-27", "2026-03-28", "2026-03-29", "2026-03-30", "2026-03-31", "2026-04-01", "2026-04-02", "2026-04-03", "2026-04-04", "2026-04-05", "2026-04-06", "2026-04-07", "2026-04-08", "2026-04-09", "2026-04-10", "2026-04-11", "2026-04-12", "2026-04-13", "2026-04-14", "2026-04-15", "2026-04-16", "2026-04-17", "2026-04-18", "2026-04-19", "2026-04-20", "2026-04-21", "2026-04-22", "2026-04-23", "2026-04-24", "2026-04-25", "2026-04-26", "2026-04-27", "2026-04-28", "2026-04-29", "2026-04-30"], "pre_o": [414392518, 414418331, 415095448, 418639387, 418340515, 426027649, 425143882, 426160271, 414528563, 402756884, 397467921, 403796558, 405648989, 412569702, 432641795, 433413681, 421093641, 419056305, 425570476, 417681430, 441599217, 448141551, 453809339, 454126068, 463518841, 456558076, 449460831, 455869457, 463645035, 473243852, 490559201, 488420699, 505652306, 491745338, 485628029, 467404663, 459564730, 438067735, 429799043, 432294931, 417357315, 428298120, 433555908, 424914800, 418035711, 401509536, 407937055, 401582253, 410013511, 399089475, 374833152, 366647450, 364667015, 353645116, 341504901, 334945715, 338452787, 336690117, 334452957, 320182171, 322821168, 320140677, 327642960, 324115666, 325545319, 334348036, 333343789, 333929329, 308904000, 287912202, 298124131, 299579590, 303359483, 297578073, 296071840, 297750551, 293646146, 304080503, 294716080, 295496137, 302858640, 301115252, 314829850, 308833711, 295807033, 299389107, 302133059, 303306633, 305311580, 310996357], "pre_h": [421707614, 427832980, 419756376, 421037211, 426423633, 428193940, 444514551, 432565167, 417346630, 406075335, 409485462, 410158066, 418867403, 434187460, 443817155, 440191856, 424477418, 426685312, 433719758, 446214612, 452407281, 456461285, 457910969, 472973771, 475225486, 464968679, 464857898, 485817122, 478096523, 506306969, 502851594, 521851629, 509799739, 492926029, 497479272, 480212334, 464532505, 452722897, 441253585, 438702266, 437468567, 440441993, 444468882, 425613913, 420748635, 410002749, 416228271, 413774935, 410922511, 401412528, 375097937, 374876906, 367621207, 364508964, 346791214, 349756863, 341484060, 344528044, 338999200, 332784308, 325502875, 334747345, 328079810, 328517824, 337729903, 338173401, 335818237, 340530073, 311322329, 302551797, 308115770, 304552063, 304248972, 300313096, 309832294, 300481998, 308232147, 304785752, 302967506, 304253059, 304991080, 329981296, 318985360, 309058125, 305080934, 302903128, 317783242, 306616610, 311117249, 317403992], "pre_l": [407103235, 401680799, 413978459, 415942691, 417944531, 422977591, 406789602, 408123667, 399938817, 394149470, 391779016, 399287480, 399351287, 411024037, 422238320, 414315466, 415672527, 417941469, 409532148, 413066035, 437333487, 445489605, 450024439, 444671138, 444851431, 441050229, 440472390, 433697370, 458792364, 457496084, 476128306, 472221376, 487597905, 484447338, 455553420, 446757060, 433099960, 415143881, 420840389, 410949980, 408186868, 421412034, 414001825, 417336597, 398796611, 399443842, 393291037, 397820828, 398180475, 372510099, 366382665, 356437560, 350690925, 330641054, 329659402, 323641639, 333658843, 326615030, 315635927, 310219030, 317458970, 313036291, 323678816, 321143161, 322163452, 329518424, 331454882, 302303256, 285493872, 283484536, 289587951, 298387011, 296688584, 293336818, 283990098, 290914700, 289494501, 294010830, 287244710, 294101717, 298982812, 285963806, 304678200, 295582618, 290115206, 298619039, 287656450, 302001603, 305190688, 307031470], "pre_c": [414418331, 415095448, 418639387, 418340515, 426027649, 425143882, 426160271, 414528563, 402756884, 397467921, 403796558, 405648989, 412569702, 432641795, 433413681, 421093641, 419056305, 425570476, 417681430, 441599217, 448141551, 453809339, 454126068, 463518841, 456558076, 449460831, 455869457, 463645035, 473243852, 490559201, 488420699, 505652306, 491745338, 485628029, 467404663, 459564730, 438067735, 429799043, 432294931, 417357315, 428298120, 433555908, 424914800, 418035711, 401509536, 407937055, 401582253, 410013511, 399089475, 374833152, 366647450, 364667015, 353645116, 341504901, 334945715, 338452787, 336690117, 334452957, 320182171, 322821168, 320140677, 327642960, 324115666, 325545319, 334348036, 333343789, 333929329, 308904000, 287912202, 298124131, 299579590, 303359483, 297578073, 296071840, 297750551, 293646146, 304080503, 294716080, 295496137, 302858640, 301115252, 314829850, 308833711, 295807033, 299389107, 302133059, 303306633, 305311580, 310996357, 313439106], "fut": ["2026-05-01", "2026-05-02", "2026-05-03", "2026-05-04", "2026-05-05", "2026-05-06", "2026-05-07", "2026-05-08", "2026-05-09", "2026-05-10", "2026-05-11", "2026-05-12", "2026-05-13", "2026-05-14", "2026-05-15", "2026-05-16", "2026-05-17", "2026-05-18", "2026-05-19", "2026-05-20", "2026-05-21", "2026-05-22", "2026-05-23", "2026-05-24", "2026-05-25", "2026-05-26", "2026-05-27", "2026-05-28", "2026-05-29", "2026-05-30", "2026-05-31"], "fut_rem": ["2026-05-16", "2026-05-17", "2026-05-18", "2026-05-19", "2026-05-20", "2026-05-21", "2026-05-22", "2026-05-23", "2026-05-24", "2026-05-25", "2026-05-26", "2026-05-27", "2026-05-28", "2026-05-29", "2026-05-30", "2026-05-31"], "glines": [269347415, 270694152, 272047623, 273407861, 274774900, 276148775, 277529518, 278917166, 280311752, 281713311, 283121877, 284537487, 285960174, 287389975, 288826925, 290271059, 291722415, 293181027, 294646932, 296120166, 297600767, 299088771, 300584215, 302087136, 303597572, 305115560, 306641137, 308174343, 309715215, 311263791, 312820110, 314384210, 315956131, 317535912, 319123592, 320719210, 322322806, 323934420, 325554092, 327181862, 328817772, 330461860, 332114170, 333774741, 335443614, 337120832, 338806437, 340500469, 342202971, 343913986, 345633556, 347361724, 349098532, 350844025, 352598245, 354361236, 356133043, 357913708, 359703276, 361501793, 363309302], "meas_in": {"x": ["2026-05-01", "2026-05-02", "2026-05-03", "2026-05-04", "2026-05-05", "2026-05-06", "2026-05-07", "2026-05-08", "2026-05-09", "2026-05-10", "2026-05-11", "2026-05-12", "2026-05-13", "2026-05-14", "2026-05-15"], "o": [313439106, 311426745, 318687533, 316321316, 307085492, 307441083, 297469268, 299296483, 305237743, 307667958, 295148243, 290085301, 288445520, 310353066, 307655858], "h": [314376512, 320824220, 322304736, 319829512, 313639564, 309118100, 302711698, 307224708, 314050240, 310359167, 297246649, 297125386, 313248469, 312882159, 308581164], "l": [310489339, 309290058, 312704113, 303577296, 300887010, 295792251, 294054053, 297309518, 298855461, 292457033, 287986894, 281405436, 285550118, 305126766, 304923973], "c": [311426745, 318687533, 316321316, 307085492, 307441083, 297469268, 299296483, 305237743, 307667958, 295148243, 290085301, 288445520, 310353066, 307655858, 305849279]}, "meas_w": {"x": [], "o": [], "h": [], "l": [], "c": []}, "meas_bu": {"x": [], "o": [], "h": [], "l": [], "c": []}, "meas_bl": {"x": [], "o": [], "h": [], "l": [], "c": []}};
 
-// ─── 탭 전환 ────────────────────────────────────────
+// ─── USDT/KRW 데이터 (합성) ─────────────────────────────────────────────────
+const USDT = {
+  ref: 1401,
+  u1: 1416, l1: 1386,
+  u2: 1430, l2: 1371,
+  sigma_pct: 2.2,
+};
+
+// 결정론적 랜덤 시드 함수
+function seededRandom(seed) {
+  let s = seed;
+  return function() {
+    s = (s * 1664525 + 1013904223) & 0xffffffff;
+    return ((s >>> 0) / 0xffffffff);
+  };
+}
+
+function generateUSDTPriceSeries() {
+  const rng = seededRandom(20260501);
+  const dates = [];
+  const prices = [];
+  let price = 1401;
+  const sigma_daily = 0.0035; // 0.35%
+
+  for (let d = 1; d <= 31; d++) {
+    const dateStr = `2026-05-${String(d).padStart(2,'0')}`;
+    dates.push(dateStr);
+    const u = rng();
+    const v = rng();
+    // Box-Muller
+    const z = Math.sqrt(-2 * Math.log(u + 1e-10)) * Math.cos(2 * Math.PI * v);
+    price = price * (1 + z * sigma_daily);
+    // clamp to 2σ band roughly
+    price = Math.max(USDT.l2 - 5, Math.min(USDT.u2 + 5, price));
+    prices.push(+price.toFixed(2));
+  }
+  return {dates, prices};
+}
+
+// ─── 탭 전환 ────────────────────────────────────────────────────────────────
 function switchTab(id, el) {
   document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
   document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
   el.classList.add('active');
   document.getElementById('tab-'+id).classList.add('active');
-  if (id === 'predict' && !window._chartP) buildPredictChart();
-  if (id === 'monitor' && !window._chartM) buildMonitorChart();
+  if (id === 'btc'     && !window._chartBTC)  { buildBTCChart(); }
+  if (id === 'usdt'    && !window._chartUSDT) { buildUSDTChart(); }
+  if (id === 'monitor' && !window._chartM)    { buildMonitorChart(); }
 }
 
-// ─── 메트릭 갱신 (사이드바 조정) ─────────────────────
-function updateMetrics() {
-  const cap = +document.getElementById('capital').value || 40000000;
-  const krw = +document.getElementById('krwHold').value / 100;
-  const aggr = document.getElementById('aggr').value;
-  const giMap = {conservative:1.0, balanced:0.5, aggressive:0.3};
-  const gi = giMap[aggr] || 0.5;
-  const dep = Math.round(cap * (1 - krw));
-  const res = Math.round(cap * krw);
-  const snap = D.snap;
-  const bots = Math.max(1, Math.min(1000, Math.ceil(snap.range_pct / gi)));
-  const perBot = Math.round(dep / bots);
-  const giKrw = Math.round(snap.ref * gi / 100);
-  // 거래량 근사: 일왕복 ≈ (변동폭/gi)*효율*30*배치*2
-  const dailyRT = Math.min(snap.range_pct / gi, snap.range_pct / gi) * 0.5;
-  const vol = dailyRT * 30 * dep * 2;
-  const reward = vol >= 1e10 ? Math.min(vol*0.0002, 3000000)
-               : vol >= 1e9  ? Math.min(vol*0.00018, 3000000)
-               : vol >= 1e8  ? Math.min(vol*0.00015, 3000000)
-               : vol >= 1e7  ? Math.min(vol*0.00008, 3000000) : 0;
-
-  document.getElementById('t-gi').textContent = gi.toFixed(2)+'% ('+fmt(giKrw)+'원)';
-  document.getElementById('t-bots').textContent = bots+'개';
-  document.getElementById('t-dep').textContent = fmt(dep)+'원';
-  document.getElementById('t-res').textContent = fmt(res)+'원';
-  document.getElementById('t-pbot').textContent = fmt(perBot)+'원';
-  document.getElementById('t-vol').textContent = (vol/1e8).toFixed(1)+'억';
-  document.getElementById('t-rew').textContent = fmt(Math.round(reward))+'원';
-}
-
+// ─── 유틸 ───────────────────────────────────────────────────────────────────
 function fmt(n) { return Math.round(n).toLocaleString('ko-KR'); }
+function fmtM(n) { return (n / 1e6).toFixed(1) + 'M'; }
 
-// ─── 예측 차트 ────────────────────────────────────────
-function buildPredictChart() {
-  window._chartP = true;
+// ─── 도넛 차트 (SVG) ────────────────────────────────────────────────────────
+function drawDonut(segments) {
+  // segments: [{value, color, label}]
+  const svg = document.getElementById('donut-svg');
+  const total = segments.reduce((a, b) => a + b.value, 0);
+  const cx = 80, cy = 80, r = 60, ir = 36;
+  let startAngle = -Math.PI / 2;
+
+  svg.innerHTML = '';
+
+  segments.forEach(seg => {
+    const angle = (seg.value / total) * 2 * Math.PI;
+    const endAngle = startAngle + angle;
+    const x1 = cx + r * Math.cos(startAngle);
+    const y1 = cy + r * Math.sin(startAngle);
+    const x2 = cx + r * Math.cos(endAngle);
+    const y2 = cy + r * Math.sin(endAngle);
+    const ix1 = cx + ir * Math.cos(startAngle);
+    const iy1 = cy + ir * Math.sin(startAngle);
+    const ix2 = cx + ir * Math.cos(endAngle);
+    const iy2 = cy + ir * Math.sin(endAngle);
+    const large = angle > Math.PI ? 1 : 0;
+
+    const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    path.setAttribute('d',
+      `M ${ix1} ${iy1} L ${x1} ${y1} A ${r} ${r} 0 ${large} 1 ${x2} ${y2} L ${ix2} ${iy2} A ${ir} ${ir} 0 ${large} 0 ${ix1} ${iy1} Z`
+    );
+    path.setAttribute('fill', seg.color);
+    path.setAttribute('opacity', '0.9');
+    svg.appendChild(path);
+    startAngle = endAngle;
+  });
+
+  // center text
+  const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+  text.setAttribute('x', cx); text.setAttribute('y', cy - 4);
+  text.setAttribute('text-anchor', 'middle');
+  text.setAttribute('fill', '#e8eaf0');
+  text.setAttribute('font-size', '13');
+  text.setAttribute('font-weight', '700');
+  text.textContent = '40M';
+  svg.appendChild(text);
+
+  const sub = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+  sub.setAttribute('x', cx); sub.setAttribute('y', cy + 12);
+  sub.setAttribute('text-anchor', 'middle');
+  sub.setAttribute('fill', '#8b929e');
+  sub.setAttribute('font-size', '9');
+  sub.textContent = '총 투입자본';
+  svg.appendChild(sub);
+}
+
+// ─── 메트릭 갱신 ────────────────────────────────────────────────────────────
+function updateMetrics() {
+  const totalCap = +document.getElementById('capital').value || 40000000;
+  const btcRatio = +document.getElementById('btcRatio').value / 100;
+  const innerRatio = +document.getElementById('innerRatio').value / 100;
+  const krwHold = +document.getElementById('krwHold').value / 100;
+
+  const investable = totalCap * (1 - krwHold);
+  const btcCap   = investable * btcRatio;
+  const usdtCap  = investable * (1 - btcRatio);
+  const innerBtc  = btcCap * innerRatio;
+  const outerBtc  = btcCap * (1 - innerRatio);
+  const innerUsdt = usdtCap * innerRatio;
+  const outerUsdt = usdtCap * (1 - innerRatio);
+
+  const btcInnerBots = Math.max(1, Math.round(D.snap.range_pct / 1.0));
+  const btcOuterBots = Math.max(1, Math.round(D.snap.range_pct / 0.5));
+  const usdtInnerBots = 30;
+  const usdtOuterBots = 30;
+
+  // Update strategy cards
+  const cards = [
+    ['si-btci-cap', innerBtc, 'si-btci-bots', btcInnerBots, 'si-btci-pbot', innerBtc/btcInnerBots, 'si-btci-net', innerBtc * 0.0206],
+    ['si-btco-cap', outerBtc, 'si-btco-bots', btcOuterBots, 'si-btco-pbot', outerBtc/btcOuterBots, 'si-btco-net', outerBtc * 0.01],
+    ['si-usdti-cap', innerUsdt, 'si-usdti-bots', usdtInnerBots, 'si-usdti-pbot', innerUsdt/usdtInnerBots, 'si-usdti-net', innerUsdt * 0.0221],
+    ['si-usdto-cap', outerUsdt, 'si-usdto-bots', usdtOuterBots, 'si-usdto-pbot', outerUsdt/usdtOuterBots, 'si-usdto-net', outerUsdt * 0.00266],
+  ];
+
+  function setEl(id, val) { const el = document.getElementById(id); if (el) el.textContent = val; }
+
+  setEl('si-btci-cap',  fmt(Math.round(innerBtc/1e4)/100 * 100)+'원');
+  setEl('si-btci-bots', btcInnerBots + '개');
+  setEl('si-btci-pbot', fmt(Math.round(innerBtc/btcInnerBots)) + '원');
+  setEl('si-btci-net',  '+' + Math.round(innerBtc * 0.0206 / 1e4) + '만원');
+
+  setEl('si-btco-cap',  fmt(Math.round(outerBtc/1e4)/100 * 100)+'원');
+  setEl('si-btco-bots', btcOuterBots + '개');
+  setEl('si-btco-pbot', fmt(Math.round(outerBtc/btcOuterBots)) + '원');
+  setEl('si-btco-net',  '+' + Math.round(outerBtc * 0.01 / 1e4) + '만원');
+
+  setEl('si-usdti-cap',  fmt(Math.round(innerUsdt/1e4)/100 * 100)+'원');
+  setEl('si-usdti-bots', usdtInnerBots + '개');
+  setEl('si-usdti-pbot', fmt(Math.round(innerUsdt/usdtInnerBots)) + '원');
+  setEl('si-usdti-net',  '+' + Math.round(innerUsdt * 0.0221 / 1e4) + '만원');
+
+  setEl('si-usdto-cap',  fmt(Math.round(outerUsdt/1e4)/100 * 100)+'원');
+  setEl('si-usdto-bots', usdtOuterBots + '개');
+  setEl('si-usdto-pbot', fmt(Math.round(outerUsdt/usdtOuterBots)) + '원');
+  setEl('si-usdto-net',  '+' + Math.round(outerUsdt * 0.00266 / 1e4) + '만원');
+
+  // BTC tab zone table
+  setEl('btc-inner-cap',  fmt(Math.round(innerBtc))+'원');
+  setEl('btc-inner-bots', btcInnerBots+'개');
+  setEl('btc-inner-pbot', fmt(Math.round(innerBtc/btcInnerBots))+'원');
+  setEl('btc-outer-cap',  fmt(Math.round(outerBtc))+'원');
+  setEl('btc-outer-bots', btcOuterBots+'개');
+  setEl('btc-outer-pbot', fmt(Math.round(outerBtc/btcOuterBots))+'원');
+  setEl('btc-inner-pct',  Math.round(innerRatio*100)+'%');
+  setEl('btc-outer-pct',  Math.round((1-innerRatio)*100)+'%');
+
+  // USDT tab zone table
+  setEl('usdt-inner-cap',  fmt(Math.round(innerUsdt))+'원');
+  setEl('usdt-inner-bots', usdtInnerBots+'개');
+  setEl('usdt-inner-pbot', fmt(Math.round(innerUsdt/usdtInnerBots))+'원');
+  setEl('usdt-outer-cap',  fmt(Math.round(outerUsdt))+'원');
+  setEl('usdt-outer-bots', usdtOuterBots+'개');
+  setEl('usdt-outer-pbot', fmt(Math.round(outerUsdt/usdtOuterBots))+'원');
+
+  // Legend text
+  const pct = (v) => Math.round(v/investable*100);
+  setEl('leg-btc-inner',  `BTC 내부존 (1σ) — ${fmt(Math.round(innerBtc/1e4)/100*100)}M (${pct(innerBtc)}%)`);
+  setEl('leg-btc-outer',  `BTC 외부존 (2σ) — ${fmt(Math.round(outerBtc/1e4)/100*100)}M (${pct(outerBtc)}%)`);
+  setEl('leg-usdt-inner', `USDT 내부존 (1σ) — ${fmt(Math.round(innerUsdt/1e4)/100*100)}M (${pct(innerUsdt)}%)`);
+  setEl('leg-usdt-outer', `USDT 외부존 (2σ) — ${fmt(Math.round(outerUsdt/1e4)/100*100)}M (${pct(outerUsdt)}%)`);
+
+  // Redraw donut
+  drawDonut([
+    {value: innerBtc,  color: '#4f8ef7'},
+    {value: outerBtc,  color: '#ff7f0e'},
+    {value: innerUsdt, color: '#26a17b'},
+    {value: outerUsdt, color: '#a0d8a0'},
+  ]);
+}
+
+// ─── BTC 예측 차트 ──────────────────────────────────────────────────────────
+function buildBTCChart() {
+  window._chartBTC = true;
   const s = D.snap;
   const bandX = [D.pre_x[D.pre_x.length-1], ...D.fut];
 
   const traces = [
-    // 캔들
     {type:'candlestick', x:D.pre_x, open:D.pre_o, high:D.pre_h, low:D.pre_l, close:D.pre_c,
      name:'BTC/KRW', increasing:{line:{color:'#d24f45'}}, decreasing:{line:{color:'#4169e1'}}},
-    // 2σ 음영
+    // 2σ fill (orange)
     {type:'scatter', x:[...bandX,...[...bandX].reverse()],
      y:[...bandX.map(()=>s.u2),...[...bandX].reverse().map(()=>s.l2)],
-     fill:'toself', fillcolor:'rgba(255,165,0,0.08)', line:{width:0}, name:'2σ 밴드', hoverinfo:'skip'},
-    // 1σ 음영
+     fill:'toself', fillcolor:'rgba(255,127,14,0.10)', line:{width:0}, name:'2σ 외부존', hoverinfo:'skip'},
+    // 1σ fill (blue)
     {type:'scatter', x:[...bandX,...[...bandX].reverse()],
      y:[...bandX.map(()=>s.u1),...[...bandX].reverse().map(()=>s.l1)],
-     fill:'toself', fillcolor:'rgba(65,105,225,0.11)', line:{width:0}, name:'1σ 밴드', hoverinfo:'skip'},
-    // 박스 라인
+     fill:'toself', fillcolor:'rgba(79,142,247,0.12)', line:{width:0}, name:'1σ 내부존', hoverinfo:'skip'},
+    // Band lines
     ...[
-      [s.u2,'orange','2σ 상단','dot',1],[s.l2,'orange','2σ 하단','dot',1],
-      [s.u1,'#4169e1','1σ 상단','dash',1.5],[s.l1,'#4169e1','1σ 하단','dash',1.5],
-      [s.ru,'#2ca02c','권장 상단','solid',2.5],[s.rl,'#2ca02c','권장 하단','solid',2.5],
+      [s.u2,'#ff7f0e','2σ 상단','dot',1],
+      [s.l2,'#ff7f0e','2σ 하단','dot',1],
+      [s.u1,'#4f8ef7','1σ 상단','dash',1.5],
+      [s.l1,'#4f8ef7','1σ 하단','dash',1.5],
       [s.ref,'#888','기준가','dot',1],
     ].map(([y,color,name,dash,width])=>({
       type:'scatter', x:bandX, y:bandX.map(()=>y), mode:'lines',
       line:{color,width,dash}, name,
     })),
-    // 그리드 라인
+    // Grid lines (inner zone only, blue tint)
     ...D.glines.slice(0,60).map((gl,i)=>({
       type:'scatter', x:D.fut, y:D.fut.map(()=>gl), mode:'lines',
-      line:{color:'rgba(80,80,80,0.18)',width:0.5},
+      line:{color:'rgba(79,142,247,0.15)',width:0.5},
       showlegend:i===0, name:i===0?'그리드 라인':null, hoverinfo:'skip',
     })),
   ];
 
-  Plotly.newPlot('chart-predict', traces, {
+  Plotly.newPlot('chart-btc', traces, {
     paper_bgcolor:'#1a1d23', plot_bgcolor:'#1a1d23',
     font:{color:'#e0e0e0'}, height:480,
     xaxis:{rangeslider:{visible:false}, gridcolor:'rgba(80,80,80,0.2)',
@@ -603,7 +1060,65 @@ function buildPredictChart() {
   }, {responsive:true});
 }
 
-// ─── 모니터 차트 ────────────────────────────────────────
+// ─── USDT 차트 ──────────────────────────────────────────────────────────────
+function buildUSDTChart() {
+  window._chartUSDT = true;
+  const {dates, prices} = generateUSDTPriceSeries();
+  const U = USDT;
+
+  // 1원 grid lines within inner zone (1386~1416)
+  const innerGridLines = [];
+  for (let p = U.l1; p <= U.u1; p++) {
+    innerGridLines.push(p);
+  }
+
+  const traces = [
+    // 2σ fill (orange)
+    {type:'scatter', x:[...dates,...[...dates].reverse()],
+     y:[...dates.map(()=>U.u2),...[...dates].reverse().map(()=>U.l2)],
+     fill:'toself', fillcolor:'rgba(255,127,14,0.10)', line:{width:0},
+     name:'2σ 외부존 (1,371~1,430원)', hoverinfo:'skip'},
+    // 1σ fill (blue)
+    {type:'scatter', x:[...dates,...[...dates].reverse()],
+     y:[...dates.map(()=>U.u1),...[...dates].reverse().map(()=>U.l1)],
+     fill:'toself', fillcolor:'rgba(79,142,247,0.15)', line:{width:0},
+     name:'1σ 내부존 (1,386~1,416원)', hoverinfo:'skip'},
+    // 1원 grid lines inside inner zone
+    ...innerGridLines.filter((_,i)=>i%2===0).map((gl,i)=>({
+      type:'scatter', x:dates, y:dates.map(()=>gl), mode:'lines',
+      line:{color:'rgba(79,142,247,0.18)', width:0.5},
+      showlegend:i===0, name:i===0?'1원 그리드':null, hoverinfo:'skip',
+    })),
+    // Band lines
+    {type:'scatter', x:dates, y:dates.map(()=>U.u2), mode:'lines',
+     line:{color:'#ff7f0e',width:1,dash:'dot'}, name:'2σ 상단 (1,430원)'},
+    {type:'scatter', x:dates, y:dates.map(()=>U.l2), mode:'lines',
+     line:{color:'#ff7f0e',width:1,dash:'dot'}, name:'2σ 하단 (1,371원)'},
+    {type:'scatter', x:dates, y:dates.map(()=>U.u1), mode:'lines',
+     line:{color:'#4f8ef7',width:1.5,dash:'dash'}, name:'1σ 상단 (1,416원)'},
+    {type:'scatter', x:dates, y:dates.map(()=>U.l1), mode:'lines',
+     line:{color:'#4f8ef7',width:1.5,dash:'dash'}, name:'1σ 하단 (1,386원)'},
+    {type:'scatter', x:dates, y:dates.map(()=>U.ref), mode:'lines',
+     line:{color:'#888',width:1,dash:'dot'}, name:'기준가 (1,401원)'},
+    // Price line
+    {type:'scatter', x:dates, y:prices, mode:'lines',
+     line:{color:'#26a17b',width:2.5}, name:'USDT/KRW (합성)'},
+  ];
+
+  Plotly.newPlot('chart-usdt', traces, {
+    paper_bgcolor:'#1a1d23', plot_bgcolor:'#1a1d23',
+    font:{color:'#e0e0e0'}, height:400,
+    xaxis:{gridcolor:'rgba(80,80,80,0.2)', type:'date'},
+    yaxis:{title:'가격 (KRW/USDT)', tickformat:',.1f',
+           gridcolor:'rgba(80,80,80,0.3)',
+           range:[U.l2 - 8, U.u2 + 8]},
+    legend:{orientation:'h', yanchor:'bottom', y:1.01, bgcolor:'rgba(30,33,40,0.8)',
+            bordercolor:'#444', borderwidth:1, font:{size:10}},
+    margin:{l:60,r:20,t:20,b:40},
+  }, {responsive:true});
+}
+
+// ─── 모니터 차트 ─────────────────────────────────────────────────────────────
 function buildMonitorChart() {
   window._chartM = true;
   const s = D.snap; const m = D.mon;
@@ -611,11 +1126,9 @@ function buildMonitorChart() {
                  l:D.pre_l.slice(-30),c:D.pre_c.slice(-30)};
 
   const traces = [
-    // 사전 히스토리
     {type:'candlestick', x:pre30.x, open:pre30.o, high:pre30.h, low:pre30.l, close:pre30.c,
      name:'사전 히스토리', opacity:0.3,
      increasing:{line:{color:'#d24f45'}}, decreasing:{line:{color:'#4169e1'}}},
-    // 측정 캔들
     ...[
       [D.meas_in,'#2ca02c','🟢 박스 내'],
       [D.meas_w,'#ff7f0e','🟡 경고'],
@@ -625,13 +1138,11 @@ function buildMonitorChart() {
       type:'candlestick', x:d.x, open:d.o, high:d.h, low:d.l, close:d.c,
       name, increasing:{line:{color}}, decreasing:{line:{color}},
     })),
-    // 수정 예측 2σ 음영
     ...(D.fut_rem.length ? [{
       type:'scatter', x:[...D.fut_rem,...[...D.fut_rem].reverse()],
       y:[...D.fut_rem.map(()=>m.rev_u2),...[...D.fut_rem].reverse().map(()=>m.rev_l2)],
       fill:'toself', fillcolor:'rgba(255,165,0,0.08)', line:{width:0}, name:'수정 2σ', hoverinfo:'skip',
     }] : []),
-    // 원본 박스 점선 + 수정 박스 실선
     ...D.fut_rem.length ? [
       [s.ru,'#2ca02c','원본 권장 상단','dot',1.5],
       [s.rl,'#2ca02c','원본 권장 하단','dot',1.5],
@@ -641,7 +1152,6 @@ function buildMonitorChart() {
       type:'scatter', x:D.fut_rem, y:D.fut_rem.map(()=>y), mode:'lines',
       line:{color,width,dash}, name,
     })) : [],
-    // 현재가 마커
     {type:'scatter', x:['2026-05-15'], y:[m.cur_price], mode:'markers+text',
      marker:{size:12, color:'gold', symbol:'diamond'},
      text:['  현재가<br>  '+fmt(m.cur_price)+'원'], textposition:'middle right',
@@ -662,7 +1172,7 @@ function buildMonitorChart() {
   }, {responsive:true});
 }
 
-// ─── 일별 측정 테이블 ──────────────────────────────────
+// ─── 일별 측정 테이블 ────────────────────────────────────────────────────────
 (function buildMeasTable() {
   const tbody = document.getElementById('meas-table');
   const inner_set = new Set(D.meas_in.x);
@@ -686,7 +1196,7 @@ function buildMonitorChart() {
   });
 })();
 
-// ─── 별점 ────────────────────────────────────────────
+// ─── 별점 ────────────────────────────────────────────────────────────────────
 const starRatings = {};
 function setStar(q, val) {
   starRatings[q] = val;
@@ -694,7 +1204,7 @@ function setStar(q, val) {
   stars.forEach((s,i)=>s.classList.toggle('on', i<val));
 }
 
-// ─── 피드백 제출 (로컬 로그) ───────────────────────────
+// ─── 피드백 제출 ─────────────────────────────────────────────────────────────
 function submitFeedback() {
   const fb = {
     name: document.getElementById('fb-name').value,
@@ -705,13 +1215,17 @@ function submitFeedback() {
     stars: starRatings,
     ts: new Date().toISOString(),
   };
-  console.log('📋 Feedback:', JSON.stringify(fb, null, 2));
-  document.getElementById('submit-ok').style.display = 'flex';
-  setTimeout(()=>document.getElementById('submit-ok').style.display='none', 5000);
+  console.log('Feedback:', JSON.stringify(fb, null, 2));
+  const ok = document.getElementById('submit-ok');
+  ok.style.display = 'flex';
+  setTimeout(()=>ok.style.display='none', 5000);
 }
 
-// ─── 초기화 ──────────────────────────────────────────
-window.onload = () => { buildPredictChart(); };
+// ─── 초기화 ──────────────────────────────────────────────────────────────────
+window.onload = () => {
+  updateMetrics();
+  buildBTCChart();
+};
 </script>
 </body>
 </html>
