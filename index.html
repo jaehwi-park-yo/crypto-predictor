@@ -867,9 +867,9 @@ function switchTab(id, el) {
   document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
   el.classList.add('active');
   document.getElementById('tab-'+id).classList.add('active');
-  if (id === 'btc'     && !window._chartBTC)  { buildBTCChart(); }
-  if (id === 'usdt'    && !window._chartUSDT) { buildUSDTChart(); }
-  if (id === 'monitor' && !window._chartM)    { buildMonitorChart(); }
+  if (id === 'btc')     { window._chartBTC  ? Plotly.Plots.resize('chart-btc')     : buildBTCChart(); }
+  if (id === 'usdt')    { window._chartUSDT ? Plotly.Plots.resize('chart-usdt')    : buildUSDTChart(); }
+  if (id === 'monitor') { window._chartM    ? Plotly.Plots.resize('chart-monitor') : buildMonitorChart(); }
 }
 
 // ─── 유틸 ───────────────────────────────────────────────────────────────────
@@ -1229,7 +1229,7 @@ function submitFeedback() {
 // ─── 초기화 ──────────────────────────────────────────────────────────────────
 window.onload = () => {
   updateMetrics();
-  buildBTCChart();
+  // 차트는 해당 탭이 보일 때 그린다 (숨김 div 렌더 시 너비 0 문제 방지)
 };
 </script>
 </body>
