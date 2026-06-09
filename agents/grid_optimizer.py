@@ -12,14 +12,12 @@ from __future__ import annotations
 import logging
 import math
 from datetime import datetime
-from typing import Optional
 
 from config import (
     KRW_HOLD_RATIO, MAX_BOTS, FEE_RATE, MIN_GRID_INTERVAL_PCT,
-    GRID_INTERVAL_CANDIDATES_PCT, TRADING_DAYS_PER_MONTH,
-    GRID_FILL_EFFICIENCY, DAILY_RANGE_SIGMA_MULT,
+    TRADING_DAYS_PER_MONTH, GRID_FILL_EFFICIENCY, DAILY_RANGE_SIGMA_MULT,
+    GRID_AGGRESSIVENESS, AGGRESSIVENESS_INTERVAL_PCT,
 )
-from models.market_state import MarketData
 from models.prediction_result import BoxPrediction, GridConfig
 from agents.reward_calculator import RewardCalculatorAgent
 
@@ -38,10 +36,13 @@ class GridOptimizerAgent:
         box: BoxPrediction,
         daily_sigma: float,
         capital_krw: float,
-        target_volume_krw: Optional[float] = None,
+        aggressiveness: str = GRID_AGGRESSIVENESS,
         krw_hold_ratio: float = KRW_HOLD_RATIO,
     ) -> GridConfig:
-        logger.info("[%s] === 그리드 최적화 시작 (자본 %s원) ===", self.name, f"{capital_krw:,.0f}")
+        logger.info(
+            "[%s] === 그리드 최적화 시작 (자본 %s원 / 공격성 %s) ===",
+            self.name, f"{capital_krw:,.0f}", aggressiveness,
+        )
 
         upper, lower = box.recommended_upper, box.recommended_lower
         ref = box.reference_price
@@ -50,31 +51,18 @@ class GridOptimizerAgent:
         deployed = capital_krw * (1 - krw_hold_ratio)
         reserve = capital_krw * krw_hold_ratio
 
-        # 목표 거래량: 미지정 시 자본 기반 안전목표 사용
-        if target_volume_krw is None:
-            rec = self.reward_agent.recommend_target_tier(capital_krw)
-            target_volume_krw = rec["safe"]["threshold"]
+        # 공격성 다이얼 → 기준 그리드 간격 (수수료 인지 최소 간격으로 하한 보정)
+        base_gi = AGGRESSIVENESS_INTERVAL_PCT.get(aggressiveness, 0.5)
+        gi_eff = max(base_gi, MIN_GRID_INTERVAL_PCT)
+        bots = max(1, math.ceil(box_range_pct / gi_eff))
 
-        # 후보 그리드 간격 평가 (수수료 인지 최소 간격 적용)
-        best = None
-        for gi in sorted(GRID_INTERVAL_CANDIDATES_PCT):
-            gi_eff = max(gi, MIN_GRID_INTERVAL_PCT)
-            bots = max(1, math.ceil(box_range_pct / gi_eff))
-            capped = bots > MAX_BOTS
-            bots = min(bots, MAX_BOTS)
-            est_vol = self._estimate_volume(deployed, gi_eff, daily_sigma, box_range_pct)
-            cand = {
-                "gi": gi_eff, "bots": bots, "est_vol": est_vol, "capped": capped,
-            }
-            # 선정: 목표 충족(est_vol>=target) 우선, 그 중 봇 적은 것 → 아니면 거래량 최대
-            if best is None:
-                best = cand
-            else:
-                best = self._pick(best, cand, target_volume_krw)
+        # 봇 상한(1,000) 초과 시 간격 자동 확대
+        capped = bots > MAX_BOTS
+        if capped:
+            bots = MAX_BOTS
+            gi_eff = box_range_pct / MAX_BOTS
 
-        gi_eff = best["gi"]
-        bots = best["bots"]
-        est_vol = best["est_vol"]
+        est_vol = self._estimate_volume(deployed, gi_eff, daily_sigma, box_range_pct)
         cap_per_bot = deployed / bots if bots else 0.0
         gi_krw = ref * gi_eff / 100
 
@@ -101,6 +89,7 @@ class GridOptimizerAgent:
             net_reward_after_fee_krw=net_reward,
             grid_count=bots,
             round_trips_per_day=self._daily_round_trips(gi_eff, daily_sigma, box_range_pct),
+            aggressiveness=aggressiveness,
         )
 
         logger.info(
@@ -108,25 +97,14 @@ class GridOptimizerAgent:
             self.name, gi_eff, f"{gi_krw:,.0f}", bots,
             f"{est_vol:,.0f}", f"{reward['reward_krw']:,.0f}",
         )
-        if best["capped"]:
+        if capped:
             logger.warning(
-                "[%s] 박스 폭 대비 봇 수가 상한(%d) 초과 → 간격 자동 확대됨", self.name, MAX_BOTS
+                "[%s] 박스 폭 대비 봇 수가 상한(%d) 초과 → 간격 %.2f%%로 자동 확대됨",
+                self.name, MAX_BOTS, gi_eff,
             )
         return config
 
     # ------------------------------------------------------------------
-    @staticmethod
-    def _pick(a: dict, b: dict, target: float) -> dict:
-        """목표 거래량 충족을 우선하는 후보 선택."""
-        a_ok, b_ok = a["est_vol"] >= target, b["est_vol"] >= target
-        if a_ok and b_ok:
-            # 둘 다 충족 → 봇 적은(간격 넓은) 쪽이 안정적
-            return a if a["bots"] <= b["bots"] else b
-        if a_ok != b_ok:
-            return a if a_ok else b
-        # 둘 다 미달 → 거래량 큰 쪽
-        return a if a["est_vol"] >= b["est_vol"] else b
-
     def _daily_round_trips(self, grid_pct: float, daily_sigma: float, box_range_pct: float) -> float:
         """하루 예상 왕복 체결 수 (전체 라인 수로 상한)."""
         daily_range_pct = daily_sigma * 100 * DAILY_RANGE_SIGMA_MULT

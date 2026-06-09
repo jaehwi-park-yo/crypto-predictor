@@ -33,6 +33,14 @@ FEE_MARGIN_MULT = 3.0                         # 그리드 간격 >= 왕복수수
 MIN_GRID_INTERVAL_PCT = FEE_MARGIN_MULT * ROUND_TRIP_FEE * 100   # ≈ 0.24%
 GRID_INTERVAL_CANDIDATES_PCT = [0.3, 0.5, 1.0]
 
+# 그리드 공격성 다이얼 (거래량 vs 수수료 절충) — 사용자 선택: 균형
+GRID_AGGRESSIVENESS = "balanced"        # "conservative" | "balanced" | "aggressive"
+AGGRESSIVENESS_INTERVAL_PCT = {
+    "conservative": 1.0,                # 넓은 간격 · 수수료 절약 · 안정
+    "balanced": 0.5,                    # 매매수익·리워드 균형 (기본)
+    "aggressive": 0.3,                  # 좁은 간격 · 거래량/리워드 극대화
+}
+
 # 거래량/회전율 추정 가정 (실데이터로 보정 예정)
 TRADING_DAYS_PER_MONTH = 30                   # 코인 24/7 → 30일
 GRID_FILL_EFFICIENCY = 0.5                    # 진동 중 실제 왕복 체결 비율

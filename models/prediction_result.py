@@ -58,6 +58,7 @@ class GridConfig:
     net_reward_after_fee_krw: float = 0.0
     grid_count: int = 0                   # number of grid levels
     round_trips_per_day: float = 2.0      # estimated round trips per bot per day
+    aggressiveness: str = "balanced"      # conservative / balanced / aggressive
 
 
 @dataclass

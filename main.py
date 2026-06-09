@@ -21,6 +21,7 @@ from datetime import datetime
 from config import (
     CAPITAL_KRW, FEE_RATE, ROUND_TRIP_FEE, MAX_REWARD_KRW, KRW_HOLD_RATIO,
     MIN_GRID_INTERVAL_PCT, LOG_LEVEL, LOG_FORMAT, REPORT_DIR, HORIZON_DAYS,
+    GRID_AGGRESSIVENESS,
 )
 from agents import (
     DataCollectorAgent, MarketAnalyzerAgent, BoxPredictorAgent,
@@ -62,7 +63,10 @@ class OrchestratorAgent:
         self.capital_krw = new_capital_krw
 
     # ------------------------------------------------------------------
-    def run_monthly_prediction(self, target_month: str = None, save: bool = True) -> str:
+    def run_monthly_prediction(
+        self, target_month: str = None, save: bool = True,
+        aggressiveness: str = GRID_AGGRESSIVENESS,
+    ) -> str:
         logger.info("[%s] ====== 월간 박스권 예측 파이프라인 개시 ======", self.name)
 
         # ① 수집
@@ -74,7 +78,7 @@ class OrchestratorAgent:
         # 일간 변동성(그리드 최적화/거래량 추정에 재사용)
         dsig = daily_volatility(compute_log_returns(market_data.get_closes()[-31:]))
         # ④ 그리드 최적화
-        grid = self.optimizer.optimize(prediction, dsig, self.capital_krw)
+        grid = self.optimizer.optimize(prediction, dsig, self.capital_krw, aggressiveness)
         # ⑤ 리워드 목표 추천
         tier_rec = self.reward.recommend_target_tier(self.capital_krw)
         # ⑥ 리스크 임계 (현재가 기준 점검)
@@ -124,6 +128,7 @@ class OrchestratorAgent:
 
         # 3. 그리드 설정
         L.append("\n[ 3. 그리드 봇 설정 ]")
+        L.append(f"  • 공격성 다이얼    : {grid.aggressiveness}")
         L.append(f"  • 총 자본         : {_won(grid.capital_total_krw)}")
         L.append(f"  • 그리드 투입      : {_won(grid.capital_deployed_krw)} "
                  f"({(1-KRW_HOLD_RATIO)*100:.0f}%)")
@@ -186,6 +191,9 @@ def main():
     parser = argparse.ArgumentParser(description="가상화폐 박스권 예측 & 그리드 매매 기획 시스템")
     parser.add_argument("--capital", type=float, default=CAPITAL_KRW, help="투입 자본(원)")
     parser.add_argument("--month", type=str, default=None, help="대상 월 (YYYY-MM)")
+    parser.add_argument("--aggressiveness", type=str, default=GRID_AGGRESSIVENESS,
+                        choices=["conservative", "balanced", "aggressive"],
+                        help="그리드 공격성 (기본: balanced)")
     parser.add_argument("--no-save", action="store_true", help="리포트 저장 안 함")
     parser.add_argument("--no-fallback", action="store_true", help="합성 데이터 폴백 비활성화")
     args = parser.parse_args()
@@ -194,7 +202,10 @@ def main():
         capital_krw=args.capital,
         use_synthetic_fallback=not args.no_fallback,
     )
-    orchestrator.run_monthly_prediction(target_month=args.month, save=not args.no_save)
+    orchestrator.run_monthly_prediction(
+        target_month=args.month, save=not args.no_save,
+        aggressiveness=args.aggressiveness,
+    )
 
 
 if __name__ == "__main__":

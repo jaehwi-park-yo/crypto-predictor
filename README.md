@@ -37,10 +37,22 @@
 ```bash
 pip install -r requirements.txt
 
-python main.py                       # 기본 자본으로 익월 예측
-python main.py --capital 60000000    # 재투자 반영 (자본 변경)
-python main.py --month 2026-07       # 대상 월 지정
+python main.py                            # 기본 자본으로 익월 예측
+python main.py --capital 60000000         # 재투자 반영 (자본 변경)
+python main.py --month 2026-07            # 대상 월 지정
+python main.py --aggressiveness aggressive # 공격성 다이얼 변경
 ```
+
+### 공격성 다이얼 (거래량 vs 수수료 절충)
+
+| 레벨 | 그리드 간격 | 성향 | 비고 |
+|---|---|---|---|
+| `conservative` | 1.0% | 수수료 절약·안정 | 봇 최소, 리워드 낮음 |
+| `balanced` (기본) | 0.5% | 매매수익·리워드 균형 | **현재 채택** |
+| `aggressive` | 0.3% | 거래량/리워드 극대화 | 봇·수수료·슬리피지↑ |
+
+> 왕복 수수료 0.08%가 리워드 상한 0.02%보다 크므로, 그리드 간격은 항상
+> 수수료 인지 최소(≈0.24%) 이상으로 강제됩니다.
 
 > 네트워크가 없으면 합성 데이터로 폴백해 파이프라인이 그대로 동작합니다.
 > 리포트는 `reports/{YYYY-MM}_report.txt`에 저장됩니다.
