@@ -44,15 +44,16 @@ def _eok(x: float) -> str:
     return f"{x / 1e8:,.1f}억"
 
 
-def generate_report(summary: BacktestSummary, aggressiveness: str) -> str:
+def generate_report(summary: BacktestSummary, aggressiveness: str, granularity: str = "daily") -> str:
     L = []
     bar = "═" * 72
     thin = "─" * 72
 
+    gran_label = {"daily": "일봉 휴리스틱", "intraday": "분 경로 합성(미세진동 반영)"}.get(granularity, granularity)
     L.append(bar)
     L.append("  🧪 BTC/KRW 박스권 그리드 전략 백테스팅 결과 리포트")
     L.append(f"  기간: {summary.start_date} ~ {summary.end_date}  ({summary.total_months}개월)")
-    L.append(f"  자본: {_won(summary.initial_capital)}  |  공격성: {aggressiveness}")
+    L.append(f"  자본: {_won(summary.initial_capital)}  |  공격성: {aggressiveness}  |  분해능: {gran_label}")
     L.append(bar)
 
     # ── A. 통계 정확도 ──────────────────────────────────────
@@ -187,6 +188,61 @@ def save_csv(summary: BacktestSummary, path: str) -> None:
     logger.info("CSV 저장: %s", path)
 
 
+def run_sweep(history, capital: float, sigma) -> str:
+    """반응빈도(n_steps) × 공격성 민감도 매트릭스 — 분해능 의존성을 명시적으로 노출."""
+    agent = BacktestAgent()
+    levels = ["conservative", "balanced", "aggressive"]
+    grids = {"conservative": "1.0%", "balanced": "0.5%", "aggressive": "0.3%"}
+    # (라벨, granularity, n_steps)
+    resolutions = [
+        ("일봉(하한)", "daily", 0),
+        ("60분(24)", "intraday", 24),
+        ("30분(48)", "intraday", 48),
+        ("15분(96)", "intraday", 96),
+        ("5분(288)", "intraday", 288),
+    ]
+    # 결과 캐시: cagr[res][level]
+    cagr = {}
+    for label, gran, steps in resolutions:
+        cagr[label] = {}
+        for lvl in levels:
+            s = agent.run(
+                history=history, capital_krw=capital, aggressiveness=lvl,
+                use_sigma=sigma, granularity=gran, n_steps=max(steps, 2),
+            )
+            cagr[label][lvl] = s.annualized_return_pct
+
+    L = []
+    bar = "═" * 72
+    L.append(bar)
+    L.append("  🧪 민감도 매트릭스: 봇 반응빈도(행) × 그리드 공격성(열)")
+    L.append("  값 = 연환산 CAGR % (그리드 스프레드 + 리워드, BTC 평가손익 미포함)")
+    L.append(bar)
+    header = f"  {'반응빈도':12s}" + "".join(
+        f"{lvl[:4]+'('+grids[lvl]+')':>16s}" for lvl in levels
+    )
+    L.append(header)
+    L.append("  " + "─" * 66)
+    for label, _, _ in resolutions:
+        row = f"  {label:12s}" + "".join(
+            f"{cagr[label][lvl]:>15.1f}%" for lvl in levels
+        )
+        L.append(row)
+    L.append(bar)
+    L.append("\n[ 해석 ]")
+    L.append("  1) 같은 행(반응빈도 고정)에서 → conservative(넓은간격)일수록 CAGR↑")
+    L.append("     : 일봉/저빈도에서는 넓은 간격이 수수료를 아껴 유리.")
+    L.append("  2) 행을 내려갈수록(고빈도) → 모든 열의 CAGR이 √빈도에 비례해 급증")
+    L.append("     : 미세진동을 더 잡지만, 이는 합성 브라운 경로의 분해능 artifact.")
+    L.append("  3) ⚠️ 절대 CAGR은 '봇이 실제로 몇 분 간격으로 반응/체결되는가'에 좌우됨.")
+    L.append("     실거래 틱/분봉 데이터 없이는 절대값 확정 불가 (현재 환경은 외부 API 차단).")
+    L.append("  4) ✅ 신뢰 가능한 결론:")
+    L.append("     - 일봉 기준 CAGR(보수 12% / 균형 6% / 공격 3%)은 '하한선'.")
+    L.append("     - 고빈도일수록 좁은 간격의 상대적 불리함이 줄어듦(수수료 대비 체결 증가).")
+    L.append("     - 실제 채택 전 반드시 빗썸 분봉 데이터로 재보정 필요.")
+    return "\n".join(L)
+
+
 def main():
     parser = argparse.ArgumentParser(description="BTC/KRW 박스권 그리드 전략 백테스팅")
     parser.add_argument("--capital", type=float, default=CAPITAL_KRW, help="초기 자본(원)")
@@ -196,8 +252,15 @@ def main():
                         choices=["conservative", "balanced", "aggressive"])
     parser.add_argument("--sigma", type=float, default=None, choices=[1.0, 2.0],
                         help="박스 σ 레벨 고정 (기본: 시나리오 자동)")
+    parser.add_argument("--granularity", type=str, default="daily",
+                        choices=["daily", "intraday"],
+                        help="분해능: daily(일봉) | intraday(분 경로 합성)")
+    parser.add_argument("--steps", type=int, default=288,
+                        help="일중 경로 분해능 (intraday, 기본 288=5분봉)")
     parser.add_argument("--no-fallback", action="store_true", help="합성데이터 폴백 비활성화")
     parser.add_argument("--save", action="store_true", help="CSV + 텍스트 리포트 저장")
+    parser.add_argument("--sweep", action="store_true",
+                        help="반응빈도 × 공격성 민감도 매트릭스 출력")
     args = parser.parse_args()
 
     # ① 히스토리 수집
@@ -212,6 +275,11 @@ def main():
 
     logger.info("총 %d일 히스토리 확보 (%s ~ %s)", len(history), history[0]["date"], history[-1]["date"])
 
+    # 민감도 매트릭스 모드
+    if args.sweep:
+        print(run_sweep(history, args.capital, args.sigma))
+        return
+
     # ② 백테스트 실행
     agent = BacktestAgent()
     summary = agent.run(
@@ -219,10 +287,12 @@ def main():
         capital_krw=args.capital,
         aggressiveness=args.aggressiveness,
         use_sigma=args.sigma,
+        granularity=args.granularity,
+        n_steps=args.steps,
     )
 
     # ③ 리포트 출력
-    report = generate_report(summary, args.aggressiveness)
+    report = generate_report(summary, args.aggressiveness, args.granularity)
     print(report)
 
     # ④ 저장

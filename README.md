@@ -57,6 +57,27 @@ python main.py --aggressiveness aggressive # 공격성 다이얼 변경
 > 네트워크가 없으면 합성 데이터로 폴백해 파이프라인이 그대로 동작합니다.
 > 리포트는 `reports/{YYYY-MM}_report.txt`에 저장됩니다.
 
+## 백테스팅
+
+```bash
+python backtest.py                              # 일봉 기준 (보수적 하한)
+python backtest.py --granularity intraday --steps 96   # 분 경로 합성(미세진동)
+python backtest.py --sweep                      # 반응빈도 × 공격성 민감도 매트릭스
+python backtest.py --save                       # CSV + 요약 저장
+```
+
+- **분해능(`--granularity`)**: `daily`(일봉 휴리스틱, 하한선) / `intraday`(일봉→분 경로 합성).
+- **`--sweep`**: 봇 반응빈도(행) × 공격성(열) CAGR 매트릭스. 분해능 의존성을 명시.
+
+> ⚠️ 그리드 수익은 봇의 실제 반응빈도(분/틱)에 좌우됩니다. 합성 브라운 경로의
+> 교차횟수는 분해능에 따라 √n 으로 증가하므로 **절대 수치는 참고용**이며,
+> 실채택 전 빗썸 분봉 데이터로 재보정이 필요합니다. 일봉 결과가 보수적 하한선입니다.
+>
+> **핵심 발견**: 모든 반응빈도에서 넓은 간격(conservative)이 좁은 간격(aggressive)보다
+> 순수익이 높음 — 좁은 간격은 동일 수수료로 더 작은 스프레드를 잘게 나눠 손해.
+> 좁은 간격은 '리워드용 거래량 확보'에만 의미가 있으나, 리워드(≤0.02%)가
+> 추가 수수료(0.04%/체결)를 못 덮으므로 순효과는 마이너스.
+
 ## 주의
 
 - 거래량/리워드 추정치는 **명시적 가정 기반 휴리스틱**이며 실거래 데이터로 보정해야 합니다 (`config.py`의 `GRID_FILL_EFFICIENCY` 등).

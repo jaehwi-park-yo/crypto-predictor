@@ -138,57 +138,58 @@ def _grid_profit_from_path(
     box_lower: float,
     grid_interval_pct: float,
     deployed: float,
+    granularity: str = "daily",
+    n_steps: int = 288,
+    rng: Optional[np.random.Generator] = None,
 ) -> Tuple[float, float, float]:
     """
-    실제 일봉 경로로 그리드 수익·수수료·거래량을 추정.
+    그리드 수익·수수료·거래량 추정. 공통 변수 C = '그리드 라인 통과 총수'.
+        round_trips = C / 2
+        수익  = round_trips × gi_pct × cap_per_bot
+        수수료 = C × FEE_RATE × cap_per_bot   (통과 1회 = 체결 1건)
+        거래량 = C × cap_per_bot
 
-    아이디어:
-      - 매일 실제 고저(HL) 범위 중 박스 내 구간을 활용
-      - 해당 구간을 진동하면서 발생하는 왕복 체결 수 = 클램핑된 HL / 그리드간격 × 효율
-      - 왕복 1회 수익 = deployed/bot_count × grid_pct (스프레드)
-      - 왕복 1회 수수료 = deployed/bot_count × round_trip_fee × 2
+    granularity:
+      - "daily"   : 일봉 HL 폭으로 C 추정 (C ≈ HL/gi × efficiency × 2)
+      - "intraday": 일봉→분 경로 합성 후 '실제 통과 횟수'를 카운트 (미세 진동 반영)
     """
     box_range_pct = (box_upper - box_lower) / box_lower * 100 if box_lower else 0.0
     gi_pct = max(grid_interval_pct, MIN_GRID_INTERVAL_PCT)
     bot_count = max(1, min(1000, math.ceil(box_range_pct / gi_pct)))
     cap_per_bot = deployed / bot_count
+    max_lines = box_range_pct / gi_pct
 
-    total_volume = 0.0
-    total_fee = 0.0
-    total_profit = 0.0
+    total_crossings = 0.0
 
-    for candle in daily_ohlcv:
-        c_high = candle["high"]
-        c_low = candle["low"]
-        c_close = candle.get("close", (c_high + c_low) / 2)
+    if granularity == "intraday":
+        from utils.intraday import generate_intraday_path, count_grid_crossings
+        if rng is None:
+            rng = np.random.default_rng()
+        for candle in daily_ohlcv:
+            o, h, l, c = candle["open"], candle["high"], candle["low"], candle["close"]
+            if min(h, box_upper) <= max(l, box_lower):
+                continue   # 박스 완전 이탈
+            path = generate_intraday_path(o, h, l, c, n_steps=n_steps, rng=rng)
+            total, net = count_grid_crossings(path, box_lower, box_upper, gi_pct)
+            # 진동분(추세 제거)만 그리드 왕복 수익으로 인정
+            total_crossings += max(0.0, total - net)
+    else:  # daily
+        for candle in daily_ohlcv:
+            c_high, c_low = candle["high"], candle["low"]
+            c_close = candle.get("close", (c_high + c_low) / 2)
+            eff_high = min(c_high, box_upper)
+            eff_low = max(c_low, box_lower)
+            if eff_high <= eff_low:
+                continue
+            hl_pct = (eff_high - eff_low) / c_close * 100 if c_close else 0.0
+            # 일봉 1회 진동 = round_trips = hl/gi (효율 보정) → C = 2 × round_trips
+            round_trips = min(hl_pct / gi_pct, max_lines) * GRID_FILL_EFFICIENCY
+            total_crossings += round_trips * 2
 
-        # 박스 내로 클램핑
-        eff_high = min(c_high, box_upper)
-        eff_low = max(c_low, box_lower)
-        if eff_high <= eff_low:
-            continue   # 박스 완전 이탈 → 해당 일 그리드 미작동
-
-        hl_pct = (eff_high - eff_low) / c_close * 100 if c_close else 0.0
-
-        # 일일 왕복 체결 수 (클램핑 HL 기준)
-        # 해석: 가격이 HL 폭을 위아래로 1회 진동 = round_trips = hl/gi 번의 그리드 레벨 왕복
-        # 수익 공식: round_trips × gi_pct × cap_per_bot = hl_pct × cap_per_bot (gi 상쇄)
-        # 수수료/거래량은 gi_pct에 종속 (좁을수록 체결 빈번 → 수수료 ↑)
-        max_lines = box_range_pct / gi_pct
-        round_trips = min(hl_pct / gi_pct, max_lines) * GRID_FILL_EFFICIENCY
-
-        # 수익 = 왕복수 × 그리드간격 × 봇당자본
-        # (= hl_pct × cap_per_bot × efficiency: gi 상쇄됨)
-        day_profit = round_trips * (gi_pct / 100) * cap_per_bot
-        # 수수료 = 왕복수 × 왕복수수료 × 봇당자본 (gi 의존성 유지)
-        day_fee = round_trips * ROUND_TRIP_FEE * cap_per_bot
-        # 거래량 = 왕복수 × 2(매수+매도) × 봇당자본
-        day_volume = round_trips * 2 * cap_per_bot
-
-        total_profit += day_profit
-        total_fee += day_fee
-        total_volume += day_volume
-
+    round_trips = total_crossings / 2.0
+    total_profit = round_trips * (gi_pct / 100) * cap_per_bot
+    total_fee = total_crossings * FEE_RATE * cap_per_bot
+    total_volume = total_crossings * cap_per_bot
     return total_profit, total_fee, total_volume
 
 
@@ -248,15 +249,19 @@ class BacktestAgent:
         lookback: int = 30,
         horizon: int = HORIZON_DAYS,
         use_sigma: Optional[float] = None,  # None = 시나리오 자동 선택, 1.0 또는 2.0
+        granularity: str = "daily",         # "daily" | "intraday"
+        n_steps: int = 288,                 # 일중 경로 분해능 (intraday)
+        seed: int = 2024,
     ) -> BacktestSummary:
 
         gi_pct = max(
             AGGRESSIVENESS_INTERVAL_PCT.get(aggressiveness, 0.5),
             MIN_GRID_INTERVAL_PCT,
         )
+        rng = np.random.default_rng(seed)
         logger.info(
-            "[%s] === 백테스팅 시작: %d일봉 / 자본 %s원 / 간격 %.2f%% ===",
-            self.name, len(history), f"{capital_krw:,.0f}", gi_pct,
+            "[%s] === 백테스팅 시작: %d일봉 / 자본 %s원 / 간격 %.2f%% / 분해능=%s ===",
+            self.name, len(history), f"{capital_krw:,.0f}", gi_pct, granularity,
         )
 
         results: List[MonthlyBacktestResult] = []
@@ -305,6 +310,7 @@ class BacktestAgent:
 
             grid_profit, fee_cost, volume = _grid_profit_from_path(
                 test_ohlcv, rec_u, rec_l, gi_pct, deployed,
+                granularity=granularity, n_steps=n_steps, rng=rng,
             )
             net_grid = grid_profit - fee_cost
             reward = _reward_from_volume(volume)
