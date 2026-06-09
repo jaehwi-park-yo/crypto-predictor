@@ -1018,8 +1018,13 @@ function buildBTCChart() {
   const s = D.snap;
   const bandX = [D.pre_x[D.pre_x.length-1], ...D.fut];
 
+  // 최근 60일 캔들만 — y축 autorange가 과거 고점에 끌려가지 않도록
+  const TAIL = 60;
+  const cx = D.pre_x.slice(-TAIL), co = D.pre_o.slice(-TAIL),
+        ch = D.pre_h.slice(-TAIL), cl = D.pre_l.slice(-TAIL), cc = D.pre_c.slice(-TAIL);
+
   const traces = [
-    {type:'candlestick', x:D.pre_x, open:D.pre_o, high:D.pre_h, low:D.pre_l, close:D.pre_c,
+    {type:'candlestick', x:cx, open:co, high:ch, low:cl, close:cc,
      name:'BTC/KRW', increasing:{line:{color:'#d24f45'}}, decreasing:{line:{color:'#4169e1'}}},
     // 2σ fill (orange)
     {type:'scatter', x:[...bandX,...[...bandX].reverse()],
@@ -1052,7 +1057,7 @@ function buildBTCChart() {
     paper_bgcolor:'#1a1d23', plot_bgcolor:'#1a1d23',
     font:{color:'#e0e0e0'}, height:480,
     xaxis:{rangeslider:{visible:false}, gridcolor:'rgba(80,80,80,0.2)',
-           type:'date', range:[D.pre_x[D.pre_x.length-60], D.fut[D.fut.length-1]]},
+           type:'date', range:[cx[0], D.fut[D.fut.length-1]]},
     yaxis:{title:'가격 (KRW)', tickformat:',.0f', gridcolor:'rgba(80,80,80,0.3)'},
     legend:{orientation:'h', yanchor:'bottom', y:1.01, bgcolor:'rgba(30,33,40,0.8)',
             bordercolor:'#444', borderwidth:1, font:{size:11}},
