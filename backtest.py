@@ -23,9 +23,14 @@ from datetime import datetime
 from config import (
     CAPITAL_KRW, LOG_LEVEL, LOG_FORMAT, REPORT_DIR, GRID_AGGRESSIVENESS,
     AGGRESSIVENESS_INTERVAL_PCT, MIN_GRID_INTERVAL_PCT,
+    GRID_BUY_INTERVAL_PCT, GRID_SELL_INTERVAL_PCT,
+    COMPOSITE_BTC_RATIO, COMPOSITE_USDT_RATIO,
+    USDT_REFERENCE_PRICE_KRW, USDT_DAILY_RANGE_KRW,
+    USDT_BUY_INTERVAL_KRW, USDT_SELL_INTERVAL_KRW,
 )
 from utils.historical_data import fetch_max_history
 from agents.backtester import BacktestAgent, BacktestSummary
+from agents.composite_strategy import CompositeStrategyAgent
 
 logging.basicConfig(level=getattr(logging, LOG_LEVEL), format=LOG_FORMAT)
 logger = logging.getLogger("backtest_runner")
@@ -243,6 +248,34 @@ def run_sweep(history, capital: float, sigma) -> str:
     return "\n".join(L)
 
 
+def _print_asymmetric_comparison(asym: BacktestSummary, sym: BacktestSummary, args) -> None:
+    """비대칭 vs 대칭 그리드 결과 비교 출력."""
+    bar = "═" * 68
+    thin = "─" * 68
+    print(bar)
+    print("  📐 비대칭 vs 대칭 그리드 비교")
+    print(f"  비대칭: 매수 {args.buy_interval}% / 매도 {args.sell_interval}%")
+    print(f"  대칭:   {args.aggressiveness} ({AGGRESSIVENESS_INTERVAL_PCT.get(args.aggressiveness, 0.5)}%)")
+    print(thin)
+    print(f"  {'항목':28s} {'비대칭':>16s} {'대칭':>16s} {'차이':>10s}")
+    print("  " + thin)
+
+    def row(label, a_val, s_val, fmt="{:,.0f}"):
+        diff = a_val - s_val
+        sign = "+" if diff >= 0 else ""
+        print(f"  {label:28s} {fmt.format(a_val):>16s} {fmt.format(s_val):>16s} {sign}{fmt.format(diff):>10s}")
+
+    row("총 그리드 스프레드 수익(원)", asym.total_grid_profit, sym.total_grid_profit)
+    row("총 수수료(원)", asym.total_fee_cost, sym.total_fee_cost)
+    row("총 순 그리드 수익(원)", asym.total_net_grid, sym.total_net_grid)
+    row("총 리워드(원)", asym.total_reward, sym.total_reward)
+    row("총 수익(원)", asym.total_profit, sym.total_profit)
+    row("월평균 수익(원)", asym.avg_monthly_profit, sym.avg_monthly_profit)
+    row("연환산 CAGR(%)", asym.annualized_return_pct, sym.annualized_return_pct, "{:.2f}")
+    print(bar)
+    print()
+
+
 def main():
     parser = argparse.ArgumentParser(description="BTC/KRW 박스권 그리드 전략 백테스팅")
     parser.add_argument("--capital", type=float, default=CAPITAL_KRW, help="초기 자본(원)")
@@ -261,6 +294,17 @@ def main():
     parser.add_argument("--save", action="store_true", help="CSV + 텍스트 리포트 저장")
     parser.add_argument("--sweep", action="store_true",
                         help="반응빈도 × 공격성 민감도 매트릭스 출력")
+    parser.add_argument("--asymmetric", action="store_true",
+                        help="비대칭 그리드 활성화 (--buy-interval / --sell-interval 적용)")
+    parser.add_argument("--buy-interval", type=float, default=GRID_BUY_INTERVAL_PCT,
+                        help=f"비대칭 매수 간격 %% (기본 {GRID_BUY_INTERVAL_PCT})")
+    parser.add_argument("--sell-interval", type=float, default=GRID_SELL_INTERVAL_PCT,
+                        help=f"비대칭 매도 간격 %% (기본 {GRID_SELL_INTERVAL_PCT})")
+    parser.add_argument("--strategy", type=str, default="btc",
+                        choices=["btc", "composite"],
+                        help="전략: btc(기본) | composite(BTC+USDT 복합)")
+    parser.add_argument("--usdt-sell-interval", type=float, default=USDT_SELL_INTERVAL_KRW,
+                        help=f"USDT 매도 간격 KRW (기본 {USDT_SELL_INTERVAL_KRW}원)")
     args = parser.parse_args()
 
     # ① 히스토리 수집
@@ -280,7 +324,38 @@ def main():
         print(run_sweep(history, args.capital, args.sigma))
         return
 
-    # ② 백테스트 실행
+    # ─── 복합전략 모드 ───────────────────────────────────────
+    if args.strategy == "composite":
+        btc_cap = args.capital * COMPOSITE_BTC_RATIO
+        usdt_cap = args.capital * COMPOSITE_USDT_RATIO
+
+        # BTC 레그: conservative 백테스트
+        btc_agent = BacktestAgent()
+        btc_summary = btc_agent.run(
+            history=history,
+            capital_krw=btc_cap,
+            aggressiveness="conservative",
+            use_sigma=args.sigma,
+            granularity=args.granularity,
+            n_steps=args.steps,
+        )
+        btc_report = generate_report(btc_summary, "conservative (BTC 레그)", args.granularity)
+        print(btc_report)
+
+        # 복합전략 분석 (USDT 레그 포함)
+        composite = CompositeStrategyAgent()
+        comp_result = composite.analyze(
+            total_capital_krw=args.capital,
+            btc_monthly_net_grid=btc_summary.avg_monthly_profit,
+            btc_monthly_fee=btc_summary.total_fee_cost / max(btc_summary.total_months, 1),
+            btc_monthly_reward=btc_summary.total_reward / max(btc_summary.total_months, 1),
+            usdt_sell_interval=args.usdt_sell_interval,
+            usdt_ratio=COMPOSITE_USDT_RATIO,
+        )
+        print(composite.format_report(comp_result))
+        return
+
+    # ─── BTC 단일 전략 모드 (기본) ──────────────────────────
     agent = BacktestAgent()
     summary = agent.run(
         history=history,
@@ -289,10 +364,29 @@ def main():
         use_sigma=args.sigma,
         granularity=args.granularity,
         n_steps=args.steps,
+        asymmetric=args.asymmetric,
+        buy_interval_pct=args.buy_interval,
+        sell_interval_pct=args.sell_interval,
     )
 
+    # ─── 비대칭 그리드: 대칭 대비 비교 출력 ──────────────────
+    if args.asymmetric:
+        sym_summary = BacktestAgent().run(
+            history=history,
+            capital_krw=args.capital,
+            aggressiveness=args.aggressiveness,
+            use_sigma=args.sigma,
+            granularity=args.granularity,
+            n_steps=args.steps,
+            asymmetric=False,
+        )
+        _print_asymmetric_comparison(summary, sym_summary, args)
+
     # ③ 리포트 출력
-    report = generate_report(summary, args.aggressiveness, args.granularity)
+    label = f"{args.aggressiveness}"
+    if args.asymmetric:
+        label += f" [비대칭 buy={args.buy_interval}%/sell={args.sell_interval}%]"
+    report = generate_report(summary, label, args.granularity)
     print(report)
 
     # ④ 저장

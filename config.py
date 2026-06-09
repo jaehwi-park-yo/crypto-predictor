@@ -56,6 +56,52 @@ BITHUMB_BASE_URL = "https://api.bithumb.com"
 COINGECKO_BASE_URL = "https://api.coingecko.com/api/v3"
 FEAR_GREED_URL = "https://api.alternative.me/fng/"
 
+# ──────────────────────────────────────────────────────────
+# 비대칭 그리드 설정 (매수간격 ≠ 매도간격)
+# ──────────────────────────────────────────────────────────
+ASYMMETRIC_GRID = False          # True = 비대칭 활성화
+GRID_BUY_INTERVAL_PCT  = 0.5    # 매수 그리드 간격 (%)
+GRID_SELL_INTERVAL_PCT = 0.5    # 매도 그리드 간격 (%)
+# 비대칭 프리셋 예시: 매수 0.5% / 매도 0.3% → 수익 집중 + 거래량↑
+
+# ──────────────────────────────────────────────────────────
+# USDT-KRW 전략 설정 (1원 단위 초단기 그리드)
+# ──────────────────────────────────────────────────────────
+USDT_ENABLED = True
+USDT_REFERENCE_PRICE_KRW = 1_400.0   # USDT/KRW 참고가 (설정값, 수집 시 갱신)
+USDT_DAILY_RANGE_KRW     = 8.0       # 일중 USDT 변동폭 ±(KRW) 참고치
+USDT_BUY_INTERVAL_KRW    = 1.0       # 매수 간격 (1원)
+USDT_SELL_INTERVAL_KRW   = 1.0       # 매도 간격 (1원, 기본)
+# USDT_SELL_INTERVAL_KRW = 2.0       # 매도 2원 옵션: 거래량↓ / 수익↑
+
+# 리워드 캡 도달 후 봇 중단 기준 (거래량 기준)
+# 최상위 티어(0.02%) 기준: 300만원 리워드 = 150억원 거래량
+REWARD_CAP_VOLUME_KRW = 15_000_000_000   # 150억: 이 이상이면 추가 리워드 없음
+REWARD_CAP_STOP_BOTS  = True             # True = 캡 도달 시 봇 중단 권고
+
+# ──────────────────────────────────────────────────────────
+# 복합전략 자본 배분 (BTC conservative + USDT aggressive)
+# ──────────────────────────────────────────────────────────
+COMPOSITE_BTC_RATIO  = 0.6   # BTC 배분 비중 (60%)
+COMPOSITE_USDT_RATIO = 0.4   # USDT 배분 비중 (40%)
+COMPOSITE_BTC_AGGRESSIVENESS  = "conservative"
+COMPOSITE_USDT_AGGRESSIVENESS = "aggressive"
+
+# ──────────────────────────────────────────────────────────
+# 하방 이탈 시 현금 배치 전략
+# ──────────────────────────────────────────────────────────
+CASH_DEPLOY_ON_BREAKOUT = True      # True = 하방 이탈 시 KRW 예비금 일부 배치
+CASH_DEPLOY_RATIO       = 0.5       # KRW 예비금 중 배치 비율 (기본 50%)
+CASH_DEPLOY_GRID_MULT   = 2.0       # 회복 그리드 간격 배수 (평소 간격 × 2)
+CASH_DEPLOY_SIGMA_LEVEL = 2.0       # 회복 박스 σ 레벨 (넓게)
+
+# ──────────────────────────────────────────────────────────
+# 분봉 데이터 소스 (업비트 공개 API 우선)
+# ──────────────────────────────────────────────────────────
+UPBIT_BASE_URL  = "https://api.upbit.com"
+UPBIT_MARKET_BTC  = "KRW-BTC"
+UPBIT_MARKET_USDT = "KRW-USDT"
+
 # Retry settings
 MAX_RETRIES = 3
 BACKOFF_FACTOR = 2.0

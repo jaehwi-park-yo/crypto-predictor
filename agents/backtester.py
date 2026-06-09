@@ -30,6 +30,7 @@ from config import (
     HORIZON_DAYS, AGGRESSIVENESS_INTERVAL_PCT, GRID_AGGRESSIVENESS,
     MIN_GRID_INTERVAL_PCT, GRID_FILL_EFFICIENCY, DAILY_RANGE_SIGMA_MULT,
     REWARD_TIERS, MAX_REWARD_KRW,
+    GRID_BUY_INTERVAL_PCT, GRID_SELL_INTERVAL_PCT, ASYMMETRIC_GRID,
 )
 from utils.statistics import (
     compute_log_returns, daily_volatility, sigma_band,
@@ -141,20 +142,36 @@ def _grid_profit_from_path(
     granularity: str = "daily",
     n_steps: int = 288,
     rng: Optional[np.random.Generator] = None,
+    buy_interval_pct: Optional[float] = None,   # 비대칭 그리드: 매수 간격
+    sell_interval_pct: Optional[float] = None,  # 비대칭 그리드: 매도 간격
 ) -> Tuple[float, float, float]:
     """
     그리드 수익·수수료·거래량 추정. 공통 변수 C = '그리드 라인 통과 총수'.
+
+    대칭 그리드 (기본):
         round_trips = C / 2
         수익  = round_trips × gi_pct × cap_per_bot
-        수수료 = C × FEE_RATE × cap_per_bot   (통과 1회 = 체결 1건)
-        거래량 = C × cap_per_bot
+        수수료 = C × FEE_RATE × cap_per_bot
 
-    granularity:
-      - "daily"   : 일봉 HL 폭으로 C 추정 (C ≈ HL/gi × efficiency × 2)
-      - "intraday": 일봉→분 경로 합성 후 '실제 통과 횟수'를 카운트 (미세 진동 반영)
+    비대칭 그리드 (buy_interval ≠ sell_interval):
+        avg_interval = (buy_interval + sell_interval) / 2
+        round_trips  = HL / avg_interval × efficiency
+        수익  = round_trips × sell_interval × cap_per_bot  (매도 폭이 확정 수익)
+        수수료 = round_trips × 2 × FEE_RATE × cap_per_bot
     """
     box_range_pct = (box_upper - box_lower) / box_lower * 100 if box_lower else 0.0
-    gi_pct = max(grid_interval_pct, MIN_GRID_INTERVAL_PCT)
+    asymmetric = (buy_interval_pct is not None and sell_interval_pct is not None)
+
+    if asymmetric:
+        buy_gi  = max(buy_interval_pct,  MIN_GRID_INTERVAL_PCT / 2)
+        sell_gi = max(sell_interval_pct, MIN_GRID_INTERVAL_PCT / 2)
+        avg_gi  = (buy_gi + sell_gi) / 2
+        gi_pct  = avg_gi
+    else:
+        gi_pct  = max(grid_interval_pct, MIN_GRID_INTERVAL_PCT)
+        buy_gi  = gi_pct
+        sell_gi = gi_pct
+
     bot_count = max(1, min(1000, math.ceil(box_range_pct / gi_pct)))
     cap_per_bot = deployed / bot_count
     max_lines = box_range_pct / gi_pct
@@ -168,27 +185,30 @@ def _grid_profit_from_path(
         for candle in daily_ohlcv:
             o, h, l, c = candle["open"], candle["high"], candle["low"], candle["close"]
             if min(h, box_upper) <= max(l, box_lower):
-                continue   # 박스 완전 이탈
+                continue
             path = generate_intraday_path(o, h, l, c, n_steps=n_steps, rng=rng)
             total, net = count_grid_crossings(path, box_lower, box_upper, gi_pct)
-            # 진동분(추세 제거)만 그리드 왕복 수익으로 인정
             total_crossings += max(0.0, total - net)
     else:  # daily
         for candle in daily_ohlcv:
             c_high, c_low = candle["high"], candle["low"]
             c_close = candle.get("close", (c_high + c_low) / 2)
             eff_high = min(c_high, box_upper)
-            eff_low = max(c_low, box_lower)
+            eff_low  = max(c_low, box_lower)
             if eff_high <= eff_low:
                 continue
             hl_pct = (eff_high - eff_low) / c_close * 100 if c_close else 0.0
-            # 일봉 1회 진동 = round_trips = hl/gi (효율 보정) → C = 2 × round_trips
             round_trips = min(hl_pct / gi_pct, max_lines) * GRID_FILL_EFFICIENCY
             total_crossings += round_trips * 2
 
     round_trips = total_crossings / 2.0
-    total_profit = round_trips * (gi_pct / 100) * cap_per_bot
-    total_fee = total_crossings * FEE_RATE * cap_per_bot
+    if asymmetric:
+        # 비대칭: 수익은 매도 간격 기준, 수수료는 왕복 고정
+        total_profit = round_trips * (sell_gi / 100) * cap_per_bot
+        total_fee    = round_trips * 2 * FEE_RATE * cap_per_bot
+    else:
+        total_profit = round_trips * (gi_pct / 100) * cap_per_bot
+        total_fee    = total_crossings * FEE_RATE * cap_per_bot
     total_volume = total_crossings * cap_per_bot
     return total_profit, total_fee, total_volume
 
@@ -252,16 +272,24 @@ class BacktestAgent:
         granularity: str = "daily",         # "daily" | "intraday"
         n_steps: int = 288,                 # 일중 경로 분해능 (intraday)
         seed: int = 2024,
+        asymmetric: bool = ASYMMETRIC_GRID,
+        buy_interval_pct: float = GRID_BUY_INTERVAL_PCT,
+        sell_interval_pct: float = GRID_SELL_INTERVAL_PCT,
     ) -> BacktestSummary:
 
         gi_pct = max(
             AGGRESSIVENESS_INTERVAL_PCT.get(aggressiveness, 0.5),
             MIN_GRID_INTERVAL_PCT,
         )
+        # 비대칭 그리드 설정
+        _buy_gi  = buy_interval_pct  if asymmetric else None
+        _sell_gi = sell_interval_pct if asymmetric else None
+
         rng = np.random.default_rng(seed)
+        asym_label = f"[비대칭 buy={buy_interval_pct}%/sell={sell_interval_pct}%]" if asymmetric else ""
         logger.info(
-            "[%s] === 백테스팅 시작: %d일봉 / 자본 %s원 / 간격 %.2f%% / 분해능=%s ===",
-            self.name, len(history), f"{capital_krw:,.0f}", gi_pct, granularity,
+            "[%s] === 백테스팅 시작: %d일봉 / 자본 %s원 / 간격 %.2f%% / 분해능=%s %s ===",
+            self.name, len(history), f"{capital_krw:,.0f}", gi_pct, granularity, asym_label,
         )
 
         results: List[MonthlyBacktestResult] = []
@@ -311,6 +339,7 @@ class BacktestAgent:
             grid_profit, fee_cost, volume = _grid_profit_from_path(
                 test_ohlcv, rec_u, rec_l, gi_pct, deployed,
                 granularity=granularity, n_steps=n_steps, rng=rng,
+                buy_interval_pct=_buy_gi, sell_interval_pct=_sell_gi,
             )
             net_grid = grid_profit - fee_cost
             reward = _reward_from_volume(volume)

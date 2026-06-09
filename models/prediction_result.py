@@ -75,4 +75,5 @@ class BreakoutStatus:
     deviation_pct: float                 # how far outside box as %
     suggested_new_upper: Optional[float] = None
     suggested_new_lower: Optional[float] = None
+    cash_deploy_plan: Optional[dict] = None   # 하방 이탈 시 현금 배치 전략
     checked_at: datetime = field(default_factory=datetime.now)
