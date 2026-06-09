@@ -17,7 +17,9 @@ from config import (
     KRW_HOLD_RATIO, MAX_BOTS, FEE_RATE, MIN_GRID_INTERVAL_PCT,
     TRADING_DAYS_PER_MONTH, GRID_FILL_EFFICIENCY, DAILY_RANGE_SIGMA_MULT,
     GRID_AGGRESSIVENESS, AGGRESSIVENESS_INTERVAL_PCT,
+    ASYMMETRIC_GRID, GRID_BUY_INTERVAL_PCT, GRID_SELL_INTERVAL_PCT,
 )
+from typing import Optional
 from models.prediction_result import BoxPrediction, GridConfig
 from agents.reward_calculator import RewardCalculatorAgent
 
@@ -38,6 +40,8 @@ class GridOptimizerAgent:
         capital_krw: float,
         aggressiveness: str = GRID_AGGRESSIVENESS,
         krw_hold_ratio: float = KRW_HOLD_RATIO,
+        buy_interval_pct: Optional[float] = None,
+        sell_interval_pct: Optional[float] = None,
     ) -> GridConfig:
         logger.info(
             "[%s] === 그리드 최적화 시작 (자본 %s원 / 공격성 %s) ===",
@@ -52,8 +56,16 @@ class GridOptimizerAgent:
         reserve = capital_krw * krw_hold_ratio
 
         # 공격성 다이얼 → 기준 그리드 간격 (수수료 인지 최소 간격으로 하한 보정)
-        base_gi = AGGRESSIVENESS_INTERVAL_PCT.get(aggressiveness, 0.5)
-        gi_eff = max(base_gi, MIN_GRID_INTERVAL_PCT)
+        asymmetric = (buy_interval_pct is not None and sell_interval_pct is not None)
+        if asymmetric:
+            buy_gi  = max(buy_interval_pct,  MIN_GRID_INTERVAL_PCT / 2)
+            sell_gi = max(sell_interval_pct, MIN_GRID_INTERVAL_PCT / 2)
+            gi_eff  = buy_gi   # bot count based on buy spacing
+        else:
+            base_gi = AGGRESSIVENESS_INTERVAL_PCT.get(aggressiveness, 0.5)
+            gi_eff  = max(base_gi, MIN_GRID_INTERVAL_PCT)
+            buy_gi  = gi_eff
+            sell_gi = gi_eff
         bots = max(1, math.ceil(box_range_pct / gi_eff))
 
         # 봇 상한(1,000) 초과 시 간격 자동 확대
@@ -90,6 +102,8 @@ class GridOptimizerAgent:
             grid_count=bots,
             round_trips_per_day=self._daily_round_trips(gi_eff, daily_sigma, box_range_pct),
             aggressiveness=aggressiveness,
+            buy_interval_pct=buy_gi if asymmetric else None,
+            sell_interval_pct=sell_gi if asymmetric else None,
         )
 
         logger.info(

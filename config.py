@@ -59,9 +59,9 @@ FEAR_GREED_URL = "https://api.alternative.me/fng/"
 # ──────────────────────────────────────────────────────────
 # 비대칭 그리드 설정 (매수간격 ≠ 매도간격)
 # ──────────────────────────────────────────────────────────
-ASYMMETRIC_GRID = False          # True = 비대칭 활성화
-GRID_BUY_INTERVAL_PCT  = 0.5    # 매수 그리드 간격 (%)
-GRID_SELL_INTERVAL_PCT = 0.5    # 매도 그리드 간격 (%)
+ASYMMETRIC_GRID = True           # True = 비대칭 활성화
+GRID_BUY_INTERVAL_PCT  = 0.5   # 매수 간격: 체결 빈도 기준
+GRID_SELL_INTERVAL_PCT = 1.0   # 매도 간격: 수익 크기 결정 (2× 보수 수익)
 # 비대칭 프리셋 예시: 매수 0.5% / 매도 0.3% → 수익 집중 + 거래량↑
 
 # ──────────────────────────────────────────────────────────
@@ -71,8 +71,7 @@ USDT_ENABLED = True
 USDT_REFERENCE_PRICE_KRW = 1_400.0   # USDT/KRW 참고가 (설정값, 수집 시 갱신)
 USDT_DAILY_RANGE_KRW     = 8.0       # 일중 USDT 변동폭 ±(KRW) 참고치
 USDT_BUY_INTERVAL_KRW    = 1.0       # 매수 간격 (1원)
-USDT_SELL_INTERVAL_KRW   = 1.0       # 매도 간격 (1원, 기본)
-# USDT_SELL_INTERVAL_KRW = 2.0       # 매도 2원 옵션: 거래량↓ / 수익↑
+USDT_SELL_INTERVAL_KRW   = 2.0   # 매도 2원: 수익/거래량 균형
 
 # 리워드 캡 도달 후 봇 중단 기준 (거래량 기준)
 # 최상위 티어(0.02%) 기준: 300만원 리워드 = 150억원 거래량

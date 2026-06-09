@@ -59,6 +59,8 @@ class GridConfig:
     grid_count: int = 0                   # number of grid levels
     round_trips_per_day: float = 2.0      # estimated round trips per bot per day
     aggressiveness: str = "balanced"      # conservative / balanced / aggressive
+    buy_interval_pct: Optional[float] = None   # 비대칭 그리드: 매수 간격
+    sell_interval_pct: Optional[float] = None  # 비대칭 그리드: 매도 간격
 
 
 @dataclass

@@ -88,6 +88,10 @@ class PredictionSnapshot:
     # 원본 BoxPrediction (재사용용)
     box_prediction: Optional[BoxPrediction] = None
 
+    # 비대칭 그리드 간격
+    buy_interval_pct: Optional[float] = None
+    sell_interval_pct: Optional[float] = None
+
 
 def _slice_history(history: List[Dict], as_of: str) -> List[Dict]:
     """history를 as_of(YYYY-MM-DD) 이하로 슬라이스."""
@@ -114,6 +118,8 @@ def predict_as_of(
     lookback: int = 31,
     chart_tail: int = 120,
     manual_box: Optional[Dict[str, float]] = None,  # {"upper":..,"lower":..} 수동 덮어쓰기
+    buy_interval_pct: Optional[float] = None,
+    sell_interval_pct: Optional[float] = None,
 ) -> PredictionSnapshot:
     """
     as_of 시점까지의 히스토리로 익월 박스권 + 그리드 설정을 예측.
@@ -168,7 +174,8 @@ def predict_as_of(
 
     # 그리드 최적화
     optimizer = GridOptimizerAgent()
-    grid = optimizer.optimize(box_pred, dsig, capital_krw, aggressiveness, krw_hold_ratio)
+    grid = optimizer.optimize(box_pred, dsig, capital_krw, aggressiveness, krw_hold_ratio,
+                              buy_interval_pct=buy_interval_pct, sell_interval_pct=sell_interval_pct)
 
     # 리워드 목표
     reward_agent = RewardCalculatorAgent()
@@ -202,6 +209,8 @@ def predict_as_of(
         stretch_target=tier_rec["stretch"],
         history_tail=sliced[-chart_tail:],
         box_prediction=box_pred,
+        buy_interval_pct=grid.buy_interval_pct,
+        sell_interval_pct=grid.sell_interval_pct,
     )
 
     logger.info(

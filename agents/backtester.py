@@ -165,8 +165,7 @@ def _grid_profit_from_path(
     if asymmetric:
         buy_gi  = max(buy_interval_pct,  MIN_GRID_INTERVAL_PCT / 2)
         sell_gi = max(sell_interval_pct, MIN_GRID_INTERVAL_PCT / 2)
-        avg_gi  = (buy_gi + sell_gi) / 2
-        gi_pct  = avg_gi
+        gi_pct  = buy_gi   # bot spacing and crossings based on BUY interval
     else:
         gi_pct  = max(grid_interval_pct, MIN_GRID_INTERVAL_PCT)
         buy_gi  = gi_pct
