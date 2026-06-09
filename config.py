@@ -60,9 +60,8 @@ FEAR_GREED_URL = "https://api.alternative.me/fng/"
 # 비대칭 그리드 설정 (매수간격 ≠ 매도간격)
 # ──────────────────────────────────────────────────────────
 ASYMMETRIC_GRID = True           # True = 비대칭 활성화
-GRID_BUY_INTERVAL_PCT  = 0.5   # 매수 간격: 체결 빈도 기준
-GRID_SELL_INTERVAL_PCT = 1.0   # 매도 간격: 수익 크기 결정 (2× 보수 수익)
-# 비대칭 프리셋 예시: 매수 0.5% / 매도 0.3% → 수익 집중 + 거래량↑
+GRID_BUY_INTERVAL_PCT  = 0.5    # 매수 간격: 체결 빈도 기준
+GRID_SELL_INTERVAL_PCT = 1.0    # 매도 간격: 수익 크기 결정 (2× 보수 수익)
 
 # ──────────────────────────────────────────────────────────
 # USDT-KRW 전략 설정 (1원 단위 초단기 그리드)
