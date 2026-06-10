@@ -90,19 +90,6 @@
   .strat-card table.sc-tbl td:first-child { color: var(--muted); }
   .strat-card table.sc-tbl td:last-child { text-align: right; font-weight: 600; }
 
-  /* Total P&L summary */
-  .pnl-summary {
-    background: var(--card); border: 1px solid var(--border); border-radius: 10px;
-    padding: 16px; display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px;
-  }
-  .pnl-col { text-align: center; }
-  .pnl-col .pl { font-size: .7rem; color: var(--muted); margin-bottom: 4px; }
-  .pnl-col .pv { font-size: 1rem; font-weight: 700; }
-  .pnl-col .pv.pos { color: #4ec94e; }
-  .pnl-col .pv.neg { color: var(--red); }
-  .pnl-col .pv.accent { color: var(--accent); }
-  .pnl-col .pv.orange { color: var(--orange); }
-
   /* Eval card */
   .eval-card {
     background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 18px;
@@ -255,7 +242,6 @@
     .metrics { grid-template-columns: repeat(2, 1fr); }
     .strategy-grid { grid-template-columns: 1fr; }
     .info-grid { grid-template-columns: 1fr; }
-    .pnl-summary { grid-template-columns: repeat(3, 1fr); }
   }
   @media (max-width: 640px) {
     .layout { flex-direction: column; }
@@ -350,10 +336,10 @@
             <div>
               <div style="font-size:.85rem;font-weight:700;margin-bottom:12px">자본 배분 (추정치)</div>
               <div class="donut-legend" id="donut-legend">
-                <div class="leg-row"><div class="leg-dot" style="background:#4f8ef7"></div><span id="leg-btc-inner">BTC 내부존 (1σ) — 14.4M (36%)</span></div>
-                <div class="leg-row"><div class="leg-dot" style="background:#ff7f0e"></div><span id="leg-btc-outer">BTC 외부존 (2σ) — 9.6M (24%)</span></div>
-                <div class="leg-row"><div class="leg-dot" style="background:#26a17b"></div><span id="leg-usdt-inner">USDT 내부존 (1σ) — 9.6M (24%)</span></div>
-                <div class="leg-row"><div class="leg-dot" style="background:#a0d8a0"></div><span id="leg-usdt-outer">USDT 외부존 (2σ) — 6.4M (16%)</span></div>
+                <div class="leg-row"><div class="leg-dot" style="background:#4f8ef7"></div><span id="leg-btc-inner">BTC 내부존 (1σ) — 10.1M (36%)</span></div>
+                <div class="leg-row"><div class="leg-dot" style="background:#ff7f0e"></div><span id="leg-btc-outer">BTC 외부존 (2σ) — 6.7M (24%)</span></div>
+                <div class="leg-row"><div class="leg-dot" style="background:#26a17b"></div><span id="leg-usdt-inner">USDT 내부존 (1σ) — 6.7M (24%)</span></div>
+                <div class="leg-row"><div class="leg-dot" style="background:#a0d8a0"></div><span id="leg-usdt-outer">USDT 외부존 (2σ) — 4.5M (16%)</span></div>
                 <div class="leg-row"><div class="leg-dot" style="background:#444"></div><span id="leg-krw">KRW 예비금 — 별도</span></div>
               </div>
             </div>
@@ -370,12 +356,12 @@
                   <div class="sc-badge">내부존</div>
                 </div>
                 <table class="sc-tbl">
-                  <tr><td>투입 자본</td><td id="si-btci-cap">14.4M원</td></tr>
+                  <tr><td>투입 자본</td><td id="si-btci-cap">10.1M원</td></tr>
                   <tr><td>매수/매도 간격</td><td title="매도간격이 수익 결정, 매수간격이 거래량 결정">매수 0.5% / 매도 1.0%</td></tr>
-                  <tr><td>봇 수 (추정)</td><td id="si-btci-bots">35개</td></tr>
-                  <tr><td>봇당 자본</td><td id="si-btci-pbot">411,428원</td></tr>
-                  <tr><td>월 거래량</td><td>~8억</td></tr>
-                  <tr><td>예상 월 순익</td><td id="si-btci-net" class="pos">+370만원</td></tr>
+                  <tr><td>봇 수 (추정)</td><td id="si-btci-bots">71개</td></tr>
+                  <tr><td>봇당 자본</td><td id="si-btci-pbot">142,000원</td></tr>
+                  <tr><td>월 거래량</td><td>~5.6억</td></tr>
+                  <tr><td>월 순익(추정)</td><td id="si-btci-net" class="pos">+25.9만원</td></tr>
                 </table>
               </div>
               <!-- BTC outer -->
@@ -385,12 +371,12 @@
                   <div class="sc-badge">외부존 · 거래량 파밍</div>
                 </div>
                 <table class="sc-tbl">
-                  <tr><td>투입 자본</td><td id="si-btco-cap">9.6M원</td></tr>
+                  <tr><td>투입 자본</td><td id="si-btco-cap">6.7M원</td></tr>
                   <tr><td>매수/매도 간격</td><td title="매도간격이 수익 결정, 매수간격이 거래량 결정">매수 0.3% / 매도 0.5%</td></tr>
-                  <tr><td>봇 수 (추정)</td><td id="si-btco-bots">35개</td></tr>
-                  <tr><td>봇당 자본</td><td id="si-btco-pbot">274,285원</td></tr>
-                  <tr><td>월 거래량</td><td>~3억 (거래량↑ 리워드 파밍)</td></tr>
-                  <tr><td>예상 월 순익</td><td id="si-btco-net" class="pos">+96만원</td></tr>
+                  <tr><td>봇 수 (추정)</td><td id="si-btco-bots">82개</td></tr>
+                  <tr><td>봇당 자본</td><td id="si-btco-pbot">82,000원</td></tr>
+                  <tr><td>월 거래량</td><td>~1.8억 (활성 ~27%)</td></tr>
+                  <tr><td>월 순익(추정)</td><td id="si-btco-net" class="pos">+6.7만원</td></tr>
                 </table>
               </div>
               <!-- USDT inner -->
@@ -400,12 +386,12 @@
                   <div class="sc-badge">내부존</div>
                 </div>
                 <table class="sc-tbl">
-                  <tr><td>투입 자본</td><td id="si-usdti-cap">9.6M원</td></tr>
-                  <tr><td>매수/매도 간격</td><td>1원/2원</td></tr>
-                  <tr><td>봇 수 (추정)</td><td id="si-usdti-bots">30개</td></tr>
-                  <tr><td>봇당 자본</td><td id="si-usdti-pbot">320,000원</td></tr>
-                  <tr><td>월 거래량</td><td>~15억</td></tr>
-                  <tr><td>예상 월 순익</td><td id="si-usdti-net" class="pos">+212만원</td></tr>
+                  <tr><td>투입 자본</td><td id="si-usdti-cap">6.7M원</td></tr>
+                  <tr><td>매수/매도 간격</td><td>1원/3원</td></tr>
+                  <tr><td>봇 수 (추정)</td><td id="si-usdti-bots">31개</td></tr>
+                  <tr><td>봇당 자본</td><td id="si-usdti-pbot">216,774원</td></tr>
+                  <tr><td>월 거래량</td><td>~3.2억</td></tr>
+                  <tr><td>월 순익(추정)</td><td id="si-usdti-net" class="pos">+24.2만원</td></tr>
                 </table>
               </div>
               <!-- USDT outer -->
@@ -415,12 +401,12 @@
                   <div class="sc-badge">외부존 · 볼륨 파밍</div>
                 </div>
                 <table class="sc-tbl">
-                  <tr><td>투입 자본</td><td id="si-usdto-cap">6.4M원</td></tr>
-                  <tr><td>매수/매도 간격</td><td>1원/1원 (볼륨 파밍)</td></tr>
+                  <tr><td>투입 자본</td><td id="si-usdto-cap">4.5M원</td></tr>
+                  <tr><td>매수/매도 간격</td><td>1원/3원 (외부존)</td></tr>
                   <tr><td>봇 수 (추정)</td><td id="si-usdto-bots">30개</td></tr>
-                  <tr><td>봇당 자본</td><td id="si-usdto-pbot">213,333원</td></tr>
-                  <tr><td>월 거래량</td><td>~5억</td></tr>
-                  <tr><td>예상 월 순익</td><td id="si-usdto-net" class="pos">+17만원</td></tr>
+                  <tr><td>봇당 자본</td><td id="si-usdto-pbot">149,333원</td></tr>
+                  <tr><td>월 거래량</td><td>~0.6억 (활성 27%)</td></tr>
+                  <tr><td>월 순익(추정)</td><td id="si-usdto-net" class="pos">+3.9만원</td></tr>
                 </table>
               </div>
             </div>
@@ -440,33 +426,33 @@
                 <tbody>
                   <tr class="inner-row">
                     <td><span style="color:var(--btc)">₿</span> BTC 1σ보수 *</td>
-                    <td>14.4M</td><td>8억</td>
-                    <td class="pos">+370만</td><td class="neg">-64만</td><td class="pos">+120만</td>
-                    <td class="pos">+426만</td>
+                    <td>10.1M</td><td>~5.6억</td>
+                    <td class="pos">+67.2만</td><td class="neg">-44.8만</td><td class="pos">+3.5만</td>
+                    <td class="pos">+25.9만 (그리드 +22.4만)</td>
                   </tr>
                   <tr class="outer-row">
                     <td><span style="color:var(--btc)">₿</span> BTC 2σ공격</td>
-                    <td>9.6M</td><td>3억</td>
-                    <td class="pos">+75만</td><td class="neg">-24만</td><td class="pos">+45만</td>
-                    <td class="pos">+96만</td>
+                    <td>6.7M</td><td>~1.8억</td>
+                    <td class="pos">+19.6만</td><td class="neg">-14.4만</td><td class="pos">+1.5만</td>
+                    <td class="pos">+6.7만 (그리드 +5.2만)</td>
                   </tr>
                   <tr class="inner-row">
                     <td><span style="color:var(--usdt)">₮</span> USDT 1σ보수</td>
-                    <td>9.6M</td><td>15억</td>
-                    <td class="pos">+107만</td><td class="neg">-120만</td><td class="pos">+225만</td>
-                    <td class="pos">+212만</td>
+                    <td>6.7M</td><td>3.23억</td>
+                    <td class="pos">+47.4만</td><td class="neg">-25.8만</td><td class="pos">+2.6만</td>
+                    <td class="pos">+24.2만 (그리드 +21.6만)</td>
                   </tr>
                   <tr class="outer-row">
                     <td><span style="color:var(--usdt)">₮</span> USDT 2σ공격</td>
-                    <td>6.4M</td><td>5억</td>
-                    <td class="neg">-18만</td><td class="neg">-40만</td><td class="pos">+75만</td>
-                    <td class="pos">+17만</td>
+                    <td>4.5M</td><td>0.58억</td>
+                    <td class="pos">+8.5만</td><td class="neg">-4.6만</td><td>0 (1억 티어 미달)</td>
+                    <td class="pos">+3.9만</td>
                   </tr>
                   <tr class="total-row">
                     <td>합계</td>
-                    <td>40M</td><td>31억</td>
-                    <td class="pos">+534만</td><td class="neg">-248만</td><td class="pos">+465만</td>
-                    <td class="pos" style="font-size:1rem">+751만</td>
+                    <td>28M</td><td>~11.2억</td>
+                    <td class="pos">+142.7만</td><td class="neg">-89.6만</td><td class="pos">+7.6만</td>
+                    <td class="pos" style="font-size:1rem">+60.7만 (월 ~2.2%)</td>
                   </tr>
                 </tbody>
               </table>
@@ -498,10 +484,10 @@
             <div class="eval-annualized">
               <h4>📊 예상 연환산 수익률 (추정치)</h4>
               <div class="annual-grid">
-                <div class="annual-chip">BTC 보수 <span>~20%</span>/년</div>
+                <div class="annual-chip">BTC 보수 <span>~31%</span>/년</div>
                 <div class="annual-chip">BTC 공격 <span>~12%</span>/년 (활성시)</div>
-                <div class="annual-chip">USDT 보수 <span>~26%</span>/년</div>
-                <div class="annual-chip">USDT 공격 <span>~3%</span>/년 (reward중심)</div>
+                <div class="annual-chip">USDT 보수 <span>~43%</span>/년</div>
+                <div class="annual-chip">USDT 공격 <span>~10%</span>/년</div>
               </div>
             </div>
           </div>
@@ -537,21 +523,21 @@
                     <td><span style="color:var(--inner-border);font-weight:700">1σ 내부 (보수)</span></td>
                     <td>269M ~ 364M원</td>
                     <td title="매도간격이 수익 결정, 매수간격이 거래량 결정">매수 0.5% / 매도 1.0%</td>
-                    <td id="btc-inner-cap">14.4M</td>
-                    <td id="btc-inner-bots">35개</td>
-                    <td id="btc-inner-pbot">411,428원</td>
-                    <td>~8억</td>
-                    <td class="pos">+370만원</td>
+                    <td id="btc-inner-cap">10.1M</td>
+                    <td id="btc-inner-bots">71개</td>
+                    <td id="btc-inner-pbot">142,000원</td>
+                    <td>~5.6억</td>
+                    <td class="pos">+25.9만원 <span style="color:var(--muted);font-weight:400">월 순익(추정)</span></td>
                   </tr>
                   <tr class="outer-row">
                     <td><span style="color:var(--outer-border);font-weight:700">1σ~2σ 외부 (공격)</span></td>
                     <td>231M~269M / 364M~424M</td>
                     <td title="매도간격이 수익 결정, 매수간격이 거래량 결정">매수 0.3% / 매도 0.5%</td>
-                    <td id="btc-outer-cap">9.6M</td>
-                    <td id="btc-outer-bots">35개</td>
-                    <td id="btc-outer-pbot">274,285원</td>
-                    <td>~3억</td>
-                    <td class="pos">+96만원</td>
+                    <td id="btc-outer-cap">6.7M</td>
+                    <td id="btc-outer-bots">82개</td>
+                    <td id="btc-outer-pbot">82,000원</td>
+                    <td>~1.8억</td>
+                    <td class="pos">+6.7만원 <span style="color:var(--muted);font-weight:400">월 순익(추정)</span></td>
                   </tr>
                 </tbody>
               </table>
@@ -603,7 +589,7 @@
             <div class="section-title">🎛️ USDT 그리드 간격 시뮬레이터 (1~5원)</div>
             <div class="sim-grid">
               <div class="sim-zone" style="border-color:var(--inner-border)">
-                <div class="sim-zone-head" style="color:var(--inner-border)">1σ 내부존 (보수) — 9.6M원</div>
+                <div class="sim-zone-head" style="color:var(--inner-border)">1σ 내부존 (보수) — <span id="sim-inner-cap-label">6.7M원</span></div>
                 <div class="stepper-row">
                   <div class="stepper">
                     <span class="stp-label">매수 간격</span>
@@ -628,7 +614,7 @@
               </div>
 
               <div class="sim-zone" style="border-color:var(--outer-border)">
-                <div class="sim-zone-head" style="color:var(--outer-border)">1σ~2σ 외부존 (공격) — 6.4M원 · 활성 27%</div>
+                <div class="sim-zone-head" style="color:var(--outer-border)">1σ~2σ 외부존 (공격) — <span id="sim-outer-cap-label">4.5M원</span> · 활성 27%</div>
                 <div class="stepper-row">
                   <div class="stepper">
                     <span class="stp-label">매수 간격</span>
@@ -654,7 +640,7 @@
             </div>
             <div class="sim-note">
               📐 <b>월 그리드순익 ≈ [매도간격 × C − 수수료] / (매수+매도)</b> · 월거래량 ≈ 18.4억 / (매수+매도)<br>
-              ⚠️ 손익분기: <b>매도 ≥ 매수 + 2원</b> (수수료 0.08% 커버). 1원/1원은 그리드 손실(리워드만 목적).
+              ⚠️ 손익분기: <b>매도 ≥ 2원</b> (매도간격이 왕복수수료 ≈1.12원을 넘어야 함 — 매수간격과 무관). 1원/1원은 그리드 손실 — 거래량용.
             </div>
           </div>
 
@@ -673,22 +659,22 @@
                   <tr class="inner-row">
                     <td><span style="color:var(--inner-border);font-weight:700">1σ 내부 (보수)</span></td>
                     <td>1,386 ~ 1,416원</td>
-                    <td>1원 / 2원</td>
-                    <td id="usdt-inner-cap">9.6M</td>
-                    <td id="usdt-inner-bots">30개</td>
-                    <td id="usdt-inner-pbot">320,000원</td>
-                    <td>~15억</td>
-                    <td class="pos">+212만원</td>
+                    <td>1원 / 3원</td>
+                    <td id="usdt-inner-cap">6.7M</td>
+                    <td id="usdt-inner-bots">31개</td>
+                    <td id="usdt-inner-pbot">216,774원</td>
+                    <td>~3.2억</td>
+                    <td class="pos">+24.2만원 <span style="color:var(--muted);font-weight:400">월 순익(추정)</span></td>
                   </tr>
                   <tr class="outer-row">
                     <td><span style="color:var(--outer-border);font-weight:700">1σ~2σ 외부 (공격)</span></td>
                     <td>1,371~1,386 / 1,416~1,430원</td>
-                    <td>1원 / 1원</td>
-                    <td id="usdt-outer-cap">6.4M</td>
+                    <td>1원 / 3원</td>
+                    <td id="usdt-outer-cap">4.5M</td>
                     <td id="usdt-outer-bots">30개</td>
-                    <td id="usdt-outer-pbot">213,333원</td>
-                    <td>~5억</td>
-                    <td class="pos">+17만원</td>
+                    <td id="usdt-outer-pbot">149,333원</td>
+                    <td>~0.6억</td>
+                    <td class="pos">+3.9만원 <span style="color:var(--muted);font-weight:400">월 순익(추정)</span></td>
                   </tr>
                 </tbody>
               </table>
@@ -1036,65 +1022,71 @@ function updateMetrics() {
   const innerUsdt = usdtCap * innerRatio;
   const outerUsdt = usdtCap * (1 - innerRatio);
 
-  const btcInnerBots = Math.max(1, Math.round(D.snap.range_pct / 1.0));
-  const btcOuterBots = Math.max(1, Math.round(D.snap.range_pct / 0.5));
-  const usdtInnerBots = 30;
+  const btcInnerBots = Math.max(1, Math.round(D.snap.range_pct / 0.5)); // 매수간격 0.5% 기준
+  const btcOuterBots = Math.max(1, Math.round(24.6 / 0.3));             // 외부존 폭 ~24.6%, 매수 0.3%
+  const usdtInnerBots = 31;
   const usdtOuterBots = 30;
 
-  // Update strategy cards
-  const cards = [
-    ['si-btci-cap', innerBtc, 'si-btci-bots', btcInnerBots, 'si-btci-pbot', innerBtc/btcInnerBots, 'si-btci-net', innerBtc * 0.0257],
-    ['si-btco-cap', outerBtc, 'si-btco-bots', btcOuterBots, 'si-btco-pbot', outerBtc/btcOuterBots, 'si-btco-net', outerBtc * 0.01],
-    ['si-usdti-cap', innerUsdt, 'si-usdti-bots', usdtInnerBots, 'si-usdti-pbot', innerUsdt/usdtInnerBots, 'si-usdti-net', innerUsdt * 0.0221],
-    ['si-usdto-cap', outerUsdt, 'si-usdto-bots', usdtOuterBots, 'si-usdto-pbot', outerUsdt/usdtOuterBots, 'si-usdto-net', outerUsdt * 0.00266],
-  ];
+  // 월 순익 추정 배율 (기본값 기준 캘리브레이션)
+  const NET = { btcInner: 0.0257, btcOuter: 0.01, usdtInner: 0.0360, usdtOuter: 0.0087 };
+  const fmtNet = (cap, mult) => '+' + (cap * mult / 1e4).toFixed(1) + '만원';
 
   function setEl(id, val) { const el = document.getElementById(id); if (el) el.textContent = val; }
 
-  setEl('si-btci-cap',  fmt(Math.round(innerBtc/1e4)/100 * 100)+'원');
+  setEl('si-btci-cap',  fmtM(innerBtc)+'원');
   setEl('si-btci-bots', btcInnerBots + '개');
   setEl('si-btci-pbot', fmt(Math.round(innerBtc/btcInnerBots)) + '원');
-  setEl('si-btci-net',  '+' + Math.round(innerBtc * 0.0257 / 1e4) + '만원');
+  setEl('si-btci-net',  fmtNet(innerBtc, NET.btcInner));
 
-  setEl('si-btco-cap',  fmt(Math.round(outerBtc/1e4)/100 * 100)+'원');
+  setEl('si-btco-cap',  fmtM(outerBtc)+'원');
   setEl('si-btco-bots', btcOuterBots + '개');
   setEl('si-btco-pbot', fmt(Math.round(outerBtc/btcOuterBots)) + '원');
-  setEl('si-btco-net',  '+' + Math.round(outerBtc * 0.01 / 1e4) + '만원');
+  setEl('si-btco-net',  fmtNet(outerBtc, NET.btcOuter));
 
-  setEl('si-usdti-cap',  fmt(Math.round(innerUsdt/1e4)/100 * 100)+'원');
+  setEl('si-usdti-cap',  fmtM(innerUsdt)+'원');
   setEl('si-usdti-bots', usdtInnerBots + '개');
   setEl('si-usdti-pbot', fmt(Math.round(innerUsdt/usdtInnerBots)) + '원');
-  setEl('si-usdti-net',  '+' + Math.round(innerUsdt * 0.0221 / 1e4) + '만원');
+  setEl('si-usdti-net',  fmtNet(innerUsdt, NET.usdtInner));
 
-  setEl('si-usdto-cap',  fmt(Math.round(outerUsdt/1e4)/100 * 100)+'원');
+  setEl('si-usdto-cap',  fmtM(outerUsdt)+'원');
   setEl('si-usdto-bots', usdtOuterBots + '개');
   setEl('si-usdto-pbot', fmt(Math.round(outerUsdt/usdtOuterBots)) + '원');
-  setEl('si-usdto-net',  '+' + Math.round(outerUsdt * 0.00266 / 1e4) + '만원');
+  setEl('si-usdto-net',  fmtNet(outerUsdt, NET.usdtOuter));
 
   // BTC tab zone table
-  setEl('btc-inner-cap',  fmt(Math.round(innerBtc))+'원');
+  setEl('btc-inner-cap',  fmtM(innerBtc));
   setEl('btc-inner-bots', btcInnerBots+'개');
   setEl('btc-inner-pbot', fmt(Math.round(innerBtc/btcInnerBots))+'원');
-  setEl('btc-outer-cap',  fmt(Math.round(outerBtc))+'원');
+  setEl('btc-outer-cap',  fmtM(outerBtc));
   setEl('btc-outer-bots', btcOuterBots+'개');
   setEl('btc-outer-pbot', fmt(Math.round(outerBtc/btcOuterBots))+'원');
   setEl('btc-inner-pct',  Math.round(innerRatio*100)+'%');
   setEl('btc-outer-pct',  Math.round((1-innerRatio)*100)+'%');
 
   // USDT tab zone table
-  setEl('usdt-inner-cap',  fmt(Math.round(innerUsdt))+'원');
+  setEl('usdt-inner-cap',  fmtM(innerUsdt));
   setEl('usdt-inner-bots', usdtInnerBots+'개');
   setEl('usdt-inner-pbot', fmt(Math.round(innerUsdt/usdtInnerBots))+'원');
-  setEl('usdt-outer-cap',  fmt(Math.round(outerUsdt))+'원');
+  setEl('usdt-outer-cap',  fmtM(outerUsdt));
   setEl('usdt-outer-bots', usdtOuterBots+'개');
   setEl('usdt-outer-pbot', fmt(Math.round(outerUsdt/usdtOuterBots))+'원');
 
+  // USDT 시뮬레이터 자본 동기화
+  usdtSim.inner.cap = innerUsdt;
+  usdtSim.outer.cap = outerUsdt;
+  setEl('sim-inner-cap-label', fmtM(innerUsdt)+'원');
+  setEl('sim-outer-cap-label', fmtM(outerUsdt)+'원');
+  if (window._chartUSDT) {
+    renderUsdtSim('inner','sim-inner');
+    renderUsdtSim('outer','sim-outer');
+  }
+
   // Legend text
   const pct = (v) => Math.round(v/investable*100);
-  setEl('leg-btc-inner',  `BTC 내부존 (1σ) — ${fmt(Math.round(innerBtc/1e4)/100*100)}M (${pct(innerBtc)}%)`);
-  setEl('leg-btc-outer',  `BTC 외부존 (2σ) — ${fmt(Math.round(outerBtc/1e4)/100*100)}M (${pct(outerBtc)}%)`);
-  setEl('leg-usdt-inner', `USDT 내부존 (1σ) — ${fmt(Math.round(innerUsdt/1e4)/100*100)}M (${pct(innerUsdt)}%)`);
-  setEl('leg-usdt-outer', `USDT 외부존 (2σ) — ${fmt(Math.round(outerUsdt/1e4)/100*100)}M (${pct(outerUsdt)}%)`);
+  setEl('leg-btc-inner',  `BTC 내부존 (1σ) — ${fmtM(innerBtc)} (${pct(innerBtc)}%)`);
+  setEl('leg-btc-outer',  `BTC 외부존 (2σ) — ${fmtM(outerBtc)} (${pct(outerBtc)}%)`);
+  setEl('leg-usdt-inner', `USDT 내부존 (1σ) — ${fmtM(innerUsdt)} (${pct(innerUsdt)}%)`);
+  setEl('leg-usdt-outer', `USDT 외부존 (2σ) — ${fmtM(outerUsdt)} (${pct(outerUsdt)}%)`);
 
   // Redraw donut
   drawDonut([
@@ -1163,11 +1155,10 @@ function buildBTCChart() {
   setTimeout(() => Plotly.Plots.resize('chart-btc'), 60);
 }
 
-// ─── USDT 차트 ──────────────────────────────────────────────────────────────
 // ─── USDT 간격 시뮬레이터 ────────────────────────────────────────────────────
 const usdtSim = {
-  inner: { buy: 1, sell: 3, cap: 9_600_000, box: 31, active: 1.0 },
-  outer: { buy: 1, sell: 3, cap: 6_400_000, box: 30, active: 0.27 },
+  inner: { buy: 1, sell: 3, cap: 6_720_000, box: 31, active: 1.0 },
+  outer: { buy: 1, sell: 3, cap: 4_480_000, box: 30, active: 0.27 },
 };
 const USDT_FEE = 0.0004, USDT_DAILY_RANGE = 8.0, USDT_EFF = 0.40,
       USDT_REF = 1401.0, USDT_TDAYS = 30;
@@ -1188,7 +1179,7 @@ function calcUsdt(z) {
   const fee = totalRt * 2 * USDT_FEE * capPerBot;
   const netGrid = (profit - fee) * z.active;
   const vol = totalRt * capPerBot * 2 * z.active;
-  const reward = usdtReward(vol) * z.active;
+  const reward = usdtReward(vol); // vol에 이미 z.active 반영됨 — 이중 적용 금지
   const totalNet = netGrid + reward;
   return { bots, capPerBot, totalRt: totalRt*z.active, vol, netGrid, reward, totalNet,
            monthlyPct: totalNet/z.cap*100, annualPct: totalNet/z.cap*100*12,
@@ -1218,6 +1209,7 @@ function stepUsdt(zoneKey, side, delta) {
   renderUsdtSim(zoneKey, zoneKey === 'inner' ? 'sim-inner' : 'sim-outer');
 }
 
+// ─── USDT 차트 ──────────────────────────────────────────────────────────────
 function buildUSDTChart() {
   window._chartUSDT = true;
   renderUsdtSim('inner', 'sim-inner');
