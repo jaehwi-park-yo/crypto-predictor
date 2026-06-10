@@ -15,7 +15,8 @@ data/*.json
 data/*.csv
 !data/btc_history.json
 
-# OS / IDE
+# 배포 패키지 (산출물)
+*.zip
 .DS_Store
 .idea/
 .vscode/
