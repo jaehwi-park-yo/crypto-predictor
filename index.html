@@ -368,7 +368,7 @@
                   <tr><td>매수/매도 간격</td><td title="매도간격이 수익 결정, 매수간격이 거래량 결정">매수 0.5% / 매도 1.0%</td></tr>
                   <tr><td>봇 수 (추정)</td><td id="si-btci-bots">71개</td></tr>
                   <tr><td>봇당 자본</td><td id="si-btci-pbot">142,000원</td></tr>
-                  <tr><td>월 거래량</td><td>~5.6억</td></tr>
+                  <tr><td>월 거래량</td><td id="si-btci-vol">~5.6억</td></tr>
                   <tr><td>월 순익(추정)</td><td id="si-btci-net" class="pos">+25.9만원</td></tr>
                 </table>
               </div>
@@ -383,7 +383,7 @@
                   <tr><td>매수/매도 간격</td><td title="매도간격이 수익 결정, 매수간격이 거래량 결정">매수 0.3% / 매도 0.5%</td></tr>
                   <tr><td>봇 수 (추정)</td><td id="si-btco-bots">82개</td></tr>
                   <tr><td>봇당 자본</td><td id="si-btco-pbot">82,000원</td></tr>
-                  <tr><td>월 거래량</td><td>~1.8억 (활성 ~27%)</td></tr>
+                  <tr><td>월 거래량</td><td id="si-btco-vol">~1.8억 (활성 ~27%)</td></tr>
                   <tr><td>월 순익(추정)</td><td id="si-btco-net" class="pos">+6.7만원</td></tr>
                 </table>
               </div>
@@ -398,7 +398,7 @@
                   <tr><td>매수/매도 간격</td><td>1원/3원</td></tr>
                   <tr><td>봇 수 (추정)</td><td id="si-usdti-bots">31개</td></tr>
                   <tr><td>봇당 자본</td><td id="si-usdti-pbot">216,774원</td></tr>
-                  <tr><td>월 거래량</td><td>~3.2억</td></tr>
+                  <tr><td>월 거래량</td><td id="si-usdti-vol">~3.2억</td></tr>
                   <tr><td>월 순익(추정)</td><td id="si-usdti-net" class="pos">+24.2만원</td></tr>
                 </table>
               </div>
@@ -413,7 +413,7 @@
                   <tr><td>매수/매도 간격</td><td>1원/3원 (외부존)</td></tr>
                   <tr><td>봇 수 (추정)</td><td id="si-usdto-bots">30개</td></tr>
                   <tr><td>봇당 자본</td><td id="si-usdto-pbot">149,333원</td></tr>
-                  <tr><td>월 거래량</td><td>~0.6억 (활성 27%)</td></tr>
+                  <tr><td>월 거래량</td><td id="si-usdto-vol">~0.6억 (활성 27%)</td></tr>
                   <tr><td>월 순익(추정)</td><td id="si-usdto-net" class="pos">+3.9만원</td></tr>
                 </table>
               </div>
@@ -434,33 +434,33 @@
                 <tbody>
                   <tr class="inner-row">
                     <td><span style="color:var(--btc)">₿</span> BTC 1σ보수 *</td>
-                    <td>10.1M</td><td>~5.6억</td>
-                    <td class="pos">+67.2만</td><td class="neg">-44.8만</td><td class="pos">+3.5만</td>
-                    <td class="pos">+25.9만 (그리드 +22.4만)</td>
+                    <td id="pnl-bi-cap">10.1M</td><td id="pnl-bi-vol">~5.6억</td>
+                    <td class="pos" id="pnl-bi-grid">+67.2만</td><td class="neg" id="pnl-bi-fee">-44.8만</td><td class="pos" id="pnl-bi-rwd">+3.5만</td>
+                    <td class="pos" id="pnl-bi-net">+25.9만</td>
                   </tr>
                   <tr class="outer-row">
                     <td><span style="color:var(--btc)">₿</span> BTC 2σ공격</td>
-                    <td>6.7M</td><td>~1.8억</td>
-                    <td class="pos">+19.6만</td><td class="neg">-14.4만</td><td class="pos">+1.5만</td>
-                    <td class="pos">+6.7만 (그리드 +5.2만)</td>
+                    <td id="pnl-bo-cap">6.7M</td><td id="pnl-bo-vol">~1.8억</td>
+                    <td class="pos" id="pnl-bo-grid">+19.6만</td><td class="neg" id="pnl-bo-fee">-14.4만</td><td class="pos" id="pnl-bo-rwd">+1.5만</td>
+                    <td class="pos" id="pnl-bo-net">+6.7만</td>
                   </tr>
                   <tr class="inner-row">
                     <td><span style="color:var(--usdt)">₮</span> USDT 1σ보수</td>
-                    <td>6.7M</td><td>3.23억</td>
-                    <td class="pos">+47.4만</td><td class="neg">-25.8만</td><td class="pos">+2.6만</td>
-                    <td class="pos">+24.2만 (그리드 +21.6만)</td>
+                    <td id="pnl-ui-cap">6.7M</td><td id="pnl-ui-vol">3.23억</td>
+                    <td class="pos" id="pnl-ui-grid">+47.4만</td><td class="neg" id="pnl-ui-fee">-25.8만</td><td class="pos" id="pnl-ui-rwd">+2.6만</td>
+                    <td class="pos" id="pnl-ui-net">+24.2만</td>
                   </tr>
                   <tr class="outer-row">
                     <td><span style="color:var(--usdt)">₮</span> USDT 2σ공격</td>
-                    <td>4.5M</td><td>0.58억</td>
-                    <td class="pos">+8.5만</td><td class="neg">-4.6만</td><td>0 (1억 티어 미달)</td>
-                    <td class="pos">+3.9만</td>
+                    <td id="pnl-uo-cap">4.5M</td><td id="pnl-uo-vol">0.58억</td>
+                    <td class="pos" id="pnl-uo-grid">+8.5만</td><td class="neg" id="pnl-uo-fee">-4.6만</td><td id="pnl-uo-rwd">0</td>
+                    <td class="pos" id="pnl-uo-net">+3.9만</td>
                   </tr>
                   <tr class="total-row">
                     <td>합계</td>
-                    <td>28M</td><td>~11.2억</td>
-                    <td class="pos">+142.7만</td><td class="neg">-89.6만</td><td class="pos">+7.6만</td>
-                    <td class="pos" style="font-size:1rem">+60.7만 (월 ~2.2%)</td>
+                    <td id="pnl-tot-cap">28M</td><td id="pnl-tot-vol">~11.2억</td>
+                    <td class="pos" id="pnl-tot-grid">+142.7만</td><td class="neg" id="pnl-tot-fee">-89.6만</td><td class="pos" id="pnl-tot-rwd">+7.6만</td>
+                    <td class="pos" style="font-size:1rem" id="pnl-tot-net">+60.7만 (월 ~2.2%)</td>
                   </tr>
                 </tbody>
               </table>
@@ -1035,31 +1035,23 @@ function updateMetrics() {
   const usdtInnerBots = 31;
   const usdtOuterBots = 30;
 
-  // 월 순익 추정 배율 (기본값 기준 캘리브레이션)
-  const NET = { btcInner: 0.0257, btcOuter: 0.01, usdtInner: 0.0360, usdtOuter: 0.0087 };
-  const fmtNet = (cap, mult) => '+' + (cap * mult / 1e4).toFixed(1) + '만원';
-
   function setEl(id, val) { const el = document.getElementById(id); if (el) el.textContent = val; }
 
   setEl('si-btci-cap',  fmtM(innerBtc)+'원');
   setEl('si-btci-bots', btcInnerBots + '개');
   setEl('si-btci-pbot', fmt(Math.round(innerBtc/btcInnerBots)) + '원');
-  setEl('si-btci-net',  fmtNet(innerBtc, NET.btcInner));
 
   setEl('si-btco-cap',  fmtM(outerBtc)+'원');
   setEl('si-btco-bots', btcOuterBots + '개');
   setEl('si-btco-pbot', fmt(Math.round(outerBtc/btcOuterBots)) + '원');
-  setEl('si-btco-net',  fmtNet(outerBtc, NET.btcOuter));
 
   setEl('si-usdti-cap',  fmtM(innerUsdt)+'원');
   setEl('si-usdti-bots', usdtInnerBots + '개');
   setEl('si-usdti-pbot', fmt(Math.round(innerUsdt/usdtInnerBots)) + '원');
-  setEl('si-usdti-net',  fmtNet(innerUsdt, NET.usdtInner));
 
   setEl('si-usdto-cap',  fmtM(outerUsdt)+'원');
   setEl('si-usdto-bots', usdtOuterBots + '개');
   setEl('si-usdto-pbot', fmt(Math.round(outerUsdt/usdtOuterBots)) + '원');
-  setEl('si-usdto-net',  fmtNet(outerUsdt, NET.usdtOuter));
 
   // BTC tab zone table
   setEl('btc-inner-cap',  fmtM(innerBtc));
@@ -1088,6 +1080,10 @@ function updateMetrics() {
     renderUsdtSim('inner','sim-inner');
     renderUsdtSim('outer','sim-outer');
   }
+
+  // 4전략 P&L 연동 (카드 + 합계 테이블)
+  _pnlCaps = { innerBtc, outerBtc, investable };
+  updatePnlTable();
 
   // Legend text
   const pct = (v) => Math.round(v/investable*100);
@@ -1193,6 +1189,81 @@ function calcUsdt(z) {
            monthlyPct: totalNet/z.cap*100, annualPct: totalNet/z.cap*100*12,
            gridPositive: (profit-fee) > 0 };
 }
+// ─── 4전략 월간 P&L 연동 계산 ──────────────────────────────────────────────
+let _pnlCaps = { innerBtc: 10_080_000, outerBtc: 6_720_000, investable: 28_000_000 };
+
+// BTC 존별 자본당 계수 (기본값 캘리브레이션: 내부 10.08M→거래량 5.6억/그리드 +67.2만, 외부 6.72M→1.8억/+19.6만)
+const BTC_COEF = {
+  inner: { volPerCap: 5.6e8 / 10.08e6, gridPerCap: 67.2e4 / 10.08e6 },
+  outer: { volPerCap: 1.8e8 / 6.72e6,  gridPerCap: 19.6e4 / 6.72e6  },
+};
+const BTC_FEE = 0.0008; // 양방향 0.04% × 2
+
+function calcBtcStrat(cap, zone) {
+  const c = BTC_COEF[zone];
+  const vol = cap * c.volPerCap;
+  const grid = cap * c.gridPerCap;
+  const fee = vol * BTC_FEE;
+  const reward = usdtReward(vol);
+  return { cap, vol, grid, fee, reward, net: grid - fee + reward };
+}
+
+function updatePnlTable() {
+  const { innerBtc, outerBtc, investable } = _pnlCaps;
+  const rows = {
+    bi: calcBtcStrat(innerBtc, 'inner'),
+    bo: calcBtcStrat(outerBtc, 'outer'),
+  };
+  // USDT: 시뮬레이터(스테퍼) 현재 간격 기준
+  for (const [key, zone] of [['ui','inner'],['uo','outer']]) {
+    const r = calcUsdt(usdtSim[zone]);
+    rows[key] = { cap: usdtSim[zone].cap, vol: r.vol,
+                  grid: r.netGrid + r.vol * USDT_FEE,  // 수수료 차감 전 그리드 P&L
+                  fee: r.vol * USDT_FEE, reward: r.reward, net: r.totalNet };
+  }
+
+  const man = (n) => (n >= 0 ? '+' : '') + (n / 1e4).toFixed(1) + '만';
+  const eok = (n) => (n / 1e8).toFixed(2) + '억';
+  const set = (id, val, cls) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.textContent = val;
+    if (cls !== undefined) el.className = cls;
+  };
+
+  const tot = { cap: 0, vol: 0, grid: 0, fee: 0, reward: 0, net: 0 };
+  for (const [key, r] of Object.entries(rows)) {
+    set(`pnl-${key}-cap`, fmtM(r.cap));
+    set(`pnl-${key}-vol`, eok(r.vol));
+    set(`pnl-${key}-grid`, man(r.grid), r.grid >= 0 ? 'pos' : 'neg');
+    set(`pnl-${key}-fee`, '-' + (r.fee / 1e4).toFixed(1) + '만', 'neg');
+    set(`pnl-${key}-rwd`, r.reward > 0 ? man(r.reward) : '0 (1억 티어 미달)', r.reward > 0 ? 'pos' : '');
+    set(`pnl-${key}-net`, man(r.net), r.net >= 0 ? 'pos' : 'neg');
+    for (const f of ['cap','vol','grid','fee','reward','net']) tot[f] += r[f];
+  }
+  set('pnl-tot-cap', fmtM(tot.cap));
+  set('pnl-tot-vol', eok(tot.vol));
+  set('pnl-tot-grid', man(tot.grid), tot.grid >= 0 ? 'pos' : 'neg');
+  set('pnl-tot-fee', '-' + (tot.fee / 1e4).toFixed(1) + '만', 'neg');
+  set('pnl-tot-rwd', man(tot.reward), tot.reward >= 0 ? 'pos' : 'neg');
+  const totEl = document.getElementById('pnl-tot-net');
+  if (totEl) {
+    totEl.textContent = `${man(tot.net)} (월 ~${(tot.net / investable * 100).toFixed(1)}%)`;
+    totEl.className = tot.net >= 0 ? 'pos' : 'neg';
+  }
+
+  // 4전략 카드 거래량·순익 동기화
+  const setT = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+  setT('si-btci-vol', '~' + eok(rows.bi.vol));
+  setT('si-btco-vol', '~' + eok(rows.bo.vol) + ' (활성 ~27%)');
+  setT('si-usdti-vol', '~' + eok(rows.ui.vol));
+  setT('si-usdto-vol', '~' + eok(rows.uo.vol) + ' (활성 27%)');
+  for (const [key, id] of [['bi','si-btci-net'],['bo','si-btco-net'],['ui','si-usdti-net'],['uo','si-usdto-net']]) {
+    const el = document.getElementById(id);
+    if (el) { el.textContent = man(rows[key].net) + '원'; el.className = rows[key].net >= 0 ? 'pos' : 'neg'; }
+  }
+}
+
 function renderUsdtSim(zoneKey, outId) {
   const r = calcUsdt(usdtSim[zoneKey]);
   const sign = (n) => (n>=0?'+':'') + fmt(n) + '원';
@@ -1215,6 +1286,7 @@ function stepUsdt(zoneKey, side, delta) {
   const prefix = zoneKey === 'inner' ? 'ui' : 'uo';
   document.getElementById(prefix+'-'+side).textContent = z[side];
   renderUsdtSim(zoneKey, zoneKey === 'inner' ? 'sim-inner' : 'sim-outer');
+  updatePnlTable(); // 간격 변경 → 포트폴리오 탭 P&L 합계도 연동
 }
 
 // ─── USDT 차트 ──────────────────────────────────────────────────────────────
