@@ -296,18 +296,15 @@
         <div id="rewardRateLabel" style="font-size:.68rem;color:var(--muted);margin-top:3px">적용 리워드율: 0.003% (1,000만원 미만)</div>
       </div>
       <div class="sb-item">
-        <div style="display:flex;align-items:center;gap:6px;margin-bottom:5px">
-          <label style="margin:0;white-space:nowrap">거래량 목표</label>
-          <input type="number" id="volTargetInput" value="0" min="0" max="1000" step="1"
-                 style="flex:1;min-width:0;text-align:center;padding:4px 2px"
-                 onchange="onVolTargetChange(this.value)">
-          <span style="font-size:.7rem;color:var(--muted)">억</span>
-        </div>
-        <div style="display:flex;align-items:center;justify-content:center;gap:6px;margin-bottom:5px">
-          <button class="vol-btn" onclick="stepVolTarget(-10)" title="-10억">−10</button>
-          <button class="vol-btn" onclick="stepVolTarget(-1)"  title="-1억">−1</button>
-          <button class="vol-btn" onclick="stepVolTarget(1)"   title="+1억">+1</button>
-          <button class="vol-btn" onclick="stepVolTarget(10)"  title="+10억">+10</button>
+        <label>거래량 목표 (억)</label>
+        <input type="number" id="volTargetInput" value="0" min="0" max="1000" step="1"
+               style="display:block;width:100%;text-align:center;margin-bottom:6px"
+               onchange="onVolTargetChange(this.value)">
+        <div style="display:flex;align-items:center;justify-content:center;gap:6px;margin-bottom:5px;width:100%">
+          <button class="vol-btn" style="flex:1" onclick="stepVolTarget(-10)" title="-10억">−10</button>
+          <button class="vol-btn" style="flex:1" onclick="stepVolTarget(-1)"  title="-1억">−1</button>
+          <button class="vol-btn" style="flex:1" onclick="stepVolTarget(1)"   title="+1억">+1</button>
+          <button class="vol-btn" style="flex:1" onclick="stepVolTarget(10)"  title="+10억">+10</button>
         </div>
         <input type="range" id="volTarget" min="0" max="1000" value="0" step="1"
                oninput="onVolTargetChange(this.value)">
