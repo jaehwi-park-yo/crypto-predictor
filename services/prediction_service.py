@@ -27,11 +27,14 @@ from typing import Dict, List, Optional
 from config import (
     CAPITAL_KRW, KRW_HOLD_RATIO, HORIZON_DAYS, PREDICTION_DRIFT,
     GRID_AGGRESSIVENESS,
+    SIGMA_UP_BTC, SIGMA_DN_BTC, SIGMA_UP_2_BTC, SIGMA_DN_2_BTC,
+    LAYER_A_RATIO_BTC, LAYER_B_RATIO_BTC, LAYER_C_RATIO_BTC,
+    DCA_TRIGGER_PCT, DCA_SIZE_EACH_PCT, DEAD_ZONE_RESET_DAYS,
 )
 from models.prediction_result import BoxPrediction
 from utils.statistics import (
-    compute_log_returns, daily_volatility, ewma_daily_volatility, sigma_band,
-    containment_probability,
+    compute_log_returns, daily_volatility, ewma_daily_volatility,
+    sigma_band, asymmetric_sigma_band, containment_probability,
 )
 from agents.grid_optimizer import GridOptimizerAgent
 from agents.reward_calculator import RewardCalculatorAgent
@@ -92,6 +95,21 @@ class PredictionSnapshot:
     buy_interval_pct: Optional[float] = None
     sell_interval_pct: Optional[float] = None
 
+    # 비대칭 σ 밴드 (상방/하방 독립 배수)
+    sigma_up: float = 1.0
+    sigma_dn: float = 1.0
+    box_upper_1s_asym: float = 0.0   # asymmetric 1σ 상단
+    box_lower_1s_asym: float = 0.0   # asymmetric 1σ 하단
+    box_upper_2s_asym: float = 0.0   # asymmetric 2σ 상단
+    box_lower_2s_asym: float = 0.0   # asymmetric 2σ 하단
+
+    # 듀얼레이어 자본 배분
+    layer_a_krw: float = 0.0    # 1σ 그리드 운용 자본
+    layer_b_krw: float = 0.0    # 하단 DCA 예비 현금
+    layer_c_krw: float = 0.0    # 2σ 외부 역추세 자본
+    dca_levels: list = None     # DCA 트리거 가격 리스트
+    dead_zone_reset_days: int = 8  # 연속 이탈 후 재설정 권고 기준일
+
 
 def _slice_history(history: List[Dict], as_of: str) -> List[Dict]:
     """history를 as_of(YYYY-MM-DD) 이하로 슬라이스."""
@@ -121,11 +139,14 @@ def predict_as_of(
     buy_interval_pct: Optional[float] = None,
     sell_interval_pct: Optional[float] = None,
     use_ml_sigma: bool = False,  # ML σ 보정 (라벨 생성 시에는 반드시 False — 순환 학습 방지)
+    sigma_up: Optional[float] = None,   # 비대칭 상방 σ 배수 (None=config 기본값)
+    sigma_dn: Optional[float] = None,   # 비대칭 하방 σ 배수 (None=config 기본값)
 ) -> PredictionSnapshot:
     """
     as_of 시점까지의 히스토리로 익월 박스권 + 그리드 설정을 예측.
     use_ml_sigma=True면 학습된 Ridge 모델로 σ를 보정한다
     (백테스트: 박스 적중 71% → 78%).
+    sigma_up/sigma_dn: 비대칭 밴드 배수 — None이면 config 기본값(BTC 1.1/1.2) 사용.
     """
     sliced = _slice_history(history, as_of)
     if len(sliced) < lookback:
@@ -155,8 +176,16 @@ def predict_as_of(
         except Exception as e:
             logger.warning("[예측서비스] ML σ 보정 실패 (통계 σ 사용): %s", e)
 
+    # 대칭 밴드 (기존 호환용 — 리포트/라벨 생성에 사용)
     u1, l1 = sigma_band(ref, dsig, horizon_days, 1.0, PREDICTION_DRIFT)
     u2, l2 = sigma_band(ref, dsig, horizon_days, 2.0, PREDICTION_DRIFT)
+
+    # 비대칭 밴드 (실운용 권장값) — config 기본값 또는 호출자 지정값
+    _su = sigma_up if sigma_up is not None else SIGMA_UP_BTC
+    _sd = sigma_dn if sigma_dn is not None else SIGMA_DN_BTC
+    u1a, l1a = asymmetric_sigma_band(ref, dsig, horizon_days, _su, _sd, PREDICTION_DRIFT)
+    u2a, l2a = asymmetric_sigma_band(ref, dsig, horizon_days,
+                                     SIGMA_UP_2_BTC, SIGMA_DN_2_BTC, PREDICTION_DRIFT)
 
     # σ 레벨 선택
     if use_sigma is not None:
@@ -164,12 +193,20 @@ def predict_as_of(
     else:
         sigma_used = 2.0 if dsig >= _AUTO_SIGMA_VOL_THRESHOLD else 1.0
 
-    rec_u, rec_l = (u1, l1) if sigma_used == 1.0 else (u2, l2)
+    # 권장 박스: 비대칭 밴드 사용 (대칭 1σ/2σ 대신)
+    rec_u, rec_l = (u1a, l1a) if sigma_used == 1.0 else (u2a, l2a)
 
     # 수동 박스 덮어쓰기 (GUI 미세조정)
     if manual_box:
         rec_u = manual_box.get("upper", rec_u)
         rec_l = manual_box.get("lower", rec_l)
+
+    # 듀얼레이어 자본 배분
+    layer_a = capital_krw * LAYER_A_RATIO_BTC
+    layer_b = capital_krw * LAYER_B_RATIO_BTC
+    layer_c = capital_krw * LAYER_C_RATIO_BTC
+    # DCA 트리거 가격: 비대칭 1σ 하단 기준
+    dca_prices = [round(l1a * (1 + pct / 100)) for pct in DCA_TRIGGER_PCT]
 
     box_range_pct = (rec_u - rec_l) / rec_l * 100 if rec_l else 0.0
     confidence = containment_probability(sigma_used) * 100
@@ -191,9 +228,9 @@ def predict_as_of(
         created_at=datetime.now(),
     )
 
-    # 그리드 최적화
+    # 그리드 최적화: Layer A 자본만 투입 (Layer B/C는 DCA 예비)
     optimizer = GridOptimizerAgent()
-    grid = optimizer.optimize(box_pred, dsig, capital_krw, aggressiveness, krw_hold_ratio,
+    grid = optimizer.optimize(box_pred, dsig, layer_a, aggressiveness, 0.0,
                               buy_interval_pct=buy_interval_pct, sell_interval_pct=sell_interval_pct)
 
     # 리워드 목표
@@ -219,7 +256,7 @@ def predict_as_of(
         grid_interval_krw=grid.grid_interval_krw,
         bot_count=grid.bot_count,
         capital_deployed_krw=grid.capital_deployed_krw,
-        krw_reserve_krw=grid.krw_reserve_krw,
+        krw_reserve_krw=layer_b + layer_c,  # B+C 합산 표시
         capital_per_bot_krw=grid.capital_per_bot_krw,
         estimated_monthly_volume_krw=grid.estimated_monthly_volume_krw,
         estimated_reward_krw=grid.estimated_reward_krw,
@@ -230,6 +267,14 @@ def predict_as_of(
         box_prediction=box_pred,
         buy_interval_pct=grid.buy_interval_pct,
         sell_interval_pct=grid.sell_interval_pct,
+        # 비대칭 σ
+        sigma_up=_su, sigma_dn=_sd,
+        box_upper_1s_asym=u1a, box_lower_1s_asym=l1a,
+        box_upper_2s_asym=u2a, box_lower_2s_asym=l2a,
+        # 듀얼레이어 자본 배분
+        layer_a_krw=layer_a, layer_b_krw=layer_b, layer_c_krw=layer_c,
+        dca_levels=dca_prices,
+        dead_zone_reset_days=DEAD_ZONE_RESET_DAYS,
     )
 
     logger.info(

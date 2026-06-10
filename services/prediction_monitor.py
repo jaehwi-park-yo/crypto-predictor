@@ -82,6 +82,9 @@ class MonitorStatus:
     days_warning: int = 0
     days_breach_upper: int = 0
     days_breach_lower: int = 0
+    consec_breach_lower: int = 0   # 최신일 기준 연속 하단 이탈일 (데드존 카운터)
+    consec_breach_upper: int = 0   # 최신일 기준 연속 상단 이탈일 (그리드락 카운터)
+    reset_recommended: bool = False  # 연속 이탈 ≥ DEAD_ZONE_RESET_DAYS → 레인지 재설정 권고
     measured_containment_pct: float = 0.0  # 권장 박스 containment
     max_upside_dev_pct: float = 0.0
     max_downside_dev_pct: float = 0.0
@@ -232,6 +235,21 @@ def monitor(
     max_up   = max(up_devs)  if up_devs  else 0.0
     max_down = max(dn_devs)  if dn_devs  else 0.0
 
+    # 연속 이탈일 (최신일부터 거꾸로 카운트 — 데드존/그리드락 감지)
+    consec_bl = consec_bu = 0
+    for d in reversed(measured):
+        if d.zone == "breach_lower":
+            consec_bl += 1
+        else:
+            break
+    for d in reversed(measured):
+        if d.zone == "breach_upper":
+            consec_bu += 1
+        else:
+            break
+    from config import DEAD_ZONE_RESET_DAYS
+    reset_rec = max(consec_bl, consec_bu) >= DEAD_ZONE_RESET_DAYS
+
     # ── 수정 예측 (경과 데이터로 σ 갱신) ─────────────────────
     # lookback(원본 기준 전 31일) + 실제 경과일 = 확장 데이터셋으로 재추정
     revised = None
@@ -327,6 +345,9 @@ def monitor(
         days_warning=n_warn,
         days_breach_upper=n_bu,
         days_breach_lower=n_bl,
+        consec_breach_lower=consec_bl,
+        consec_breach_upper=consec_bu,
+        reset_recommended=reset_rec,
         measured_containment_pct=containment_pct,
         max_upside_dev_pct=max_up,
         max_downside_dev_pct=max_down,

@@ -839,6 +839,34 @@
             <div id="chart-monitor" style="height:480px"></div>
           </div>
 
+          <!-- 데드존/그리드락 경보 (연속 이탈 시에만 표시) -->
+          <div id="deadzone-alert" style="display:none;padding:12px 16px;border-radius:8px;
+               background:#3a1a1a;border:1px solid #d62728;font-size:.85rem;line-height:1.6"></div>
+
+          <div class="info-grid">
+            <div class="info-card">
+              <h3>🏦 듀얼레이어 자본 배분</h3>
+              <table class="data">
+                <tr><td>Layer A — 1σ 그리드 운용</td><td id="layer-a-val" style="text-align:right;color:var(--green)">─</td></tr>
+                <tr><td>Layer B — 하단 DCA 예비</td><td id="layer-b-val" style="text-align:right;color:var(--accent)">─</td></tr>
+                <tr><td>Layer C — 2σ 역추세 자본</td><td id="layer-c-val" style="text-align:right;color:var(--orange)">─</td></tr>
+              </table>
+              <div style="font-size:.75rem;color:var(--muted);margin-top:8px;line-height:1.6">
+                Layer B는 1σ 하단 이탈 시 DCA 매수에 사용 (33%씩 3회).<br>
+                Layer C는 2σ 이탈 확인 2일 후 역추세 진입용.
+              </div>
+            </div>
+            <div class="info-card">
+              <h3>🎯 하단 이탈 DCA 트리거</h3>
+              <table class="data" id="dca-table">
+                <tr><td colspan="2" style="color:var(--muted)">로딩 중…</td></tr>
+              </table>
+              <div style="font-size:.75rem;color:var(--muted);margin-top:8px;line-height:1.6">
+                비대칭 1σ 하단 기준 -5% / -10% / -15% 도달 시 Layer B 자본 순차 투입.
+              </div>
+            </div>
+          </div>
+
           <div class="info-grid">
             <div class="info-card">
               <h3>📐 수정 예측 vs 원본 비교</h3>
@@ -1042,14 +1070,17 @@ const USDT = {
   last_price: 0,   // 마지막 수신 실시간 가격 (모델 갱신과 무관)
   orig: null,      // 월초 원본 박스 스냅샷 (localStorage 영속)
 };
+// USDT 비대칭 σ 배수 — 백테스트(23개월): up=1.0/dn=1.1 (하방이탈 9일 감소)
+// USDT 로그수익률 왜도=+0.90 (상방 쏠림)이지만 하방(KRW 강세)에서 데드존 위험이 커서 dn 확대
+const USDT_SIGMA_UP = 1.0, USDT_SIGMA_DN = 1.1;
 function updateUsdtModel(livePrice, isLive = true) {
   if (!livePrice || livePrice <= 0) return;
   const s = USDT.sigma_pct / 100;
   USDT.ref = livePrice;
-  USDT.u1 = +(livePrice * (1 + s)).toFixed(1);
-  USDT.l1 = +(livePrice * (1 - s)).toFixed(1);
-  USDT.u2 = +(livePrice * (1 + 2*s)).toFixed(1);
-  USDT.l2 = +(livePrice * (1 - 2*s)).toFixed(1);
+  USDT.u1 = +(livePrice * (1 + USDT_SIGMA_UP * s)).toFixed(1);
+  USDT.l1 = +(livePrice * (1 - USDT_SIGMA_DN * s)).toFixed(1);
+  USDT.u2 = +(livePrice * (1 + 2 * USDT_SIGMA_UP * s)).toFixed(1);
+  USDT.l2 = +(livePrice * (1 - 2 * USDT_SIGMA_DN * s)).toFixed(1);
   USDT_REF = livePrice;
   // 시뮬레이터 박스폭(원)도 실가격 기준 1σ 폭으로 갱신
   const boxW = Math.max(10, Math.round(USDT.u1 - USDT.l1));
@@ -1883,6 +1914,53 @@ function updateMonitorPanel() {
     const chg = (m.cur_price - s.ref) / s.ref * 100;
     const el = document.getElementById('mon-ref-change');
     if (el) { el.textContent = (chg >= 0 ? '+' : '') + chg.toFixed(1) + '%'; el.style.color = chg >= 0 ? '#4ec94e' : '#d62728'; }
+  }
+
+  // 데드존/그리드락 경보
+  const dzAlert = document.getElementById('deadzone-alert');
+  if (dzAlert) {
+    const cdn = m.consec_dn || 0, cup = m.consec_up || 0, resetDays = s.reset_days || 8;
+    if (cdn > 0 || cup > 0) {
+      const isDn = cdn >= cup;
+      const days = isDn ? cdn : cup;
+      const label = isDn ? '하단 이탈 (데드존)' : '상단 돌파 (그리드락)';
+      const icon = isDn ? '🕳️' : '🔒';
+      let html = `${icon} <b>${label} ${days}일째 연속</b>`;
+      if (m.reset_rec) {
+        html += ` — <b style="color:#ff6b6b">레인지 재설정 권고 (기준 ${resetDays}일 초과)</b><br>` +
+          (isDn ? `Layer B 잔여 현금으로 DCA 매수 + 수정 밴드 기준 그리드 재배치를 검토하세요.`
+                : `포지션 일부 이익 실현 + Trailing Up으로 레인지 상향 이동을 검토하세요.`);
+      } else {
+        html += ` (재설정 권고 기준: ${resetDays}일)` +
+          (isDn ? `<br>DCA 트리거 가격 도달 여부를 아래 표에서 확인하세요.` : '');
+      }
+      dzAlert.innerHTML = html;
+      dzAlert.style.display = 'block';
+      dzAlert.style.background = m.reset_rec ? '#3a1a1a' : '#332a1a';
+      dzAlert.style.borderColor = m.reset_rec ? '#d62728' : '#d4b44a';
+    } else {
+      dzAlert.style.display = 'none';
+    }
+  }
+
+  // 듀얼레이어 자본 배분
+  if (s.layer_a) {
+    set('layer-a-val', fmt(s.layer_a) + '원 (' + Math.round(s.layer_a / s.capital * 100) + '%)');
+    set('layer-b-val', fmt(s.layer_b) + '원 (' + Math.round(s.layer_b / s.capital * 100) + '%)');
+    set('layer-c-val', fmt(s.layer_c) + '원 (' + Math.round(s.layer_c / s.capital * 100) + '%)');
+  }
+
+  // DCA 트리거 테이블
+  const dcaTable = document.getElementById('dca-table');
+  if (dcaTable && s.dca_levels && s.dca_levels.length) {
+    const cur = m.cur_price || 0;
+    const labels = ['1차 (-5%)', '2차 (-10%)', '3차 (-15%)'];
+    dcaTable.innerHTML = s.dca_levels.map((p, i) => {
+      const hit = cur > 0 && cur <= p;
+      const sizeKrw = s.layer_b ? fmt(Math.round(s.layer_b * 0.33)) : '─';
+      return `<tr><td>${labels[i] || (i+1)+'차'} ${hit ? '⚡<b style="color:#ff6b6b">도달</b>' : ''}</td>` +
+             `<td style="text-align:right;${hit?'color:#ff6b6b;font-weight:700':''}">${fmt(p)}원 (투입 ${sizeKrw}원)</td></tr>`;
+    }).join('');
   }
 
   // 메트릭 카드

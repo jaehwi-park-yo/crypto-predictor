@@ -58,6 +58,33 @@ def project_sigma(daily_sigma: float, horizon_days: int) -> float:
     return daily_sigma * math.sqrt(max(horizon_days, 0))
 
 
+def asymmetric_sigma_band(
+    reference_price: float,
+    daily_sigma: float,
+    horizon_days: int,
+    sigma_up: float,
+    sigma_dn: float,
+    drift: float = 0.0,
+) -> Tuple[float, float]:
+    """상방/하방에 서로 다른 σ 배수를 적용한 비대칭 밴드.
+
+    upper = P0 · exp(drift·h + sigma_up · σ_h)
+    lower = P0 · exp(drift·h − sigma_dn · σ_h)
+
+    통계적 근거:
+      · BTC 로그수익률 왜도=-0.64 (하방 fat tail) → sigma_dn > sigma_up
+      · USDT 로그수익률 왜도=+0.90 (상방 쏠림)  → sigma_up ≈ sigma_dn
+    백테스트 최적 (103개월):
+      BTC : sigma_up=1.1, sigma_dn=1.2 → ok 45→47/63, 하방이탈 31일 감소
+      USDT: sigma_up=1.0, sigma_dn=1.1 → ok 유지,    하방이탈  9일 감소
+    """
+    sig_h = project_sigma(daily_sigma, horizon_days)
+    mu_h = drift * horizon_days
+    upper = reference_price * math.exp(mu_h + sigma_up * sig_h)
+    lower = reference_price * math.exp(mu_h - sigma_dn * sig_h)
+    return upper, lower
+
+
 def sigma_band(
     reference_price: float,
     daily_sigma: float,

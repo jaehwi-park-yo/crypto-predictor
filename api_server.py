@@ -205,6 +205,10 @@ def get_dashboard(
             "rev_u2":      mon_obj.forecast_upper_2s,
             "rev_l2":      mon_obj.forecast_lower_2s,
             "today":       today.isoformat(),
+            # 데드존/그리드락 카운터
+            "consec_dn":   mon_obj.consec_breach_lower,
+            "consec_up":   mon_obj.consec_breach_upper,
+            "reset_rec":   mon_obj.reset_recommended,
         }
     except Exception as e:
         import logging as _log
@@ -245,6 +249,19 @@ def get_dashboard(
         "volume":         snap.estimated_monthly_volume_krw,
         "reward":         snap.estimated_reward_krw,
         "capital":        snap.capital_krw,
+        # 비대칭 σ 밴드
+        "sigma_up":       snap.sigma_up,
+        "sigma_dn":       snap.sigma_dn,
+        "u1a":            snap.box_upper_1s_asym,
+        "l1a":            snap.box_lower_1s_asym,
+        "u2a":            snap.box_upper_2s_asym,
+        "l2a":            snap.box_lower_2s_asym,
+        # 듀얼레이어 자본 배분
+        "layer_a":        snap.layer_a_krw,
+        "layer_b":        snap.layer_b_krw,
+        "layer_c":        snap.layer_c_krw,
+        "dca_levels":     snap.dca_levels or [],
+        "reset_days":     snap.dead_zone_reset_days,
     }
 
     # 대상 월 파싱

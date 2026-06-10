@@ -17,15 +17,56 @@ MAX_REWARD_KRW = 3_000_000      # Max 3M KRW/month
 MAX_BOTS = 1000
 
 # Sigma levels for box boundary
-SIGMA_LEVELS = [1.0, 2.0]  # 1σ ~68%, 2σ ~95%
+SIGMA_LEVELS = [1.0, 2.0]  # 레거시 참고용 (실제 사용은 아래 비대칭 값)
+
+# ──────────────────────────────────────────────────────────
+# 비대칭 σ 밴드 (상방/하방 독립 배수)
+# ──────────────────────────────────────────────────────────
+# BTC: 로그수익률 왜도=-0.64 (하방 fat tail), 초과첨도=15.17
+#   walk-forward 백테스트(103개월): σ_up=1.1/σ_dn=1.2 → ok 45→47/63 (+4%)
+#   하방이탈 31일 감소 (180→149일), 박스폭 +3.7%p (허용 범위)
+SIGMA_UP_BTC = 1.1    # 상방 σ 배수
+SIGMA_DN_BTC = 1.2    # 하방 σ 배수 (하방 fat tail 보완)
+
+# USDT: 왜도=+0.896 (상방 fat tail — KRW 절하 방향 쏠림)
+#   σ_up=1.0/σ_dn=1.1 → 하방이탈 9일 감소, ok 동일 유지
+SIGMA_UP_USDT = 1.0   # 상방 σ 배수 (보수적 — 상단 돌파는 드묾)
+SIGMA_DN_USDT = 1.1   # 하방 σ 배수 (KRW 강세 국면 대비)
+
+# 2σ 외부 밴드 배수 (비대칭 동일 비율로 확대)
+SIGMA_UP_2_BTC  = SIGMA_UP_BTC  * 2.0   # = 2.2
+SIGMA_DN_2_BTC  = SIGMA_DN_BTC  * 2.0   # = 2.4
+SIGMA_UP_2_USDT = SIGMA_UP_USDT * 2.0   # = 2.0
+SIGMA_DN_2_USDT = SIGMA_DN_USDT * 2.0   # = 2.2
 
 # Risk management
 UPSIDE_BREAKOUT_ACTION = "hold"              # Do nothing on upside
 DOWNSIDE_BREAKOUT_ACTION = "partial_stop"    # Partial stop on downside
 PARTIAL_STOP_RATIO = 0.3                     # 30% position stop on downside
 
-# KRW holding ratio (to be discussed - placeholder)
-KRW_HOLD_RATIO = 0.3  # 30% in KRW cash by default
+# ──────────────────────────────────────────────────────────
+# 듀얼레이어 자본 배분 (Layer A: 1σ 그리드 / Layer B: DCA 예비 / Layer C: 2σ 외부)
+# ──────────────────────────────────────────────────────────
+# BTC: A=60% 그리드 운용, B=30% 하단 DCA 예비, C=10% 2σ 외부 역추세
+# USDT: A=80%, B=20% (변동성 낮아 외부 배치 불필요)
+LAYER_A_RATIO_BTC  = 0.60   # 1σ 내부 그리드 운용 자본
+LAYER_B_RATIO_BTC  = 0.30   # 하단 이탈 DCA 예비 현금
+LAYER_C_RATIO_BTC  = 0.10   # 2σ 외부 역추세 진입 (극단 이탈 시)
+
+LAYER_A_RATIO_USDT = 0.80
+LAYER_B_RATIO_USDT = 0.20
+LAYER_C_RATIO_USDT = 0.00
+
+# Layer B DCA 트리거: 1σ 하단 대비 낙폭 (%, 3단계)
+DCA_TRIGGER_PCT = [-5.0, -10.0, -15.0]   # 하단 -5%, -10%, -15%
+DCA_TRIGGER_PCT_USDT = [-1.5, -3.0, -5.0]
+DCA_SIZE_EACH_PCT = 0.33   # Layer B의 33%씩 투입 (3회 = 100%)
+
+# 하방 데드존 재설정 트리거 (연속 이탈일 초과 시 레인지 재설정 권고)
+DEAD_ZONE_RESET_DAYS = 8   # 8일 연속 하단 이탈 → 재설정 권고
+
+# KRW holding ratio: Layer A 기준으로 계산 (기존 호환)
+KRW_HOLD_RATIO = 1.0 - LAYER_A_RATIO_BTC  # = 0.40 (Layer B+C 합산)
 
 # --- 그리드/수수료 파생 상수 (오케스트레이터 판단 반영) ---
 ROUND_TRIP_FEE = 2 * FEE_RATE                 # 왕복 수수료 0.08%
@@ -92,6 +133,18 @@ CASH_DEPLOY_ON_BREAKOUT = True      # True = 하방 이탈 시 KRW 예비금 일
 CASH_DEPLOY_RATIO       = 0.5       # KRW 예비금 중 배치 비율 (기본 50%)
 CASH_DEPLOY_GRID_MULT   = 2.0       # 회복 그리드 간격 배수 (평소 간격 × 2)
 CASH_DEPLOY_SIGMA_LEVEL = 2.0       # 회복 박스 σ 레벨 (넓게)
+
+# ──────────────────────────────────────────────────────────
+# 누진 포지션 크기 (Progressive Sizing)
+# 박스 중심에서 멀어질수록 주문 크기 × (1 + α×레벨)
+# ──────────────────────────────────────────────────────────
+PROGRESSIVE_SIZING = True
+PROGRESSIVE_ALPHA  = 0.15  # 레벨당 15% 가중 (중심+3레벨 = 1.45×기본)
+
+# 비대칭 TP (Asymmetric Take-Profit)
+# 매도 목표가 = 매수가 × (1 + ASYM_TP_MULT × 간격) — 홀드 더 길게
+ASYM_TP_ENABLED = True
+ASYM_TP_MULT    = 2.0   # 기본 간격의 2배 위에서 매도 (수익 확대, 체결 빈도 감소)
 
 # ──────────────────────────────────────────────────────────
 # 분봉 데이터 소스 (업비트 공개 API 우선)
