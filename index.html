@@ -546,6 +546,7 @@
             <span>기준 시점: <b id="predict-as-of">─</b></span>
             <span>잔여: <b id="predict-days-left">─</b></span>
             <button onclick="fetchDashboard()" style="margin-left:4px;padding:3px 10px;font-size:.78rem;background:rgba(79,142,247,0.18);color:#4f8ef7;border:1px solid rgba(79,142,247,0.4);border-radius:5px;cursor:pointer">🔄 예측 새로고침</button>
+            <button onclick="downloadDataset(this)" title="일봉·분봉·월별 라벨셋을 ZIP으로 내보냅니다 (ML 학습용)" style="padding:3px 10px;font-size:.78rem;background:rgba(44,160,44,0.15);color:#2ca02c;border:1px solid rgba(44,160,44,0.4);border-radius:5px;cursor:pointer">📤 데이터셋 내보내기</button>
             <span id="predict-loading" style="display:none;color:var(--muted)">불러오는 중…</span>
           </div>
 
@@ -2130,6 +2131,32 @@ function submitFeedback() {
 const API_BASE = 'http://localhost:8000';  // python api_server.py 실행 시 활성화
 
 // ─── 대시보드 전체 데이터 로딩 ────────────────────────────────────────────────
+// ─── 📤 ML 데이터셋 내보내기 ────────────────────────────────────────────────
+async function downloadDataset(btn) {
+  const orig = btn.textContent;
+  btn.textContent = '⏳ 생성 중…';
+  btn.disabled = true;
+  try {
+    const res = await fetch(`${API_BASE}/api/export/dataset`, {signal: AbortSignal.timeout(120000)});
+    if (!res.ok) throw new Error('status ' + res.status);
+    const blob = await res.blob();
+    const cd = res.headers.get('Content-Disposition') || '';
+    const m = cd.match(/filename="?([^";]+)"?/);
+    const fname = m ? m[1] : 'btc-grid-dataset.zip';
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = fname;
+    a.click();
+    URL.revokeObjectURL(a.href);
+    btn.textContent = '✔ 다운로드 완료';
+  } catch (e) {
+    btn.textContent = '⚠ 실패 (서버 확인)';
+    console.warn('[데이터셋 내보내기 실패]', e);
+  } finally {
+    setTimeout(() => { btn.textContent = orig; btn.disabled = false; }, 2500);
+  }
+}
+
 async function fetchDashboard() {
   const loadingEl = document.getElementById('predict-loading');
   if (loadingEl) loadingEl.style.display = 'inline';

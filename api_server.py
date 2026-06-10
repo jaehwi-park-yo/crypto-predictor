@@ -390,5 +390,22 @@ def minutes_api(
     return {"market": market, "unit": unit, "count": len(candles), "candles": candles}
 
 
+@app.get("/api/export/dataset")
+def export_dataset_api():
+    """ML 학습용 데이터셋 ZIP 생성 후 다운로드.
+
+    구성: daily_btc.csv + minute_*.csv(수집분) + monthly_labels.csv(지도학습 라벨) + meta.json
+    """
+    from fastapi.responses import FileResponse
+    from utils.dataset_export import export_dataset
+
+    try:
+        meta = export_dataset()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"데이터셋 생성 실패: {e}")
+    fname = f"btc-grid-dataset_{date.today().isoformat()}.zip"
+    return FileResponse(meta["zip_path"], media_type="application/zip", filename=fname)
+
+
 if __name__ == "__main__":
     uvicorn.run("api_server:app", host="0.0.0.0", port=8000, reload=False)
