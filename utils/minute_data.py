@@ -1,7 +1,7 @@
 """
 utils/minute_data.py — 업비트 분봉 데이터 파이프라인 (F1 개선용 데이터셋)
 =======================================================================
-- 최초 부팅: 업비트 공개 API에서 가능한 최대 분봉 히스토리 부트스트랩 (최대 ~2년)
+- 최초 부팅: 업비트 공개 API에서 가능한 최대 분봉 히스토리 부트스트랩 (상장 시점 ~2017-09까지)
 - 이후 부팅: 마지막 저장 시각 이후 누락분만 증분 수집(sync)
 - 저장소: SQLite data/candles.db (WAL 모드)
 
@@ -119,9 +119,14 @@ def _max_ts(conn: sqlite3.Connection, market: str, unit: int) -> Optional[str]:
     return row[0] if row and row[0] else None
 
 
-def bootstrap(market: str, unit: int = 5, max_days: int = 730,
+def bootstrap(market: str, unit: int = 5, max_days: int = 3650,
               progress_cb: Optional[Callable] = None) -> int:
-    """과거 방향으로 페이지네이션하며 최대 max_days까지 전체 수집."""
+    """과거 방향으로 페이지네이션하며 최대 max_days까지 전체 수집.
+
+    업비트는 상장 시점(KRW-BTC: 2017-09)까지 분봉을 제공하므로
+    max_days=3650(10년)이면 사실상 전체 히스토리를 받는다.
+    상장일 이전에 도달하면 API가 빈 응답을 반환해 자동 종료된다.
+    """
     conn = _connect()
     try:
         cutoff = (datetime.now() - timedelta(days=max_days)).strftime("%Y-%m-%dT%H:%M:%S")

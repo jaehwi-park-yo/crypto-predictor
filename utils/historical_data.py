@@ -157,7 +157,7 @@ _REGIMES = [
 
 
 def _synthetic_realistic(
-    start: str = "2020-01-01",
+    start: str = "2017-09-01",
     end: str = None,
     seed: int = 777,
 ) -> List[Dict]:
@@ -254,7 +254,7 @@ def _fetch_upbit_usdt(max_candles: int = 3000) -> List[Dict]:
 
 
 def fetch_usdt_history(
-    start: str = "2020-01-01",
+    start: str = "2017-09-01",
     use_synthetic_fallback: bool = False,
 ) -> List[Dict]:
     """USDT/KRW 일봉 히스토리 수집 (업비트 단일 소스)."""
@@ -273,7 +273,7 @@ def fetch_usdt_history(
 # 퍼블릭 인터페이스
 # ─────────────────────────────────────────────────────────
 def fetch_max_history(
-    start: str = "2020-01-01",
+    start: str = "2017-09-01",
     use_synthetic_fallback: bool = True,
 ) -> List[Dict]:
     """

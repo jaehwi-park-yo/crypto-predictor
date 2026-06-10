@@ -61,7 +61,7 @@ def validate_against_live(data: List[Dict], live_price: float,
     return True
 
 
-def get_history(start: str = "2020-01-01", force_refresh: bool = False,
+def get_history(start: str = "2017-09-01", force_refresh: bool = False,
                 live_price: Optional[float] = None) -> List[Dict]:
     """
     캐시 우선 히스토리 반환. 실패하면 fetch_max_history() 호출 후 저장.
@@ -127,7 +127,7 @@ def _save_usdt_cache(data: List[Dict]) -> None:
         logger.warning("[캐시] USDT 저장 실패: %s", e)
 
 
-def get_usdt_history(start: str = "2020-01-01", force_refresh: bool = False,
+def get_usdt_history(start: str = "2017-09-01", force_refresh: bool = False,
                      live_price: Optional[float] = None) -> List[Dict]:
     """USDT/KRW 일봉 캐시 우선 반환 — 구조는 get_history()와 동일."""
     if not force_refresh:
