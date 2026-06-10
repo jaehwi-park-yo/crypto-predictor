@@ -595,14 +595,14 @@
 
           <div class="info-grid">
             <div class="info-card">
-              <h3>📦 BTC 박스권 상세</h3>
+              <h3>📦 BTC 박스권 상세 <small id="btc-sigma-badge" style="font-size:.75em;color:#8b929e;font-weight:400">σ↑─ / σ↓─</small></h3>
               <table class="data">
                 <tr><td>기준가</td><td id="btc-ref" style="color:var(--btc)">─</td></tr>
-                <tr><td>1σ 상단</td><td id="btc-u1">─</td></tr>
-                <tr><td>1σ 하단</td><td id="btc-l1">─</td></tr>
+                <tr><td>1σ 상단 <span style="color:#8b929e;font-size:.8em">(비대칭)</span></td><td id="btc-u1">─</td></tr>
+                <tr><td>1σ 하단 <span style="color:#8b929e;font-size:.8em">(비대칭)</span></td><td id="btc-l1">─</td></tr>
                 <tr><td>1σ 범위</td><td id="btc-range">─</td></tr>
-                <tr><td>2σ 상단</td><td id="btc-u2">─</td></tr>
-                <tr><td>2σ 하단</td><td id="btc-l2">─</td></tr>
+                <tr><td>2σ 상단 <span style="color:#8b929e;font-size:.8em">(비대칭)</span></td><td id="btc-u2">─</td></tr>
+                <tr><td>2σ 하단 <span style="color:#8b929e;font-size:.8em">(비대칭)</span></td><td id="btc-l2">─</td></tr>
                 <tr><td>월간 σ</td><td id="btc-monthly-sigma">─</td></tr>
               </table>
             </div>
@@ -1346,23 +1346,28 @@ function buildBTCChart() {
   const cx = D.pre_x.slice(-TAIL), co = D.pre_o.slice(-TAIL),
         ch = D.pre_h.slice(-TAIL), cl = D.pre_l.slice(-TAIL), cc = D.pre_c.slice(-TAIL);
 
+  // 비대칭 σ 밴드값 (폴백: 대칭값)
+  const _u1a = s.u1a || s.u1, _l1a = s.l1a || s.l1;
+  const _u2a = s.u2a || s.u2, _l2a = s.l2a || s.l2;
+  const _su = s.sigma_up || 1.0, _sd = s.sigma_dn || 1.0;
+
   const traces = [
     {type:'candlestick', x:cx, open:co, high:ch, low:cl, close:cc,
      name:'BTC/KRW', increasing:{line:{color:'#d24f45'}}, decreasing:{line:{color:'#4169e1'}}},
-    // 2σ fill (orange)
+    // 2σ fill (orange) — 비대칭
     {type:'scatter', x:[...bandX,...[...bandX].reverse()],
-     y:[...bandX.map(()=>s.u2),...[...bandX].reverse().map(()=>s.l2)],
-     fill:'toself', fillcolor:'rgba(255,127,14,0.10)', line:{width:0}, name:'2σ 외부존', hoverinfo:'skip'},
-    // 1σ fill (blue)
+     y:[...bandX.map(()=>_u2a),...[...bandX].reverse().map(()=>_l2a)],
+     fill:'toself', fillcolor:'rgba(255,127,14,0.10)', line:{width:0}, name:`2σ 외부존 (↑${_su*2}/↓${_sd*2})`, hoverinfo:'skip'},
+    // 1σ fill (blue) — 비대칭
     {type:'scatter', x:[...bandX,...[...bandX].reverse()],
-     y:[...bandX.map(()=>s.u1),...[...bandX].reverse().map(()=>s.l1)],
-     fill:'toself', fillcolor:'rgba(79,142,247,0.12)', line:{width:0}, name:'1σ 내부존', hoverinfo:'skip'},
-    // Band lines
+     y:[...bandX.map(()=>_u1a),...[...bandX].reverse().map(()=>_l1a)],
+     fill:'toself', fillcolor:'rgba(79,142,247,0.12)', line:{width:0}, name:`1σ 내부존 (↑${_su}/↓${_sd})`, hoverinfo:'skip'},
+    // Band lines — 비대칭
     ...[
-      [s.u2,'#ff7f0e','2σ 상단','dot',1],
-      [s.l2,'#ff7f0e','2σ 하단','dot',1],
-      [s.u1,'#4f8ef7','1σ 상단','dash',1.5],
-      [s.l1,'#4f8ef7','1σ 하단','dash',1.5],
+      [_u2a,'#ff7f0e',`2σ 상단 (×${_su*2})`,'dot',1],
+      [_l2a,'#ff7f0e',`2σ 하단 (×${_sd*2})`,'dot',1],
+      [_u1a,'#4f8ef7',`1σ 상단 (×${_su})`,'dash',1.5],
+      [_l1a,'#4f8ef7',`1σ 하단 (×${_sd})`,'dash',1.5],
       [s.ref,'#888','기준가','dot',1],
     ].map(([y,color,name,dash,width])=>({
       type:'scatter', x:bandX, y:bandX.map(()=>y), mode:'lines',
@@ -1396,8 +1401,8 @@ function buildBTCChart() {
            type:'date', range:[cx[0], D.fut[D.fut.length-1]]},
     yaxis:{title:'가격 (KRW)', tickformat:',.0f', gridcolor:'rgba(80,80,80,0.3)',
            range: (() => {
-             const priceMin = Math.min(...cl, s.l2);
-             const priceMax = Math.max(...ch, s.u2);
+             const priceMin = Math.min(...cl, _l2a);
+             const priceMax = Math.max(...ch, _u2a);
              const mid = (priceMin + priceMax) / 2;
              const half = (priceMax - priceMin) / 2 * 1.5;
              return [mid - half, mid + half];
@@ -2005,14 +2010,20 @@ function updateMonitorPanel() {
     set('meas-table-heading', `📅 일별 측정 내역 (${s.target || '─'} 아직 없음)`);
   }
 
-  // BTC 박스권 상세 카드
+  // BTC 박스권 상세 카드 — 비대칭 σ 값 사용
+  const u1a = s.u1a || s.u1, l1a = s.l1a || s.l1;
+  const u2a = s.u2a || s.u2, l2a = s.l2a || s.l2;
   set('btc-ref', s.ref ? fmt(s.ref) + '원' : '─');
-  set('btc-u1', s.u1 ? fmt(s.u1) + '원' : '─');
-  set('btc-l1', s.l1 ? fmt(s.l1) + '원' : '─');
-  set('btc-range', s.range_pct ? s.range_pct + '%' : '─');
-  set('btc-u2', s.u2 ? fmt(s.u2) + '원' : '─');
-  set('btc-l2', s.l2 ? fmt(s.l2) + '원' : '─');
+  set('btc-u1', u1a ? fmt(u1a) + '원' : '─');
+  set('btc-l1', l1a ? fmt(l1a) + '원' : '─');
+  const asym_range = (u1a && l1a) ? ((u1a - l1a) / l1a * 100).toFixed(1) + '%' : (s.range_pct ? s.range_pct + '%' : '─');
+  set('btc-range', asym_range);
+  set('btc-u2', u2a ? fmt(u2a) + '원' : '─');
+  set('btc-l2', l2a ? fmt(l2a) + '원' : '─');
   set('btc-monthly-sigma', s.monthly_sigma ? s.monthly_sigma + '%' : '─');
+  // σ 배수 배지
+  const badge = document.getElementById('btc-sigma-badge');
+  if (badge && s.sigma_up) badge.textContent = `σ↑${s.sigma_up} / σ↓${s.sigma_dn}`;
 }
 
 // ─── USDT 리스크 모니터 패널 갱신 ────────────────────────────────────────────
