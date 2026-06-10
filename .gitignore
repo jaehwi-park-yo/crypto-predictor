@@ -27,5 +27,6 @@ data/*.db-shm
 .claude/
 *.pdf
 
-# 데이터셋 시드 (런타임 복원 파일)
-data/dataset_seed.zip*
+# 데이터셋 시드: seed ZIP은 커밋 포함 (초기 설치자 부트스트랩), .imported는 제외
+!data/dataset_seed.zip
+data/dataset_seed.zip.imported

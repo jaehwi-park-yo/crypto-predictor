@@ -165,8 +165,9 @@ def restore_from_seed(force: bool = False) -> bool:
     if seed is None:
         return False
 
-    if not force and _db_has_data() and _cache_has_data():
-        logger.info("[시드] DB/캐시가 이미 채워져 있음 — 시드 복원 건너뜀 (%s)", seed.name)
+    # 일봉 캐시가 이미 있으면 건너뜀 (분봉 DB는 없어도 됨 — minute_collector가 채움)
+    if not force and _cache_has_data():
+        logger.info("[시드] 일봉 캐시가 이미 채워져 있음 — 시드 복원 건너뜀 (%s)", seed.name)
         return False
 
     logger.info("[시드] 복원 시작: %s (%.1f MB)", seed, seed.stat().st_size / 1e6)
