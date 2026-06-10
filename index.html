@@ -191,6 +191,12 @@
     cursor: pointer; line-height: 1; transition: background .15s;
   }
   .stp-ctrl button:hover { background: var(--accent); border-color: var(--accent); }
+  .vol-btn {
+    min-width: 34px; height: 26px; border-radius: 6px; border: 1px solid var(--border);
+    background: var(--panel); color: var(--text); font-size: .78rem; font-weight: 700;
+    cursor: pointer; transition: background .15s, border-color .15s; padding: 0 4px;
+  }
+  .vol-btn:hover { background: var(--accent); border-color: var(--accent); color: #fff; }
   .stp-val { font-size: 1.3rem; font-weight: 800; min-width: 24px; text-align: center; color: var(--usdt); }
   .stp-unit { font-size: .8rem; color: var(--muted); margin-left: -2px; }
   .stp-hint { font-size: .68rem; color: #6a7180; }
@@ -286,6 +292,13 @@
       </div>
       <div class="sb-item">
         <label>거래량 목표: <span class="val" id="volTargetVal">자동 (0)</span></label>
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:5px">
+          <button class="vol-btn" onclick="stepVolTarget(-10)" title="-10억">−10</button>
+          <button class="vol-btn" onclick="stepVolTarget(-1)"  title="-1억">−1</button>
+          <span style="font-size:.7rem;color:var(--muted);flex:1;text-align:center">억</span>
+          <button class="vol-btn" onclick="stepVolTarget(1)"   title="+1억">+1</button>
+          <button class="vol-btn" onclick="stepVolTarget(10)"  title="+10억">+10</button>
+        </div>
         <input type="range" id="volTarget" min="0" max="170" value="0" step="1"
                oninput="onVolTargetChange(this.value)">
         <div id="volTargetStatus" style="font-size:.68rem;color:var(--muted);margin-top:3px">0 = 수동 모드 · 1~170억 설정 시 아래 3개 변수 자동 추천</div>
@@ -1341,6 +1354,13 @@ function recommendParams(targetVolKrw) {
             (r.vol === bestFallback.vol && r.net > bestFallback.net)) bestFallback = cand;
       }
   return { pick: best || bestFallback, reached: !!best };
+}
+function stepVolTarget(delta) {
+  const sl = document.getElementById('volTarget');
+  const cur = +sl.value;
+  const next = Math.max(0, Math.min(170, cur + delta));
+  sl.value = next;
+  onVolTargetChange(next);
 }
 function onVolTargetChange(val) {
   const target = +val;
