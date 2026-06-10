@@ -23,6 +23,7 @@
 | ④ 그리드최적화 | `agents/grid_optimizer.py` | 간격·봇수·자본배분 (수수료 인지) |
 | ⑤ 리워드계산 | `agents/reward_calculator.py` | 구간 판정·목표추천·페이스점검 |
 | ⑥ 리스크모니터 | `agents/risk_monitor.py` | 이탈 판정 + 비대칭 대응 |
+| ⑦ 미스터리쇼퍼 | `agents/mystery_shopper.py` | 120+ 가상 사용자 집단지성 리뷰 → 개선과제 도출 |
 
 ## 핵심 설계 원칙 (확정)
 
