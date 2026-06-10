@@ -12,6 +12,7 @@ from typing import List, Dict, Optional
 logger = logging.getLogger("data_cache")
 CACHE_DIR  = Path(__file__).parent.parent / "data"
 CACHE_FILE = CACHE_DIR / "btc_history.json"
+USDT_CACHE_FILE = CACHE_DIR / "usdt_history.json"
 
 def _is_fresh(data: List[Dict]) -> bool:
     """마지막 캔들이 오늘 혹은 어제이면 신선(신선 기준: 영업일 기반)."""
@@ -96,3 +97,55 @@ def get_history(start: str = "2020-01-01", force_refresh: bool = False,
     from utils.historical_data import _synthetic_realistic
     logger.warning("[캐시] ⚠️ 실데이터·캐시 모두 없음 → 합성 폴백 (캐시 저장 안 함)")
     return _synthetic_realistic(start=start)
+
+
+# ──────────────────────────────────────────────────────────────
+# USDT/KRW 캐시 (BTC와 독립적인 파일)
+# ──────────────────────────────────────────────────────────────
+def _load_usdt_cache() -> Optional[List[Dict]]:
+    if not USDT_CACHE_FILE.exists():
+        return None
+    try:
+        with open(USDT_CACHE_FILE, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        if not isinstance(data, list) or len(data) < 30:
+            return None
+        logger.info("[캐시] USDT 로드 완료: %d일봉 (%s ~ %s)", len(data), data[0]["date"], data[-1]["date"])
+        return data
+    except Exception as e:
+        logger.warning("[캐시] USDT 읽기 실패: %s", e)
+        return None
+
+
+def _save_usdt_cache(data: List[Dict]) -> None:
+    try:
+        CACHE_DIR.mkdir(parents=True, exist_ok=True)
+        with open(USDT_CACHE_FILE, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False)
+        logger.info("[캐시] USDT 저장 완료: %d일봉 → %s", len(data), USDT_CACHE_FILE)
+    except Exception as e:
+        logger.warning("[캐시] USDT 저장 실패: %s", e)
+
+
+def get_usdt_history(start: str = "2020-01-01", force_refresh: bool = False,
+                     live_price: Optional[float] = None) -> List[Dict]:
+    """USDT/KRW 일봉 캐시 우선 반환 — 구조는 get_history()와 동일."""
+    if not force_refresh:
+        cached = _load_usdt_cache()
+        if cached and _is_fresh(cached) and validate_against_live(cached, live_price):
+            return [d for d in cached if d["date"] >= start]
+
+    from utils.historical_data import fetch_usdt_history
+    logger.info("[캐시] USDT API에서 신규 수집 시작...")
+    data = fetch_usdt_history(start=start)
+    if data and len(data) >= 30:
+        _save_usdt_cache(data)
+        return data
+
+    cached = _load_usdt_cache()
+    if cached:
+        logger.warning("[캐시] USDT API 실패 → 캐시 사용")
+        return [d for d in cached if d["date"] >= start]
+
+    logger.warning("[캐시] USDT 데이터 없음 — 빈 목록 반환")
+    return []

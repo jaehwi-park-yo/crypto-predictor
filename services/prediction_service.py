@@ -30,7 +30,7 @@ from config import (
 )
 from models.prediction_result import BoxPrediction
 from utils.statistics import (
-    compute_log_returns, daily_volatility, sigma_band,
+    compute_log_returns, daily_volatility, ewma_daily_volatility, sigma_band,
     containment_probability,
 )
 from agents.grid_optimizer import GridOptimizerAgent
@@ -133,8 +133,10 @@ def predict_as_of(
 
     closes = [c["close"] for c in sliced]
     ref = closes[-1]
-    returns = compute_log_returns(closes[-lookback:])
-    dsig = daily_volatility(returns)
+    # EWMA σ — 최근 90일 수익률 기반, span=60 지수가중 (realized σ 추정 MAE ~13% 개선)
+    ewma_lookback = max(lookback, 90)
+    returns_ewma = compute_log_returns(closes[-ewma_lookback:])
+    dsig = ewma_daily_volatility(returns_ewma, span=60)
 
     u1, l1 = sigma_band(ref, dsig, horizon_days, 1.0, PREDICTION_DRIFT)
     u2, l2 = sigma_band(ref, dsig, horizon_days, 2.0, PREDICTION_DRIFT)

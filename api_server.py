@@ -30,7 +30,7 @@ from calendar import monthrange
 import threading
 from utils import minute_data
 from utils.live_data import fetch_current_price, fetch_usdt_price
-from utils.data_cache import get_history
+from utils.data_cache import get_history, get_usdt_history
 from services.prediction_service import predict_as_of
 from services.prediction_monitor import monitor as monitor_prediction
 
@@ -368,9 +368,20 @@ def _minute_collector():
         log.warning("[minutes] 수집 실패: %s", e)
 
 
+def _preload_usdt_history():
+    """USDT/KRW 일봉 캐시 사전 로드 — 서버 기동 직후 백그라운드에서 실행."""
+    import logging as _lg
+    try:
+        data = get_usdt_history()
+        _lg.getLogger("api_server").info("[startup] USDT 일봉 %d건 캐시 준비 완료", len(data))
+    except Exception as e:
+        _lg.getLogger("api_server").warning("[startup] USDT 일봉 로드 실패: %s", e)
+
+
 @app.on_event("startup")
 def _start_minute_collector():
     threading.Thread(target=_minute_collector, daemon=True, name="minute-collector").start()
+    threading.Thread(target=_preload_usdt_history, daemon=True, name="usdt-preload").start()
 
 
 @app.get("/api/minutes/status")

@@ -6,9 +6,11 @@ utils/dataset_export.py — ML 학습용 데이터셋 내보내기
 
 ZIP 구성:
   daily_btc.csv            BTC/KRW 일봉 전체 (date,open,high,low,close,volume)
+  daily_usdt.csv           USDT/KRW 일봉 전체 (date,open,high,low,close,volume)
   minute_KRW-BTC_5m.csv    BTC 5분봉 (수집된 경우)
   minute_KRW-USDT_5m.csv   USDT 5분봉 (수집된 경우)
-  monthly_labels.csv       지도학습 라벨셋 — 월별 (특징 → 실현 결과)
+  monthly_labels.csv       BTC 지도학습 라벨셋 — 월별 (특징 → 실현 결과)
+  monthly_labels_usdt.csv  USDT 지도학습 라벨셋
   meta.json                스키마·행수·생성 정보
 
 monthly_labels.csv 컬럼:
@@ -60,9 +62,13 @@ def _csv_bytes(rows: List[Dict], fields: List[str]) -> bytes:
     return buf.getvalue().encode("utf-8")
 
 
-def _daily_csv() -> Optional[bytes]:
-    from utils.data_cache import get_history
-    hist = get_history()
+def _daily_csv(market: str = "BTC") -> Optional[bytes]:
+    if market == "USDT":
+        from utils.data_cache import get_usdt_history
+        hist = get_usdt_history()
+    else:
+        from utils.data_cache import get_history
+        hist = get_history()
     if not hist:
         return None
     return _csv_bytes(hist, ["date", "open", "high", "low", "close", "volume"])
@@ -190,6 +196,84 @@ LABEL_FIELDS = [
 ]
 
 
+def build_usdt_monthly_labels(min_lookback: int = 40) -> List[Dict]:
+    """USDT/KRW 월별 라벨셋 — build_monthly_labels()와 동일 구조."""
+    from utils.data_cache import get_usdt_history
+    from services.prediction_service import predict_as_of
+
+    history = get_usdt_history()
+    if len(history) < min_lookback + 28:
+        return []
+
+    months = sorted({c["date"][:7] for c in history})
+    rows: List[Dict] = []
+
+    for i in range(1, len(months)):
+        target_ym = months[i]
+        prev_ym = months[i - 1]
+        prev_candles = _month_days(history, prev_ym)
+        if not prev_candles:
+            continue
+        as_of = prev_candles[-1]["date"]
+        upto = [c for c in history if c["date"] <= as_of]
+        if len(upto) < min_lookback:
+            continue
+
+        try:
+            snap = predict_as_of(history, as_of)
+        except Exception:
+            continue
+        if snap.target_month != target_ym:
+            continue
+
+        actual = _month_days(history, target_ym)
+        if len(actual) < 5:
+            continue
+
+        in1 = in2 = up = dn = 0
+        max_up = max_dn = 0.0
+        for c in actual:
+            close = float(c["close"])
+            if snap.box_lower_1s <= close <= snap.box_upper_1s:
+                in1 += 1
+            if snap.box_lower_2s <= close <= snap.box_upper_2s:
+                in2 += 1
+            if close > snap.box_upper_2s:
+                up += 1
+                max_up = max(max_up, (close - snap.box_upper_2s) / snap.box_upper_2s * 100)
+            elif close < snap.box_lower_2s:
+                dn += 1
+                max_dn = max(max_dn, (snap.box_lower_2s - close) / snap.box_lower_2s * 100)
+
+        n = len(actual)
+        tail = upto[-32:]
+        ret_31 = (float(tail[-1]["close"]) / float(tail[0]["close"]) - 1) * 100 if len(tail) >= 2 else 0.0
+        contain_1s = in1 / n * 100
+
+        rows.append({
+            "as_of": as_of,
+            "target_month": target_ym,
+            "ref_price": round(snap.reference_price, 4),
+            "daily_sigma": round(snap.daily_sigma, 6),
+            "monthly_sigma_pct": round(snap.monthly_sigma_pct, 3),
+            "box_u1": round(snap.box_upper_1s, 4),
+            "box_l1": round(snap.box_lower_1s, 4),
+            "box_u2": round(snap.box_upper_2s, 4),
+            "box_l2": round(snap.box_lower_2s, 4),
+            "ret_prev_31d": round(ret_31, 3),
+            "realized_days": n,
+            "contain_1s_pct": round(contain_1s, 1),
+            "contain_2s_pct": round(in2 / n * 100, 1),
+            "breach_up_days": up,
+            "breach_dn_days": dn,
+            "max_up_dev_pct": round(max_up, 2),
+            "max_dn_dev_pct": round(max_dn, 2),
+            "realized_sigma_pct": round(_realized_sigma_pct(actual), 3),
+            "label_ok": int(contain_1s >= 68.3),
+        })
+    return rows
+
+
 # ──────────────────────────────────────────────────────────────
 # 퍼블릭 API
 # ──────────────────────────────────────────────────────────────
@@ -202,8 +286,10 @@ def export_dataset(out_path: Path | str = DEFAULT_OUT) -> Dict:
         "generated_at": datetime.now().isoformat(timespec="seconds"),
         "files": {},
         "schema": {
-            "monthly_labels.csv": "지도학습 라벨셋 — label_ok=1이면 1σ containment ≥ 68.3% (F1 산출 기준 라벨)",
+            "monthly_labels.csv": "BTC 지도학습 라벨셋 — label_ok=1이면 1σ containment ≥ 68.3%",
+            "monthly_labels_usdt.csv": "USDT 지도학습 라벨셋 — 동일 구조",
             "daily_btc.csv": "BTC/KRW 일봉",
+            "daily_usdt.csv": "USDT/KRW 일봉",
             "minute_*.csv": "5분봉 (업비트, 수집된 범위)",
         },
         "notes": "as_of 이전 데이터만으로 예측을 재현했으므로 미래 정보 누설 없음. "
@@ -211,10 +297,15 @@ def export_dataset(out_path: Path | str = DEFAULT_OUT) -> Dict:
     }
 
     with zipfile.ZipFile(out_path, "w", zipfile.ZIP_DEFLATED) as zf:
-        daily = _daily_csv()
-        if daily:
-            zf.writestr("daily_btc.csv", daily)
-            meta["files"]["daily_btc.csv"] = daily.count(b"\n") - 1
+        daily_btc = _daily_csv("BTC")
+        if daily_btc:
+            zf.writestr("daily_btc.csv", daily_btc)
+            meta["files"]["daily_btc.csv"] = daily_btc.count(b"\n") - 1
+
+        daily_usdt = _daily_csv("USDT")
+        if daily_usdt:
+            zf.writestr("daily_usdt.csv", daily_usdt)
+            meta["files"]["daily_usdt.csv"] = daily_usdt.count(b"\n") - 1
 
         for market in ("KRW-BTC", "KRW-USDT"):
             mb = _minute_csv(market)
@@ -228,6 +319,12 @@ def export_dataset(out_path: Path | str = DEFAULT_OUT) -> Dict:
             lb = _csv_bytes(labels, LABEL_FIELDS)
             zf.writestr("monthly_labels.csv", lb)
             meta["files"]["monthly_labels.csv"] = len(labels)
+
+        usdt_labels = build_usdt_monthly_labels()
+        if usdt_labels:
+            ulb = _csv_bytes(usdt_labels, LABEL_FIELDS)
+            zf.writestr("monthly_labels_usdt.csv", ulb)
+            meta["files"]["monthly_labels_usdt.csv"] = len(usdt_labels)
 
         zf.writestr("meta.json", json.dumps(meta, ensure_ascii=False, indent=2))
 

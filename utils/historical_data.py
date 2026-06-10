@@ -210,6 +210,66 @@ def _synthetic_realistic(
 
 
 # ─────────────────────────────────────────────────────────
+# 소스 5: 업비트 USDT/KRW 일봉 (KRW-USDT)
+# ─────────────────────────────────────────────────────────
+def _fetch_upbit_usdt(max_candles: int = 3000) -> List[Dict]:
+    """업비트 KRW-USDT 일봉 수집 — BTC와 동일한 페이지네이션 방식."""
+    base = "https://api.upbit.com/v1/candles/days"
+    headers = {"Accept": "application/json", "User-Agent": "Mozilla/5.0"}
+    all_candles: List[Dict] = []
+    to_param = None
+
+    while len(all_candles) < max_candles:
+        params: Dict[str, Any] = {"market": "KRW-USDT", "count": 200}
+        if to_param:
+            params["to"] = to_param
+        try:
+            r = requests.get(base, params=params, headers=headers, timeout=_TIMEOUT)
+            r.raise_for_status()
+            batch = r.json()
+        except Exception as e:
+            logger.warning("업비트 USDT 요청 실패: %s", e)
+            break
+        if not batch:
+            break
+        all_candles.extend(batch)
+        oldest = batch[-1]["candle_date_time_kst"][:10]
+        to_param = oldest + "T00:00:00"
+        time.sleep(_SLEEP)
+        if len(batch) < 200:
+            break
+
+    all_candles.reverse()
+    return [
+        {
+            "date": c["candle_date_time_kst"][:10],
+            "open": float(c["opening_price"]),
+            "high": float(c["high_price"]),
+            "low": float(c["low_price"]),
+            "close": float(c["trade_price"]),
+            "volume": float(c["candle_acc_trade_volume"]),
+        }
+        for c in all_candles
+    ]
+
+
+def fetch_usdt_history(
+    start: str = "2020-01-01",
+    use_synthetic_fallback: bool = False,
+) -> List[Dict]:
+    """USDT/KRW 일봉 히스토리 수집 (업비트 단일 소스)."""
+    logger.info("[히스토리] USDT 일봉 수집 시작 (목표 시작: %s)", start)
+    data = _fetch_upbit_usdt(max_candles=4000)
+    if len(data) >= 30:
+        data = [d for d in data if d["date"] >= start]
+        logger.info("[히스토리] ✅ USDT 업비트 %d일봉 확보 (%s ~ %s)",
+                    len(data), data[0]["date"], data[-1]["date"])
+        return data
+    logger.warning("[히스토리] USDT 데이터 없음 (업비트 응답 부족)")
+    return []
+
+
+# ─────────────────────────────────────────────────────────
 # 퍼블릭 인터페이스
 # ─────────────────────────────────────────────────────────
 def fetch_max_history(
