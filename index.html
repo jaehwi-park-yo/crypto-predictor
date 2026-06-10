@@ -282,7 +282,13 @@
     <div class="sb-group">
       <div class="sb-item">
         <label>투입 자본 (원)</label>
-        <input type="number" id="capital" value="40000000" step="1000000" onchange="updateMetrics()">
+        <input type="number" id="capital" value="40000000" step="1000000" onchange="onCapitalChange()">
+      </div>
+      <div class="sb-item">
+        <label>거래량 목표: <span class="val" id="volTargetVal">자동 (0)</span></label>
+        <input type="range" id="volTarget" min="0" max="170" value="0" step="1"
+               oninput="onVolTargetChange(this.value)">
+        <div id="volTargetStatus" style="font-size:.68rem;color:var(--muted);margin-top:3px">0 = 수동 모드 · 1~170억 설정 시 아래 3개 변수 자동 추천</div>
       </div>
       <div class="sb-item">
         <label>BTC 비중: <span class="val" id="btcRatioVal">60%</span></label>
@@ -395,7 +401,7 @@
                 </div>
                 <table class="sc-tbl">
                   <tr><td>투입 자본</td><td id="si-usdti-cap">6.7M원</td></tr>
-                  <tr><td>매수/매도 간격</td><td>1원/3원</td></tr>
+                  <tr><td>매수/매도 간격</td><td id="si-usdti-int">1원/3원</td></tr>
                   <tr><td>봇 수 (추정)</td><td id="si-usdti-bots">31개</td></tr>
                   <tr><td>봇당 자본</td><td id="si-usdti-pbot">216,774원</td></tr>
                   <tr><td>월 거래량</td><td id="si-usdti-vol">~3.2억</td></tr>
@@ -410,7 +416,7 @@
                 </div>
                 <table class="sc-tbl">
                   <tr><td>투입 자본</td><td id="si-usdto-cap">4.5M원</td></tr>
-                  <tr><td>매수/매도 간격</td><td>1원/3원 (외부존)</td></tr>
+                  <tr><td>매수/매도 간격</td><td id="si-usdto-int">1원/3원 (외부존)</td></tr>
                   <tr><td>봇 수 (추정)</td><td id="si-usdto-bots">30개</td></tr>
                   <tr><td>봇당 자본</td><td id="si-usdto-pbot">149,333원</td></tr>
                   <tr><td>월 거래량</td><td id="si-usdto-vol">~0.6억 (활성 27%)</td></tr>
@@ -646,9 +652,17 @@
                 <div class="sim-out" id="sim-outer"></div>
               </div>
             </div>
+            <div style="display:flex;align-items:center;gap:12px;margin-top:4px">
+              <button id="usdt-save-btn" onclick="saveUsdtToPortfolio()"
+                style="background:var(--usdt);color:#fff;border:none;border-radius:8px;padding:9px 18px;font-size:.85rem;font-weight:700;cursor:pointer">
+                💾 포트폴리오에 적용
+              </button>
+              <span id="usdt-save-status" style="font-size:.75rem;color:var(--muted)">적용 중: 내부 1원/3원 · 외부 1원/3원</span>
+            </div>
             <div class="sim-note">
               📐 <b>월 그리드순익 ≈ [매도간격 × C − 수수료] / (매수+매도)</b> · 월거래량 ≈ 18.4억 / (매수+매도)<br>
-              ⚠️ 손익분기: <b>매도 ≥ 2원</b> (매도간격이 왕복수수료 ≈1.12원을 넘어야 함 — 매수간격과 무관). 1원/1원은 그리드 손실 — 거래량용.
+              ⚠️ 손익분기: <b>매도 ≥ 2원</b> (매도간격이 왕복수수료 ≈1.12원을 넘어야 함 — 매수간격과 무관). 1원/1원은 그리드 손실 — 거래량용.<br>
+              💾 시뮬레이터 변경은 아래 존별 상세에 즉시 반영되고, <b>적용 버튼</b>을 누르면 포트폴리오 탭 4전략·P&L 합계에 반영됩니다.
             </div>
           </div>
 
@@ -667,22 +681,22 @@
                   <tr class="inner-row">
                     <td><span style="color:var(--inner-border);font-weight:700">1σ 내부 (보수)</span></td>
                     <td>1,386 ~ 1,416원</td>
-                    <td>1원 / 3원</td>
+                    <td id="usdt-inner-int">1원 / 3원</td>
                     <td id="usdt-inner-cap">6.7M</td>
                     <td id="usdt-inner-bots">31개</td>
                     <td id="usdt-inner-pbot">216,774원</td>
-                    <td>~3.2억</td>
-                    <td class="pos">+24.2만원 <span style="color:var(--muted);font-weight:400">월 순익(추정)</span></td>
+                    <td id="usdt-inner-vol">~3.2억</td>
+                    <td class="pos" id="usdt-inner-net">+24.2만원 <span style="color:var(--muted);font-weight:400">월 순익(추정)</span></td>
                   </tr>
                   <tr class="outer-row">
                     <td><span style="color:var(--outer-border);font-weight:700">1σ~2σ 외부 (공격)</span></td>
                     <td>1,371~1,386 / 1,416~1,430원</td>
-                    <td>1원 / 3원</td>
+                    <td id="usdt-outer-int">1원 / 3원</td>
                     <td id="usdt-outer-cap">4.5M</td>
                     <td id="usdt-outer-bots">30개</td>
                     <td id="usdt-outer-pbot">149,333원</td>
-                    <td>~0.6억</td>
-                    <td class="pos">+3.9만원 <span style="color:var(--muted);font-weight:400">월 순익(추정)</span></td>
+                    <td id="usdt-outer-vol">~0.6억</td>
+                    <td class="pos" id="usdt-outer-net">+3.9만원 <span style="color:var(--muted);font-weight:400">월 순익(추정)</span></td>
                   </tr>
                 </tbody>
               </table>
@@ -746,7 +760,7 @@
           </div>
 
           <div style="background:#1a222e;border:1px solid #1a3a5f;border-radius:8px;padding:12px 16px;font-size:.82rem;color:#6ea8c9">
-            💱 현재가 (히스토리 폴백): <b style="color:#fff;font-size:.9rem">337,454,075원</b>
+            💱 현재가 (히스토리 폴백): <b style="color:#fff;font-size:.9rem" id="monitor-live-price">337,454,075원</b>
             &nbsp;|&nbsp; 원본 기준가: 313,439,106원
             &nbsp;|&nbsp; <span style="color:#4ec94e">+7.7%</span>
           </div>
@@ -1032,8 +1046,6 @@ function updateMetrics() {
 
   const btcInnerBots = Math.max(1, Math.round(D.snap.range_pct / 0.5)); // 매수간격 0.5% 기준
   const btcOuterBots = Math.max(1, Math.round(24.6 / 0.3));             // 외부존 폭 ~24.6%, 매수 0.3%
-  const usdtInnerBots = 31;
-  const usdtOuterBots = 30;
 
   function setEl(id, val) { const el = document.getElementById(id); if (el) el.textContent = val; }
 
@@ -1046,12 +1058,8 @@ function updateMetrics() {
   setEl('si-btco-pbot', fmt(Math.round(outerBtc/btcOuterBots)) + '원');
 
   setEl('si-usdti-cap',  fmtM(innerUsdt)+'원');
-  setEl('si-usdti-bots', usdtInnerBots + '개');
-  setEl('si-usdti-pbot', fmt(Math.round(innerUsdt/usdtInnerBots)) + '원');
-
   setEl('si-usdto-cap',  fmtM(outerUsdt)+'원');
-  setEl('si-usdto-bots', usdtOuterBots + '개');
-  setEl('si-usdto-pbot', fmt(Math.round(outerUsdt/usdtOuterBots)) + '원');
+  // USDT 카드 봇수/봇당자본/간격/순익은 updatePnlTable()이 적용 간격 기준으로 갱신
 
   // BTC tab zone table
   setEl('btc-inner-cap',  fmtM(innerBtc));
@@ -1063,19 +1071,12 @@ function updateMetrics() {
   setEl('btc-inner-pct',  Math.round(innerRatio*100)+'%');
   setEl('btc-outer-pct',  Math.round((1-innerRatio)*100)+'%');
 
-  // USDT tab zone table
-  setEl('usdt-inner-cap',  fmtM(innerUsdt));
-  setEl('usdt-inner-bots', usdtInnerBots+'개');
-  setEl('usdt-inner-pbot', fmt(Math.round(innerUsdt/usdtInnerBots))+'원');
-  setEl('usdt-outer-cap',  fmtM(outerUsdt));
-  setEl('usdt-outer-bots', usdtOuterBots+'개');
-  setEl('usdt-outer-pbot', fmt(Math.round(outerUsdt/usdtOuterBots))+'원');
-
-  // USDT 시뮬레이터 자본 동기화
+  // USDT 시뮬레이터 자본 동기화 + 존별 상세 테이블
   usdtSim.inner.cap = innerUsdt;
   usdtSim.outer.cap = outerUsdt;
   setEl('sim-inner-cap-label', fmtM(innerUsdt)+'원');
   setEl('sim-outer-cap-label', fmtM(outerUsdt)+'원');
+  syncUsdtDetail();
   if (window._chartUSDT) {
     renderUsdtSim('inner','sim-inner');
     renderUsdtSim('outer','sim-outer');
@@ -1214,10 +1215,13 @@ function updatePnlTable() {
     bi: calcBtcStrat(innerBtc, 'inner'),
     bo: calcBtcStrat(outerBtc, 'outer'),
   };
-  // USDT: 시뮬레이터(스테퍼) 현재 간격 기준
+  // USDT: 💾 적용(save)된 간격 기준 — 시뮬레이터 실험값은 적용 전까지 반영 안 함
+  const usdtCalc = {};
   for (const [key, zone] of [['ui','inner'],['uo','outer']]) {
-    const r = calcUsdt(usdtSim[zone]);
-    rows[key] = { cap: usdtSim[zone].cap, vol: r.vol,
+    const z = { ...usdtSim[zone], buy: usdtApplied[zone].buy, sell: usdtApplied[zone].sell };
+    const r = calcUsdt(z);
+    usdtCalc[key] = r;
+    rows[key] = { cap: z.cap, vol: r.vol,
                   grid: r.netGrid + r.vol * USDT_FEE,  // 수수료 차감 전 그리드 P&L
                   fee: r.vol * USDT_FEE, reward: r.reward, net: r.totalNet };
   }
@@ -1262,6 +1266,115 @@ function updatePnlTable() {
     const el = document.getElementById(id);
     if (el) { el.textContent = man(rows[key].net) + '원'; el.className = rows[key].net >= 0 ? 'pos' : 'neg'; }
   }
+  // USDT 카드 간격·봇수·봇당자본 (적용 간격 기준)
+  setT('si-usdti-int', `${usdtApplied.inner.buy}원/${usdtApplied.inner.sell}원`);
+  setT('si-usdto-int', `${usdtApplied.outer.buy}원/${usdtApplied.outer.sell}원 (외부존)`);
+  setT('si-usdti-bots', usdtCalc.ui.bots + '개');
+  setT('si-usdti-pbot', fmt(Math.round(usdtCalc.ui.capPerBot)) + '원');
+  setT('si-usdto-bots', usdtCalc.uo.bots + '개');
+  setT('si-usdto-pbot', fmt(Math.round(usdtCalc.uo.capPerBot)) + '원');
+}
+
+// ─── USDT 시뮬레이터 ↔ USDT 탭 존별 상세 연동 (실시간) ─────────────────────
+function syncUsdtDetail() {
+  const set = (id, v, cls) => { const el = document.getElementById(id); if (el) { el.textContent = v; if (cls !== undefined) el.className = cls; } };
+  for (const [zone, p] of [['inner','usdt-inner'],['outer','usdt-outer']]) {
+    const z = usdtSim[zone];
+    const r = calcUsdt(z);
+    set(`${p}-int`,  `${z.buy}원 / ${z.sell}원`);
+    set(`${p}-cap`,  fmtM(z.cap));
+    set(`${p}-bots`, r.bots + '개');
+    set(`${p}-pbot`, fmt(Math.round(r.capPerBot)) + '원');
+    set(`${p}-vol`,  '~' + (r.vol / 1e8).toFixed(2) + '억');
+    set(`${p}-net`,  (r.totalNet >= 0 ? '+' : '') + (r.totalNet / 1e4).toFixed(1) + '만원',
+        r.totalNet >= 0 ? 'pos' : 'neg');
+  }
+}
+
+// ─── 💾 시뮬레이터 간격 → 포트폴리오 적용 ──────────────────────────────────
+const usdtApplied = {
+  inner: { buy: 1, sell: 3 },
+  outer: { buy: 1, sell: 3 },
+};
+function saveUsdtToPortfolio() {
+  usdtApplied.inner.buy  = usdtSim.inner.buy;
+  usdtApplied.inner.sell = usdtSim.inner.sell;
+  usdtApplied.outer.buy  = usdtSim.outer.buy;
+  usdtApplied.outer.sell = usdtSim.outer.sell;
+  updatePnlTable();
+  const st = document.getElementById('usdt-save-status');
+  if (st) st.textContent = `적용 중: 내부 ${usdtApplied.inner.buy}원/${usdtApplied.inner.sell}원 · 외부 ${usdtApplied.outer.buy}원/${usdtApplied.outer.sell}원`;
+  const btn = document.getElementById('usdt-save-btn');
+  if (btn) {
+    btn.textContent = '✔ 적용 완료';
+    setTimeout(() => { btn.textContent = '💾 포트폴리오에 적용'; }, 1500);
+  }
+}
+
+// ─── 거래량 목표 → 파라미터 자동 추천 ──────────────────────────────────────
+// 슬라이더 범위 내 (BTC비중·내부존비율·KRW예비금) 전수 탐색:
+// 목표 거래량 이상인 조합 중 월 순익 최대 → 없으면 거래량 최대 조합
+function estimatePortfolio(totalCap, btcRatio, innerRatio, krwHold) {
+  const investable = totalCap * (1 - krwHold);
+  const btcCap = investable * btcRatio, usdtCap = investable * (1 - btcRatio);
+  const bi = calcBtcStrat(btcCap * innerRatio, 'inner');
+  const bo = calcBtcStrat(btcCap * (1 - innerRatio), 'outer');
+  let vol = bi.vol + bo.vol, net = bi.net + bo.net;
+  for (const zone of ['inner', 'outer']) {
+    const cap = zone === 'inner' ? usdtCap * innerRatio : usdtCap * (1 - innerRatio);
+    const r = calcUsdt({ ...usdtSim[zone], cap,
+                         buy: usdtApplied[zone].buy, sell: usdtApplied[zone].sell });
+    vol += r.vol; net += r.totalNet;
+  }
+  return { vol, net };
+}
+function recommendParams(targetVolKrw) {
+  const totalCap = +document.getElementById('capital').value || 40000000;
+  let best = null, bestFallback = null;
+  for (let b = 40; b <= 70; b += 5)
+    for (let i = 40; i <= 70; i += 5)
+      for (let k = 20; k <= 50; k += 5) {
+        const r = estimatePortfolio(totalCap, b/100, i/100, k/100);
+        const cand = { b, i, k, ...r };
+        if (r.vol >= targetVolKrw && (!best || r.net > best.net)) best = cand;
+        if (!bestFallback || r.vol > bestFallback.vol ||
+            (r.vol === bestFallback.vol && r.net > bestFallback.net)) bestFallback = cand;
+      }
+  return { pick: best || bestFallback, reached: !!best };
+}
+function onVolTargetChange(val) {
+  const target = +val;
+  const lbl = document.getElementById('volTargetVal');
+  const status = document.getElementById('volTargetStatus');
+  if (target === 0) {
+    lbl.textContent = '자동 (0)';
+    status.textContent = '0 = 수동 모드 · 1~170억 설정 시 아래 3개 변수 자동 추천';
+    status.style.color = 'var(--muted)';
+    return;
+  }
+  lbl.textContent = target + '억';
+  const { pick, reached } = recommendParams(target * 1e8);
+  // 추천값으로 슬라이더 이동
+  const setSlider = (id, v, lblId) => {
+    document.getElementById(id).value = v;
+    document.getElementById(lblId).textContent = v + '%';
+  };
+  setSlider('btcRatio', pick.b, 'btcRatioVal');
+  setSlider('innerRatio', pick.i, 'innerRatioVal');
+  setSlider('krwHold', pick.k, 'krwHoldVal');
+  updateMetrics();
+  if (reached) {
+    status.textContent = `✔ 달성 가능: 예상 ${(pick.vol/1e8).toFixed(1)}억 · 순익 +${(pick.net/1e4).toFixed(0)}만/월`;
+    status.style.color = '#4ec94e';
+  } else {
+    status.textContent = `⚠️ 현재 자본 최대 ${(pick.vol/1e8).toFixed(1)}억 — 목표 미달 (자본 증액 필요)`;
+    status.style.color = '#d4b44a';
+  }
+}
+function onCapitalChange() {
+  const target = +document.getElementById('volTarget').value;
+  if (target > 0) onVolTargetChange(target);
+  else updateMetrics();
 }
 
 function renderUsdtSim(zoneKey, outId) {
@@ -1286,7 +1399,7 @@ function stepUsdt(zoneKey, side, delta) {
   const prefix = zoneKey === 'inner' ? 'ui' : 'uo';
   document.getElementById(prefix+'-'+side).textContent = z[side];
   renderUsdtSim(zoneKey, zoneKey === 'inner' ? 'sim-inner' : 'sim-outer');
-  updatePnlTable(); // 간격 변경 → 포트폴리오 탭 P&L 합계도 연동
+  syncUsdtDetail(); // 존별 상세는 즉시 연동, 포트폴리오 반영은 💾 적용 버튼으로
 }
 
 // ─── USDT 차트 ──────────────────────────────────────────────────────────────

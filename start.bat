@@ -1,6 +1,14 @@
 @echo off
 chcp 65001 > nul
 title BTC Grid Prediction — 로컬 실행
+cd /d "%~dp0"
+
+where python > nul 2>&1
+if errorlevel 1 (
+    echo ❌ Python이 설치되어 있지 않습니다. https://www.python.org/downloads/ 에서 설치 후 다시 실행하세요.
+    pause
+    exit /b 1
+)
 
 :: ─── 설정 ───────────────────────────────────────────────────────────────────
 set VENV_DIR=.venv

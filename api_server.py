@@ -12,14 +12,14 @@ api_server.py — 실시간 가격 API 서버 (index.html 연동용)
 """
 from __future__ import annotations
 import logging, sys
-from datetime import date
-from typing import Optional
+from datetime import date, timedelta
+from typing import Literal, Optional
 
 logging.basicConfig(level=logging.INFO, stream=sys.stdout,
     format="%(asctime)s [%(name)s] %(message)s")
 
 try:
-    from fastapi import FastAPI, Query
+    from fastapi import FastAPI, HTTPException, Query
     from fastapi.middleware.cors import CORSMiddleware
     import uvicorn
 except ImportError:
@@ -80,19 +80,26 @@ def get_predict(
     as_of:     str   = Query(default=None, description="YYYY-MM-DD (기본: 어제)"),
     capital:   float = Query(default=40_000_000, ge=1_000_000),
     krw_hold:  float = Query(default=0.30, ge=0.0, le=0.7),
-    aggressiveness: str = Query(default="balanced"),
+    aggressiveness: Literal["conservative", "balanced", "aggressive"] = Query(default="balanced"),
 ):
     """as-of 시점 기준 익월 박스권 예측."""
     if as_of is None:
-        today = date.today()
-        as_of = today.replace(day=today.day - 1).isoformat() if today.day > 1 else today.isoformat()
+        as_of = (date.today() - timedelta(days=1)).isoformat()
+    else:
+        try:
+            date.fromisoformat(as_of)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="as_of는 YYYY-MM-DD 형식이어야 합니다")
     history = get_history()
-    snap = predict_as_of(
-        history, as_of,
-        capital_krw=capital,
-        krw_hold_ratio=krw_hold,
-        aggressiveness=aggressiveness,
-    )
+    try:
+        snap = predict_as_of(
+            history, as_of,
+            capital_krw=capital,
+            krw_hold_ratio=krw_hold,
+            aggressiveness=aggressiveness,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e))
     return {
         "as_of":         snap.as_of_date,
         "target":        snap.target_month,
