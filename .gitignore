@@ -26,3 +26,6 @@ data/*.db-shm
 .vscode/
 .claude/
 *.pdf
+
+# 데이터셋 시드 (런타임 복원 파일)
+data/dataset_seed.zip*
