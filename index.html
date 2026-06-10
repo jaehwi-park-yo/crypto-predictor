@@ -288,12 +288,17 @@
     <div class="sb-group">
       <div class="sb-item">
         <label>투입 자본 (원)</label>
-        <input type="number" id="capital" value="40000000" step="1000000" onchange="onCapitalChange()">
+        <input type="number" id="capital" value="40000000" step="1000000" onchange="onCapitalChange()" oninput="updateCapitalDisplay(this.value)">
+        <div id="capitalDisplay" style="font-size:.68rem;color:var(--muted);margin-top:2px">4,000만원</div>
       </div>
       <div class="sb-item">
-        <label>직전월 거래량 (원)</label>
+        <label>직전월 거래량 (원)
+          <span title="직전 달 빗썸 계정 전체 거래량 기준으로 당월 리워드율이 결정됩니다. 신규계정 첫 달은 0.003%." style="cursor:help;color:#8b929e;font-size:.8em;margin-left:3px">(?)</span>
+        </label>
         <input type="number" id="prevVol" value="0" step="100000000" min="0" onchange="onPrevVolChange()">
         <div id="rewardRateLabel" style="font-size:.68rem;color:var(--muted);margin-top:3px">적용 리워드율: 0.003% (1,000만원 미만)</div>
+        <div style="font-size:.62rem;color:#666;margin-top:2px">※ 직전월 거래량 기준 → 당월 전체 적용 (신규계정 첫달: 0.003%)</div>
+        <div id="rewardNextTier" style="font-size:.62rem;color:#8b929e;margin-top:1px"></div>
       </div>
       <div class="sb-item">
         <label>거래량 목표 (억)</label>
@@ -316,7 +321,9 @@
                oninput="document.getElementById('btcRatioVal').textContent=this.value+'%';updateMetrics()">
       </div>
       <div class="sb-item">
-        <label>내부존(1σ) 비율: <span class="val" id="innerRatioVal">60%</span></label>
+        <label>내부존(1σ) 비율
+          <span title="1σ(표준편차 1배) 범위 안에서 운용되는 자본 비율. 박스권 내 촘촘한 그리드로 안정적 수익을 추구합니다. 외부존(1σ~2σ)은 이탈 시 추가 자본을 투입합니다." style="cursor:help;color:#8b929e;font-size:.8em;margin-left:3px">(?)</span>
+          : <span class="val" id="innerRatioVal">60%</span></label>
         <input type="range" id="innerRatio" min="40" max="70" value="60" step="5"
                oninput="document.getElementById('innerRatioVal').textContent=this.value+'%';updateMetrics()">
       </div>
@@ -1205,10 +1212,28 @@ function rewardTier() {
 function usdtReward(vol) {
   return Math.min(vol * rewardTier().rate, 3_000_000);
 }
+function updateCapitalDisplay(val) {
+  const n = +val || 0;
+  const el = document.getElementById('capitalDisplay');
+  if (el) el.textContent = n >= 1e8 ? (n/1e8).toFixed(1) + '억원' : Math.round(n/1e4) + '만원';
+}
 function onPrevVolChange() {
+  const prev = +(document.getElementById('prevVol')?.value) || 0;
   const { rate, label } = rewardTier();
   const el = document.getElementById('rewardRateLabel');
   if (el) el.textContent = `적용 리워드율: ${(rate*100).toFixed(3)}% (${label})`;
+  // 다음 리워드 티어까지 거리
+  const nextEl = document.getElementById('rewardNextTier');
+  if (nextEl) {
+    const nextTier = REWARD_TIERS.slice().reverse().find(([t]) => t > prev);
+    if (nextTier) {
+      const gap = nextTier[0] - prev;
+      const gapStr = gap >= 1e8 ? (gap/1e8).toFixed(0)+'억' : Math.round(gap/1e4)+'만';
+      nextEl.textContent = `다음 티어(${(nextTier[1]*100).toFixed(3)}%)까지 ${gapStr}원 남음`;
+    } else {
+      nextEl.textContent = '최고 티어 달성 (0.020%)';
+    }
+  }
   updateMetrics();
   // 거래량 목표 설정 중이면 추천 재계산 (리워드율이 순익에 영향)
   const target = +document.getElementById('volTarget').value;
@@ -1329,6 +1354,30 @@ function updatePnlTable() {
   }
   setT('si-usdto-bots', usdtCalc.uo.bots + '개');
   setT('si-usdto-pbot', fmt(Math.round(usdtCalc.uo.capPerBot)) + '원');
+
+  // P6: 봇당 자본 최소 주문금액(5,000원) 미만 경고
+  const MIN_BOT_CAP = 5000;
+  const warnings = [];
+  if (Math.round(usdtCalc.ui.capPerBot) < MIN_BOT_CAP) warnings.push('USDT 내부존 봇당자본 부족');
+  if (Math.round(usdtCalc.uo.capPerBot) < MIN_BOT_CAP) warnings.push('USDT 외부존 봇당자본 부족');
+  const btciBotCap = rows.bi.cap / Math.max(1, Math.round(D.snap.range_pct / 0.5));
+  const btcoBotCap = rows.bo.cap / Math.max(1, Math.round(D.snap.range_pct / 0.3));
+  if (btciBotCap < MIN_BOT_CAP) warnings.push('BTC 내부존 봇당자본 부족');
+  if (btcoBotCap < MIN_BOT_CAP) warnings.push('BTC 외부존 봇당자본 부족');
+  let warnEl = document.getElementById('bot-cap-warning');
+  if (!warnEl) {
+    warnEl = document.createElement('div');
+    warnEl.id = 'bot-cap-warning';
+    warnEl.style.cssText = 'font-size:.7rem;color:#d4b44a;margin-top:6px;padding:5px 8px;border:1px solid #d4b44a44;border-radius:5px;display:none';
+    const tbl = document.querySelector('#tab-portfolio .disclaimer');
+    if (tbl) tbl.parentNode.insertBefore(warnEl, tbl);
+  }
+  if (warnings.length) {
+    warnEl.textContent = '⚠️ 최소 주문금액(5,000원) 미달: ' + warnings.join(', ') + ' — 자본을 늘리거나 봇 수를 줄이세요.';
+    warnEl.style.display = 'block';
+  } else {
+    warnEl.style.display = 'none';
+  }
 }
 
 // ─── USDT 시뮬레이터 ↔ USDT 탭 존별 상세 연동 (실시간) ─────────────────────
@@ -1430,7 +1479,11 @@ function onVolTargetChange(val) {
     status.textContent = `✔ 달성 가능: 예상 ${(pick.vol/1e8).toFixed(1)}억 · 순익 +${(pick.net/1e4).toFixed(0)}만/월`;
     status.style.color = '#4ec94e';
   } else {
-    status.textContent = `⚠️ 현재 자본 최대 ${(pick.vol/1e8).toFixed(1)}억 — 목표 미달 (자본 증액 필요)`;
+    const totalCap = +document.getElementById('capital').value || 40000000;
+    const scaleFactor = pick.vol > 0 ? (target * 1e8) / pick.vol : 0;
+    const neededCap = scaleFactor > 0 ? Math.ceil(totalCap * scaleFactor / 1e4) * 1e4 : 0;
+    const neededStr = neededCap > 0 ? ` (필요 자본 약 ${Math.round(neededCap/1e4)}만원)` : '';
+    status.textContent = `⚠️ 현재 자본 최대 ${(pick.vol/1e8).toFixed(1)}억 — 목표 미달${neededStr}`;
     status.style.color = '#d4b44a';
   }
 }
@@ -1664,6 +1717,8 @@ async function fetchLivePrice() {
 
 // ─── 초기화 ──────────────────────────────────────────────────────────────────
 window.onload = () => {
+  updateCapitalDisplay(document.getElementById('capital').value);
+  onPrevVolChange();
   updateMetrics();
   fetchLivePrice();
   setInterval(fetchLivePrice, 60_000);   // 1분마다 갱신
