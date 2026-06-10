@@ -544,7 +544,7 @@
             <span>대상월: <b id="predict-target-month">─</b></span>
             <span>기준 시점: <b id="predict-as-of">─</b></span>
             <span>잔여: <b id="predict-days-left">─</b></span>
-            <button onclick="fetchLivePrediction()" style="margin-left:4px;padding:3px 10px;font-size:.78rem;background:rgba(79,142,247,0.18);color:#4f8ef7;border:1px solid rgba(79,142,247,0.4);border-radius:5px;cursor:pointer">🔄 예측 새로고침</button>
+            <button onclick="fetchDashboard()" style="margin-left:4px;padding:3px 10px;font-size:.78rem;background:rgba(79,142,247,0.18);color:#4f8ef7;border:1px solid rgba(79,142,247,0.4);border-radius:5px;cursor:pointer">🔄 예측 새로고침</button>
             <span id="predict-loading" style="display:none;color:var(--muted)">불러오는 중…</span>
           </div>
 
@@ -951,8 +951,20 @@
 </div>
 
 <script>
-// ─── 기존 BTC 차트 데이터 ────────────────────────────────────────────────────
-const D = {"snap": {"as_of": "2026-04-30", "target": "2026-05", "ref": 313439106, "u1": 364748527.77978504, "l1": 269347415.2399967, "u2": 424457210.25480664, "l2": 231458132.40185544, "ru": 364748527.77978504, "rl": 269347415.2399967, "sigma": 1.0, "range_pct": 35.4, "monthly_sigma": 15.2, "daily_sigma": 2.77, "confidence": 68.3, "gi_pct": 0.5, "gi_krw": 1567195, "bots": 71, "deployed": 28000000, "reserve": 12000000, "per_bot": 394366, "volume": 6975058425.017568, "reward": 1046258, "capital": 40000000}, "mon": {"elapsed": 15, "total": 31, "progress": 48.4, "containment": 100.0, "status": "ON_TRACK", "detail": "15/31일 경과 (48%) — containment 100%", "sigma_change": -8.7, "box_shift": -3.04, "cur_price": 337454075, "rev_ru": 338382104, "rev_rl": 276444233, "rev_u2": 374375407, "rev_l2": 249866255}, "pre_x": ["2026-01-31", "2026-02-01", "2026-02-02", "2026-02-03", "2026-02-04", "2026-02-05", "2026-02-06", "2026-02-07", "2026-02-08", "2026-02-09", "2026-02-10", "2026-02-11", "2026-02-12", "2026-02-13", "2026-02-14", "2026-02-15", "2026-02-16", "2026-02-17", "2026-02-18", "2026-02-19", "2026-02-20", "2026-02-21", "2026-02-22", "2026-02-23", "2026-02-24", "2026-02-25", "2026-02-26", "2026-02-27", "2026-02-28", "2026-03-01", "2026-03-02", "2026-03-03", "2026-03-04", "2026-03-05", "2026-03-06", "2026-03-07", "2026-03-08", "2026-03-09", "2026-03-10", "2026-03-11", "2026-03-12", "2026-03-13", "2026-03-14", "2026-03-15", "2026-03-16", "2026-03-17", "2026-03-18", "2026-03-19", "2026-03-20", "2026-03-21", "2026-03-22", "2026-03-23", "2026-03-24", "2026-03-25", "2026-03-26", "2026-03-27", "2026-03-28", "2026-03-29", "2026-03-30", "2026-03-31", "2026-04-01", "2026-04-02", "2026-04-03", "2026-04-04", "2026-04-05", "2026-04-06", "2026-04-07", "2026-04-08", "2026-04-09", "2026-04-10", "2026-04-11", "2026-04-12", "2026-04-13", "2026-04-14", "2026-04-15", "2026-04-16", "2026-04-17", "2026-04-18", "2026-04-19", "2026-04-20", "2026-04-21", "2026-04-22", "2026-04-23", "2026-04-24", "2026-04-25", "2026-04-26", "2026-04-27", "2026-04-28", "2026-04-29", "2026-04-30"], "pre_o": [414392518, 414418331, 415095448, 418639387, 418340515, 426027649, 425143882, 426160271, 414528563, 402756884, 397467921, 403796558, 405648989, 412569702, 432641795, 433413681, 421093641, 419056305, 425570476, 417681430, 441599217, 448141551, 453809339, 454126068, 463518841, 456558076, 449460831, 455869457, 463645035, 473243852, 490559201, 488420699, 505652306, 491745338, 485628029, 467404663, 459564730, 438067735, 429799043, 432294931, 417357315, 428298120, 433555908, 424914800, 418035711, 401509536, 407937055, 401582253, 410013511, 399089475, 374833152, 366647450, 364667015, 353645116, 341504901, 334945715, 338452787, 336690117, 334452957, 320182171, 322821168, 320140677, 327642960, 324115666, 325545319, 334348036, 333343789, 333929329, 308904000, 287912202, 298124131, 299579590, 303359483, 297578073, 296071840, 297750551, 293646146, 304080503, 294716080, 295496137, 302858640, 301115252, 314829850, 308833711, 295807033, 299389107, 302133059, 303306633, 305311580, 310996357], "pre_h": [421707614, 427832980, 419756376, 421037211, 426423633, 428193940, 444514551, 432565167, 417346630, 406075335, 409485462, 410158066, 418867403, 434187460, 443817155, 440191856, 424477418, 426685312, 433719758, 446214612, 452407281, 456461285, 457910969, 472973771, 475225486, 464968679, 464857898, 485817122, 478096523, 506306969, 502851594, 521851629, 509799739, 492926029, 497479272, 480212334, 464532505, 452722897, 441253585, 438702266, 437468567, 440441993, 444468882, 425613913, 420748635, 410002749, 416228271, 413774935, 410922511, 401412528, 375097937, 374876906, 367621207, 364508964, 346791214, 349756863, 341484060, 344528044, 338999200, 332784308, 325502875, 334747345, 328079810, 328517824, 337729903, 338173401, 335818237, 340530073, 311322329, 302551797, 308115770, 304552063, 304248972, 300313096, 309832294, 300481998, 308232147, 304785752, 302967506, 304253059, 304991080, 329981296, 318985360, 309058125, 305080934, 302903128, 317783242, 306616610, 311117249, 317403992], "pre_l": [407103235, 401680799, 413978459, 415942691, 417944531, 422977591, 406789602, 408123667, 399938817, 394149470, 391779016, 399287480, 399351287, 411024037, 422238320, 414315466, 415672527, 417941469, 409532148, 413066035, 437333487, 445489605, 450024439, 444671138, 444851431, 441050229, 440472390, 433697370, 458792364, 457496084, 476128306, 472221376, 487597905, 484447338, 455553420, 446757060, 433099960, 415143881, 420840389, 410949980, 408186868, 421412034, 414001825, 417336597, 398796611, 399443842, 393291037, 397820828, 398180475, 372510099, 366382665, 356437560, 350690925, 330641054, 329659402, 323641639, 333658843, 326615030, 315635927, 310219030, 317458970, 313036291, 323678816, 321143161, 322163452, 329518424, 331454882, 302303256, 285493872, 283484536, 289587951, 298387011, 296688584, 293336818, 283990098, 290914700, 289494501, 294010830, 287244710, 294101717, 298982812, 285963806, 304678200, 295582618, 290115206, 298619039, 287656450, 302001603, 305190688, 307031470], "pre_c": [414418331, 415095448, 418639387, 418340515, 426027649, 425143882, 426160271, 414528563, 402756884, 397467921, 403796558, 405648989, 412569702, 432641795, 433413681, 421093641, 419056305, 425570476, 417681430, 441599217, 448141551, 453809339, 454126068, 463518841, 456558076, 449460831, 455869457, 463645035, 473243852, 490559201, 488420699, 505652306, 491745338, 485628029, 467404663, 459564730, 438067735, 429799043, 432294931, 417357315, 428298120, 433555908, 424914800, 418035711, 401509536, 407937055, 401582253, 410013511, 399089475, 374833152, 366647450, 364667015, 353645116, 341504901, 334945715, 338452787, 336690117, 334452957, 320182171, 322821168, 320140677, 327642960, 324115666, 325545319, 334348036, 333343789, 333929329, 308904000, 287912202, 298124131, 299579590, 303359483, 297578073, 296071840, 297750551, 293646146, 304080503, 294716080, 295496137, 302858640, 301115252, 314829850, 308833711, 295807033, 299389107, 302133059, 303306633, 305311580, 310996357, 313439106], "fut": ["2026-05-01", "2026-05-02", "2026-05-03", "2026-05-04", "2026-05-05", "2026-05-06", "2026-05-07", "2026-05-08", "2026-05-09", "2026-05-10", "2026-05-11", "2026-05-12", "2026-05-13", "2026-05-14", "2026-05-15", "2026-05-16", "2026-05-17", "2026-05-18", "2026-05-19", "2026-05-20", "2026-05-21", "2026-05-22", "2026-05-23", "2026-05-24", "2026-05-25", "2026-05-26", "2026-05-27", "2026-05-28", "2026-05-29", "2026-05-30", "2026-05-31"], "fut_rem": ["2026-05-16", "2026-05-17", "2026-05-18", "2026-05-19", "2026-05-20", "2026-05-21", "2026-05-22", "2026-05-23", "2026-05-24", "2026-05-25", "2026-05-26", "2026-05-27", "2026-05-28", "2026-05-29", "2026-05-30", "2026-05-31"], "glines": [269347415, 270694152, 272047623, 273407861, 274774900, 276148775, 277529518, 278917166, 280311752, 281713311, 283121877, 284537487, 285960174, 287389975, 288826925, 290271059, 291722415, 293181027, 294646932, 296120166, 297600767, 299088771, 300584215, 302087136, 303597572, 305115560, 306641137, 308174343, 309715215, 311263791, 312820110, 314384210, 315956131, 317535912, 319123592, 320719210, 322322806, 323934420, 325554092, 327181862, 328817772, 330461860, 332114170, 333774741, 335443614, 337120832, 338806437, 340500469, 342202971, 343913986, 345633556, 347361724, 349098532, 350844025, 352598245, 354361236, 356133043, 357913708, 359703276, 361501793, 363309302], "meas_in": {"x": ["2026-05-01", "2026-05-02", "2026-05-03", "2026-05-04", "2026-05-05", "2026-05-06", "2026-05-07", "2026-05-08", "2026-05-09", "2026-05-10", "2026-05-11", "2026-05-12", "2026-05-13", "2026-05-14", "2026-05-15"], "o": [313439106, 311426745, 318687533, 316321316, 307085492, 307441083, 297469268, 299296483, 305237743, 307667958, 295148243, 290085301, 288445520, 310353066, 307655858], "h": [314376512, 320824220, 322304736, 319829512, 313639564, 309118100, 302711698, 307224708, 314050240, 310359167, 297246649, 297125386, 313248469, 312882159, 308581164], "l": [310489339, 309290058, 312704113, 303577296, 300887010, 295792251, 294054053, 297309518, 298855461, 292457033, 287986894, 281405436, 285550118, 305126766, 304923973], "c": [311426745, 318687533, 316321316, 307085492, 307441083, 297469268, 299296483, 305237743, 307667958, 295148243, 290085301, 288445520, 310353066, 307655858, 305849279]}, "meas_w": {"x": [], "o": [], "h": [], "l": [], "c": []}, "meas_bu": {"x": [], "o": [], "h": [], "l": [], "c": []}, "meas_bl": {"x": [], "o": [], "h": [], "l": [], "c": []}};
+// ─── BTC 차트 데이터 (동적 로딩) ─────────────────────────────────────────────
+let D = {
+  snap:{as_of:'',target:'',ref:0,u1:0,l1:0,u2:0,l2:0,ru:0,rl:0,sigma:1,range_pct:35,
+        monthly_sigma:15,daily_sigma:2.8,confidence:68.3,gi_pct:0.5,gi_krw:0,
+        bots:0,deployed:0,reserve:0,per_bot:0,volume:0,reward:0,capital:40000000},
+  mon:{elapsed:0,total:31,progress:0,containment:100,status:'PREDICTED',detail:'로딩 중…',
+       sigma_change:0,box_shift:0,cur_price:0,rev_ru:0,rev_rl:0,rev_u2:0,rev_l2:0},
+  pre_x:[],pre_o:[],pre_h:[],pre_l:[],pre_c:[],
+  fut:[],fut_rem:[],glines:[],
+  meas_in:{x:[],o:[],h:[],l:[],c:[]},
+  meas_w:{x:[],o:[],h:[],l:[],c:[]},
+  meas_bu:{x:[],o:[],h:[],l:[],c:[]},
+  meas_bl:{x:[],o:[],h:[],l:[],c:[]}
+};
 
 // ─── USDT/KRW 데이터 (합성) ─────────────────────────────────────────────────
 const USDT = {
@@ -1001,7 +1013,7 @@ function switchTab(id, el) {
   document.getElementById('tab-'+id).classList.add('active');
   if (id === 'btc')     {
     if (window._chartBTC) { Plotly.Plots.resize('chart-btc'); }
-    else { fetchLivePrediction().then(() => { if (!window._chartBTC) buildBTCChart(); }); }
+    else { fetchDashboard().then(() => { if (!window._chartBTC) buildBTCChart(); }); }
   }
   if (id === 'usdt')    { window._chartUSDT ? Plotly.Plots.resize('chart-usdt')    : buildUSDTChart(); }
   if (id === 'monitor') { window._chartM    ? Plotly.Plots.resize('chart-monitor') : buildMonitorChart(); }
@@ -1140,7 +1152,7 @@ function updateMetrics() {
 function buildBTCChart() {
   window._chartBTC = true;
   const s = D.snap;
-  const bandX = [D.pre_x[D.pre_x.length-1], ...D.fut];
+  const bandX = [D.pre_x.length ? D.pre_x[D.pre_x.length-1] : D.fut[0], ...D.fut];
 
   // 최근 60일 캔들만 — y축 autorange가 과거 고점에 끌려가지 않도록
   const TAIL = 60;
@@ -1505,6 +1517,7 @@ function onCapitalChange() {
   const target = +document.getElementById('volTarget').value;
   if (target > 0) onVolTargetChange(target);
   else updateMetrics();
+  fetchDashboard();
 }
 
 function renderUsdtSim(zoneKey, outId) {
@@ -1698,83 +1711,60 @@ function submitFeedback() {
 // ─── 실시간 가격 (api_server.py 연동) ─────────────────────────────────────────
 const API_BASE = 'http://localhost:8000';  // python api_server.py 실행 시 활성화
 
-// ─── 예측 일정 기반 라이브 예측 가져오기 ────────────────────────────────────────
-async function fetchLivePrediction() {
+// ─── 대시보드 전체 데이터 로딩 ────────────────────────────────────────────────
+async function fetchDashboard() {
   const loadingEl = document.getElementById('predict-loading');
   if (loadingEl) loadingEl.style.display = 'inline';
   try {
-    const today = new Date();
-    const year = today.getFullYear();
-    const month = today.getMonth(); // 0-based
-    // 현재 달의 마지막 날
-    const lastDay = new Date(year, month + 1, 0).getDate();
-    const daysLeft = lastDay - today.getDate();
-
-    let asOf, targetMonth, modeLabel;
-
-    if (daysLeft >= 8) {
-      // 이번달 수정예측: as_of = 이전 달 말일 → predict_as_of가 이번달을 타겟으로 함
-      const prevMonthLast = new Date(year, month, 0); // day=0 → 전달 마지막날
-      const pad = n => String(n).padStart(2,'0');
-      asOf = `${prevMonthLast.getFullYear()}-${pad(prevMonthLast.getMonth()+1)}-${pad(prevMonthLast.getDate())}`;
-      targetMonth = `${year}-${pad(month+1)}`;
-      modeLabel = `이번달 수정예측 (잔여 ${daysLeft}일)`;
-    } else {
-      // 다음달 예측: as_of = 어제
-      const yesterday = new Date(today);
-      yesterday.setDate(today.getDate() - 1);
-      const pad = n => String(n).padStart(2,'0');
-      asOf = `${yesterday.getFullYear()}-${pad(yesterday.getMonth()+1)}-${pad(yesterday.getDate())}`;
-      const nextMonth = new Date(year, month + 1, 1);
-      targetMonth = `${nextMonth.getFullYear()}-${pad(nextMonth.getMonth()+1)}`;
-      modeLabel = `다음달 예측 (월말 D-${daysLeft})`;
-    }
-
-    const url = `${API_BASE}/api/predict?as_of=${asOf}&capital=40000000&krw_hold=0.30&aggressiveness=balanced`;
-    const res = await fetch(url, {signal: AbortSignal.timeout(8000)});
+    const capital = +document.getElementById('capital').value || 40000000;
+    const url = `${API_BASE}/api/dashboard?capital=${capital}&krw_hold=0.30&aggressiveness=balanced&history_days=120`;
+    const res = await fetch(url, {signal: AbortSignal.timeout(15000)});
     if (!res.ok) throw new Error('status ' + res.status);
     const data = await res.json();
 
-    // D.snap 업데이트
-    D.snap.u1  = data.u1;
-    D.snap.l1  = data.l1;
-    D.snap.u2  = data.u2;
-    D.snap.l2  = data.l2;
-    D.snap.ref = data.ref;
-    D.snap.target = data.target;
-
-    // D.fut 업데이트 (새 대상 월의 모든 날짜)
-    const [ty, tm_] = data.target.split('-').map(Number);
-    const daysInTarget = new Date(ty, tm_, 0).getDate();
-    const pad2 = n => String(n).padStart(2,'0');
-    D.fut = Array.from({length: daysInTarget}, (_, i) =>
-      `${ty}-${pad2(tm_)}-${pad2(i+1)}`
-    );
+    // D 전체 갱신
+    Object.assign(D, data);
 
     // 상태 바 업데이트
+    const today = new Date();
+    const lastDay = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate();
+    const daysLeft = lastDay - today.getDate();
+    const modeLabel = daysLeft >= 8
+      ? `이번달 수정예측 (잔여 ${daysLeft}일)`
+      : `다음달 예측 (월말 D-${daysLeft})`;
+    const now = new Date().toLocaleTimeString('ko-KR', {hour:'2-digit', minute:'2-digit'});
+
     const modeEl   = document.getElementById('predict-mode-label');
     const targetEl = document.getElementById('predict-target-month');
     const asofEl   = document.getElementById('predict-as-of');
     const daysEl   = document.getElementById('predict-days-left');
     if (modeEl)   modeEl.textContent   = modeLabel;
-    if (targetEl) targetEl.textContent = data.target;
-    if (asofEl)   asofEl.textContent   = data.as_of;
+    if (targetEl) targetEl.textContent = data.snap?.target || '';
+    if (asofEl)   asofEl.textContent   = (data.snap?.as_of || '') + ' (업데이트 ' + now + ')';
     if (daysEl)   daysEl.textContent   = `${daysLeft}일`;
 
-    // 차트 재빌드
+    // 메트릭 + 차트 재빌드
+    updateMetrics();
     window._chartBTC = false;
+    window._chartM   = false;
     if (document.getElementById('tab-btc')?.classList.contains('active')) {
       buildBTCChart();
     }
+    if (document.getElementById('tab-monitor')?.classList.contains('active')) {
+      buildMonitorChart();
+    }
   } catch(e) {
-    // API 미응답 시 정적 D 데이터 유지, 에러 없이 실패
-    console.warn('[예측 새로고침 실패]', e);
-    // 상태 바에 기존 스냅 데이터로 폴백 표시
+    console.warn('[대시보드 로딩 실패]', e);
     const modeEl = document.getElementById('predict-mode-label');
-    if (modeEl) modeEl.textContent = '정적 예측 (오프라인)';
+    if (modeEl) modeEl.textContent = '오프라인 (데이터 없음)';
   } finally {
     if (loadingEl) loadingEl.style.display = 'none';
   }
+}
+
+// fetchLivePrediction → fetchDashboard 위임 (기존 호출 호환성 유지)
+async function fetchLivePrediction() {
+  return fetchDashboard();
 }
 
 async function fetchLivePrice() {
@@ -1815,8 +1805,8 @@ window.onload = () => {
   updateMetrics();
   fetchLivePrice();
   setInterval(fetchLivePrice, 60_000);   // 1분마다 갱신
-  fetchLivePrediction();
-  setInterval(fetchLivePrediction, 5 * 60_000);  // 5분마다 예측 갱신
+  fetchDashboard();
+  setInterval(fetchDashboard, 10 * 60_000);  // 10분마다 대시보드 갱신
   // 차트는 해당 탭이 보일 때 그린다 (숨김 div 렌더 시 너비 0 문제 방지)
 };
 </script>
