@@ -81,8 +81,13 @@ def get_predict(
     capital:   float = Query(default=40_000_000, ge=1_000_000),
     krw_hold:  float = Query(default=0.30, ge=0.0, le=0.7),
     aggressiveness: Literal["conservative", "balanced", "aggressive"] = Query(default="balanced"),
+    target_month: Optional[str] = Query(default=None, description="YYYY-MM 형식 대상 월 (현재달 수정예측용)"),
 ):
-    """as-of 시점 기준 익월 박스권 예측."""
+    """as-of 시점 기준 익월 박스권 예측.
+
+    target_month를 지정하면 as_of를 해당 달의 전달 말일로 조정하여
+    현재 달 예측을 가져올 수 있습니다.
+    """
     if as_of is None:
         as_of = (date.today() - timedelta(days=1)).isoformat()
     else:
@@ -90,6 +95,19 @@ def get_predict(
             date.fromisoformat(as_of)
         except ValueError:
             raise HTTPException(status_code=400, detail="as_of는 YYYY-MM-DD 형식이어야 합니다")
+
+    # target_month가 지정된 경우, predict_as_of가 해당 월을 예측하도록
+    # as_of를 대상 달의 전달 말일로 조정
+    if target_month is not None:
+        try:
+            from datetime import datetime as _dt
+            tm = _dt.strptime(target_month, "%Y-%m")
+            # 전달 말일 = 대상 월 1일에서 하루 빼기
+            prev_month_last = (tm - timedelta(days=1)).date()
+            as_of = prev_month_last.isoformat()
+        except ValueError:
+            raise HTTPException(status_code=400, detail="target_month는 YYYY-MM 형식이어야 합니다")
+
     history = get_history()
     try:
         snap = predict_as_of(

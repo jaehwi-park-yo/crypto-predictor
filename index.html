@@ -539,9 +539,13 @@
       <!-- ═══════════════════════════════════ 탭2: BTC/KRW ═══════════════════════ -->
       <div id="tab-btc" class="tab-panel">
         <div style="margin-top:16px;display:flex;flex-direction:column;gap:16px">
-          <div style="font-size:.8rem;color:var(--muted)">
-            기준 시점: <b>2026-04-30</b> → 대상 월: <b>2026-05</b> &nbsp;|&nbsp;
-            기준가: <b style="color:var(--btc)">313,439,106원</b>
+          <div id="predict-status-bar" style="font-size:.8rem;color:var(--muted);display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+            <span id="predict-mode-label" style="background:rgba(79,142,247,0.15);color:#4f8ef7;padding:2px 8px;border-radius:4px;font-weight:600">─</span>
+            <span>대상월: <b id="predict-target-month">─</b></span>
+            <span>기준 시점: <b id="predict-as-of">─</b></span>
+            <span>잔여: <b id="predict-days-left">─</b></span>
+            <button onclick="fetchLivePrediction()" style="margin-left:4px;padding:3px 10px;font-size:.78rem;background:rgba(79,142,247,0.18);color:#4f8ef7;border:1px solid rgba(79,142,247,0.4);border-radius:5px;cursor:pointer">🔄 예측 새로고침</button>
+            <span id="predict-loading" style="display:none;color:var(--muted)">불러오는 중…</span>
           </div>
 
           <div class="chart-box">
@@ -995,7 +999,10 @@ function switchTab(id, el) {
   document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
   el.classList.add('active');
   document.getElementById('tab-'+id).classList.add('active');
-  if (id === 'btc')     { window._chartBTC  ? Plotly.Plots.resize('chart-btc')     : buildBTCChart(); }
+  if (id === 'btc')     {
+    if (window._chartBTC) { Plotly.Plots.resize('chart-btc'); }
+    else { fetchLivePrediction().then(() => { if (!window._chartBTC) buildBTCChart(); }); }
+  }
   if (id === 'usdt')    { window._chartUSDT ? Plotly.Plots.resize('chart-usdt')    : buildUSDTChart(); }
   if (id === 'monitor') { window._chartM    ? Plotly.Plots.resize('chart-monitor') : buildMonitorChart(); }
 }
@@ -1177,7 +1184,14 @@ function buildBTCChart() {
     width: el.clientWidth || el.parentElement.clientWidth,
     xaxis:{rangeslider:{visible:false}, gridcolor:'rgba(80,80,80,0.2)',
            type:'date', range:[cx[0], D.fut[D.fut.length-1]]},
-    yaxis:{title:'가격 (KRW)', tickformat:',.0f', gridcolor:'rgba(80,80,80,0.3)'},
+    yaxis:{title:'가격 (KRW)', tickformat:',.0f', gridcolor:'rgba(80,80,80,0.3)',
+           range: (() => {
+             const priceMin = Math.min(...cl, s.l2);
+             const priceMax = Math.max(...ch, s.u2);
+             const mid = (priceMin + priceMax) / 2;
+             const half = (priceMax - priceMin) / 2 * 1.5;
+             return [mid - half, mid + half];
+           })()},
     legend:{orientation:'h', yanchor:'bottom', y:1.01, bgcolor:'rgba(30,33,40,0.8)',
             bordercolor:'#444', borderwidth:1, font:{size:11}},
     margin:{l:70,r:20,t:20,b:40},
@@ -1684,6 +1698,85 @@ function submitFeedback() {
 // ─── 실시간 가격 (api_server.py 연동) ─────────────────────────────────────────
 const API_BASE = 'http://localhost:8000';  // python api_server.py 실행 시 활성화
 
+// ─── 예측 일정 기반 라이브 예측 가져오기 ────────────────────────────────────────
+async function fetchLivePrediction() {
+  const loadingEl = document.getElementById('predict-loading');
+  if (loadingEl) loadingEl.style.display = 'inline';
+  try {
+    const today = new Date();
+    const year = today.getFullYear();
+    const month = today.getMonth(); // 0-based
+    // 현재 달의 마지막 날
+    const lastDay = new Date(year, month + 1, 0).getDate();
+    const daysLeft = lastDay - today.getDate();
+
+    let asOf, targetMonth, modeLabel;
+
+    if (daysLeft >= 8) {
+      // 이번달 수정예측: as_of = 이전 달 말일 → predict_as_of가 이번달을 타겟으로 함
+      const prevMonthLast = new Date(year, month, 0); // day=0 → 전달 마지막날
+      const pad = n => String(n).padStart(2,'0');
+      asOf = `${prevMonthLast.getFullYear()}-${pad(prevMonthLast.getMonth()+1)}-${pad(prevMonthLast.getDate())}`;
+      targetMonth = `${year}-${pad(month+1)}`;
+      modeLabel = `이번달 수정예측 (잔여 ${daysLeft}일)`;
+    } else {
+      // 다음달 예측: as_of = 어제
+      const yesterday = new Date(today);
+      yesterday.setDate(today.getDate() - 1);
+      const pad = n => String(n).padStart(2,'0');
+      asOf = `${yesterday.getFullYear()}-${pad(yesterday.getMonth()+1)}-${pad(yesterday.getDate())}`;
+      const nextMonth = new Date(year, month + 1, 1);
+      targetMonth = `${nextMonth.getFullYear()}-${pad(nextMonth.getMonth()+1)}`;
+      modeLabel = `다음달 예측 (월말 D-${daysLeft})`;
+    }
+
+    const url = `${API_BASE}/api/predict?as_of=${asOf}&capital=40000000&krw_hold=0.30&aggressiveness=balanced`;
+    const res = await fetch(url, {signal: AbortSignal.timeout(8000)});
+    if (!res.ok) throw new Error('status ' + res.status);
+    const data = await res.json();
+
+    // D.snap 업데이트
+    D.snap.u1  = data.u1;
+    D.snap.l1  = data.l1;
+    D.snap.u2  = data.u2;
+    D.snap.l2  = data.l2;
+    D.snap.ref = data.ref;
+    D.snap.target = data.target;
+
+    // D.fut 업데이트 (새 대상 월의 모든 날짜)
+    const [ty, tm_] = data.target.split('-').map(Number);
+    const daysInTarget = new Date(ty, tm_, 0).getDate();
+    const pad2 = n => String(n).padStart(2,'0');
+    D.fut = Array.from({length: daysInTarget}, (_, i) =>
+      `${ty}-${pad2(tm_)}-${pad2(i+1)}`
+    );
+
+    // 상태 바 업데이트
+    const modeEl   = document.getElementById('predict-mode-label');
+    const targetEl = document.getElementById('predict-target-month');
+    const asofEl   = document.getElementById('predict-as-of');
+    const daysEl   = document.getElementById('predict-days-left');
+    if (modeEl)   modeEl.textContent   = modeLabel;
+    if (targetEl) targetEl.textContent = data.target;
+    if (asofEl)   asofEl.textContent   = data.as_of;
+    if (daysEl)   daysEl.textContent   = `${daysLeft}일`;
+
+    // 차트 재빌드
+    window._chartBTC = false;
+    if (document.getElementById('tab-btc')?.classList.contains('active')) {
+      buildBTCChart();
+    }
+  } catch(e) {
+    // API 미응답 시 정적 D 데이터 유지, 에러 없이 실패
+    console.warn('[예측 새로고침 실패]', e);
+    // 상태 바에 기존 스냅 데이터로 폴백 표시
+    const modeEl = document.getElementById('predict-mode-label');
+    if (modeEl) modeEl.textContent = '정적 예측 (오프라인)';
+  } finally {
+    if (loadingEl) loadingEl.style.display = 'none';
+  }
+}
+
 async function fetchLivePrice() {
   try {
     const res = await fetch(`${API_BASE}/api/price`, {signal: AbortSignal.timeout(3000)});
@@ -1722,6 +1815,8 @@ window.onload = () => {
   updateMetrics();
   fetchLivePrice();
   setInterval(fetchLivePrice, 60_000);   // 1분마다 갱신
+  fetchLivePrediction();
+  setInterval(fetchLivePrediction, 5 * 60_000);  // 5분마다 예측 갱신
   // 차트는 해당 탭이 보일 때 그린다 (숨김 div 렌더 시 너비 0 문제 방지)
 };
 </script>
