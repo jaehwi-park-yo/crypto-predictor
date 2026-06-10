@@ -291,17 +291,24 @@
         <input type="number" id="capital" value="40000000" step="1000000" onchange="onCapitalChange()">
       </div>
       <div class="sb-item">
+        <label>직전월 거래량 (원)</label>
+        <input type="number" id="prevVol" value="0" step="100000000" min="0" onchange="onPrevVolChange()">
+        <div id="rewardRateLabel" style="font-size:.68rem;color:var(--muted);margin-top:3px">적용 리워드율: 0.003% (1,000만원 미만)</div>
+      </div>
+      <div class="sb-item">
         <label>거래량 목표: <span class="val" id="volTargetVal">자동 (0)</span></label>
         <div style="display:flex;align-items:center;gap:6px;margin-bottom:5px">
+          <button class="vol-btn" onclick="stepVolTarget(-100)" title="-100억">−100</button>
           <button class="vol-btn" onclick="stepVolTarget(-10)" title="-10억">−10</button>
           <button class="vol-btn" onclick="stepVolTarget(-1)"  title="-1억">−1</button>
           <span style="font-size:.7rem;color:var(--muted);flex:1;text-align:center">억</span>
           <button class="vol-btn" onclick="stepVolTarget(1)"   title="+1억">+1</button>
           <button class="vol-btn" onclick="stepVolTarget(10)"  title="+10억">+10</button>
+          <button class="vol-btn" onclick="stepVolTarget(100)"  title="+100억">+100</button>
         </div>
-        <input type="range" id="volTarget" min="0" max="170" value="0" step="1"
+        <input type="range" id="volTarget" min="0" max="1000" value="0" step="1"
                oninput="onVolTargetChange(this.value)">
-        <div id="volTargetStatus" style="font-size:.68rem;color:var(--muted);margin-top:3px">0 = 수동 모드 · 1~170억 설정 시 아래 3개 변수 자동 추천</div>
+        <div id="volTargetStatus" style="font-size:.68rem;color:var(--muted);margin-top:3px">0 = 수동 모드 · 1~1,000억 설정 시 아래 3개 변수 자동 추천</div>
       </div>
       <div class="sb-item">
         <label>BTC 비중: <span class="val" id="btcRatioVal">60%</span></label>
@@ -484,7 +491,7 @@
                 </tbody>
               </table>
             </div>
-            <div class="disclaimer">* BTC 비대칭: 매수간격→거래량, 매도간격→수익 결정. 총수익 = 매도간격 × 배치자본 × 효율 (매수간격 약분됨).<br>그리드 P&L = 왕복수 × 매도간격 × 봇당자본. 수수료 = 총거래량 × 0.08%. 리워드 티어: 10억→0.018%. 모두 추정치입니다.</div>
+            <div class="disclaimer">* BTC 비대칭: 매수간격→거래량, 매도간격→수익 결정. 총수익 = 매도간격 × 배치자본 × 효율 (매수간격 약분됨).<br>그리드 P&L = 왕복수 × 매도간격 × 봇당자본. 수수료 = 총거래량 × 0.08%. 리워드율은 사이드바의 <b>직전월 거래량</b>으로 결정된 단일 비율이 모든 거래에 적용됩니다. 모두 추정치입니다.</div>
           </div>
 
           <!-- 전략 평가 -->
@@ -1181,10 +1188,31 @@ const usdtSim = {
 const USDT_FEE = 0.0004, USDT_DAILY_RANGE = 8.0, USDT_EFF = 0.40,
       USDT_REF = 1401.0, USDT_TDAYS = 30;
 
+// 리워드율은 "직전월 계정 전체 거래량" 기준으로 결정되어 당월 모든 거래에 적용됨
+const REWARD_TIERS = [
+  [1e11, 0.0002,  '1,000억원 이상'],
+  [1e10, 0.00018, '100억원 이상'],
+  [1e9,  0.00015, '10억원 이상'],
+  [1e8,  0.00008, '1억원 이상'],
+  [1e7,  0.00005, '1,000만원 이상'],
+  [0,    0.00003, '1,000만원 미만'],
+];
+function rewardTier() {
+  const prev = +(document.getElementById('prevVol')?.value) || 0;
+  for (const [t, r, label] of REWARD_TIERS) if (prev >= t) return { rate: r, label };
+  return { rate: 0.00003, label: '1,000만원 미만' };
+}
 function usdtReward(vol) {
-  const tiers = [[1e11,0.0002],[1e10,0.00018],[1e9,0.00015],[1e8,0.00008]];
-  for (const [t,r] of tiers) if (vol >= t) return Math.min(vol*r, 3_000_000);
-  return 0;
+  return Math.min(vol * rewardTier().rate, 3_000_000);
+}
+function onPrevVolChange() {
+  const { rate, label } = rewardTier();
+  const el = document.getElementById('rewardRateLabel');
+  if (el) el.textContent = `적용 리워드율: ${(rate*100).toFixed(3)}% (${label})`;
+  updateMetrics();
+  // 거래량 목표 설정 중이면 추천 재계산 (리워드율이 순익에 영향)
+  const target = +document.getElementById('volTarget').value;
+  if (target > 0) onVolTargetChange(target);
 }
 function calcUsdt(z) {
   const cycle = z.buy + z.sell;
@@ -1254,7 +1282,7 @@ function updatePnlTable() {
     set(`pnl-${key}-vol`, eok(r.vol));
     set(`pnl-${key}-grid`, man(r.grid), r.grid >= 0 ? 'pos' : 'neg');
     set(`pnl-${key}-fee`, '-' + (r.fee / 1e4).toFixed(1) + '만', 'neg');
-    set(`pnl-${key}-rwd`, r.reward > 0 ? man(r.reward) : '0 (1억 티어 미달)', r.reward > 0 ? 'pos' : '');
+    set(`pnl-${key}-rwd`, man(r.reward), r.reward > 0 ? 'pos' : '');
     set(`pnl-${key}-net`, man(r.net), r.net >= 0 ? 'pos' : 'neg');
     for (const f of ['cap','vol','grid','fee','reward','net']) tot[f] += r[f];
   }
@@ -1358,7 +1386,7 @@ function recommendParams(targetVolKrw) {
 function stepVolTarget(delta) {
   const sl = document.getElementById('volTarget');
   const cur = +sl.value;
-  const next = Math.max(0, Math.min(170, cur + delta));
+  const next = Math.max(0, Math.min(1000, cur + delta));
   sl.value = next;
   onVolTargetChange(next);
 }
@@ -1368,7 +1396,7 @@ function onVolTargetChange(val) {
   const status = document.getElementById('volTargetStatus');
   if (target === 0) {
     lbl.textContent = '자동 (0)';
-    status.textContent = '0 = 수동 모드 · 1~170억 설정 시 아래 3개 변수 자동 추천';
+    status.textContent = '0 = 수동 모드 · 1~1,000억 설정 시 아래 3개 변수 자동 추천';
     status.style.color = 'var(--muted)';
     return;
   }
