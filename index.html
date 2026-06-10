@@ -297,7 +297,7 @@
       </div>
       <div class="sb-item">
         <label>거래량 목표 (억)</label>
-        <input type="number" id="volTargetInput" value="0" min="0" max="1000" step="1"
+        <input type="number" id="volTargetInput" value="0" min="0" max="200" step="1"
                style="display:block;width:100%;text-align:center;margin-bottom:6px"
                onchange="onVolTargetChange(this.value)">
         <div style="display:flex;align-items:center;justify-content:center;gap:6px;margin-bottom:5px;width:100%">
@@ -306,9 +306,9 @@
           <button class="vol-btn" style="flex:1" onclick="stepVolTarget(1)"   title="+1억">+1</button>
           <button class="vol-btn" style="flex:1" onclick="stepVolTarget(10)"  title="+10억">+10</button>
         </div>
-        <input type="range" id="volTarget" min="0" max="1000" value="0" step="1"
+        <input type="range" id="volTarget" min="0" max="200" value="0" step="1"
                oninput="onVolTargetChange(this.value)">
-        <div id="volTargetStatus" style="font-size:.68rem;color:var(--muted);margin-top:3px">0 = 수동 모드 · 1~1,000억 설정 시 아래 3개 변수 자동 추천</div>
+        <div id="volTargetStatus" style="font-size:.68rem;color:var(--muted);margin-top:3px">0 = 수동 모드 · 1~200억 설정 시 아래 3개 변수 자동 추천</div>
       </div>
       <div class="sb-item">
         <label>BTC 비중: <span class="val" id="btcRatioVal">60%</span></label>
@@ -1386,12 +1386,12 @@ function recommendParams(targetVolKrw) {
 function stepVolTarget(delta) {
   const sl = document.getElementById('volTarget');
   const cur = +sl.value;
-  const next = Math.max(0, Math.min(1000, cur + delta));
+  const next = Math.max(0, Math.min(200, cur + delta));
   sl.value = next;
   onVolTargetChange(next);
 }
 function onVolTargetChange(val) {
-  const target = Math.max(0, Math.min(1000, Math.round(+val) || 0));
+  const target = Math.max(0, Math.min(200, Math.round(+val) || 0));
   // 슬라이더·직접입력 양방향 동기화
   document.getElementById('volTarget').value = target;
   document.getElementById('volTargetInput').value = target;
@@ -1399,7 +1399,7 @@ function onVolTargetChange(val) {
   const status = document.getElementById('volTargetStatus');
   if (target === 0) {
     lbl.textContent = '자동 (0)';
-    status.textContent = '0 = 수동 모드 · 1~1,000억 설정 시 아래 3개 변수 자동 추천';
+    status.textContent = '0 = 수동 모드 · 1~200억 설정 시 아래 3개 변수 자동 추천';
     status.style.color = 'var(--muted)';
     return;
   }
