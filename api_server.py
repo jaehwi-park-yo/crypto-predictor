@@ -26,9 +26,11 @@ except ImportError:
     print("fastapi/uvicorn 미설치. 설치: pip install fastapi uvicorn")
     sys.exit(1)
 
+from calendar import monthrange
 from utils.live_data import fetch_current_price, fetch_usdt_price
 from utils.data_cache import get_history
 from services.prediction_service import predict_as_of
+from services.prediction_monitor import monitor as monitor_prediction
 
 app = FastAPI(title="BTC Grid Prediction API", version="1.0.0")
 
@@ -133,6 +135,178 @@ def get_predict(
         "grid_sell_pct": snap.sell_interval_pct,
         "volume_est":    round(snap.estimated_monthly_volume_krw),
         "reward_est":    round(snap.estimated_reward_krw),
+    }
+
+
+@app.get("/api/dashboard")
+def get_dashboard(
+    capital: float = Query(default=40_000_000, ge=1_000_000),
+    krw_hold: float = Query(default=0.30, ge=0.0, le=0.7),
+    aggressiveness: Literal["conservative", "balanced", "aggressive"] = Query(default="balanced"),
+    history_days: int = Query(default=120, ge=30, le=365),
+):
+    """대시보드 전체 데이터: 예측 스냅, 모니터링, 차트용 캔들, 그리드 라인."""
+    history = get_history()
+    today = date.today()
+
+    # 예측 시점 결정
+    last_day_of_month = monthrange(today.year, today.month)[1]
+    days_left = last_day_of_month - today.day
+
+    if days_left >= 8:
+        # 이번달 예측: as_of = 전달 말일
+        first_of_this_month = date(today.year, today.month, 1)
+        as_of = (first_of_this_month - timedelta(days=1)).isoformat()
+    else:
+        # 다음달 예측: as_of = 어제
+        as_of = (today - timedelta(days=1)).isoformat()
+
+    try:
+        snap = predict_as_of(
+            history, as_of,
+            capital_krw=capital,
+            krw_hold_ratio=krw_hold,
+            aggressiveness=aggressiveness,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+
+    # monitor() 호출
+    try:
+        history_fallback = get_history()
+        fallback_btc = float(history_fallback[-1]["close"]) if history_fallback else None
+        price_obj = fetch_current_price(fallback_price=fallback_btc)
+        live_price = price_obj.price if price_obj.is_live else None
+
+        mon_obj = monitor_prediction(snap, history, today.isoformat(), live_price=live_price)
+        mon_data = {
+            "elapsed":     mon_obj.elapsed_days,
+            "total":       mon_obj.total_days,
+            "progress":    round(mon_obj.progress_pct, 1),
+            "containment": round(mon_obj.measured_containment_pct, 1),
+            "status":      mon_obj.overall_status,
+            "detail":      mon_obj.status_detail,
+            "sigma_change": round(mon_obj.sigma_change_pct, 2),
+            "box_shift":   round(mon_obj.box_center_shift_pct, 2),
+            "cur_price":   mon_obj.current_price,
+            "rev_ru":      mon_obj.forecast_revised_upper,
+            "rev_rl":      mon_obj.forecast_revised_lower,
+            "rev_u2":      mon_obj.forecast_upper_2s,
+            "rev_l2":      mon_obj.forecast_lower_2s,
+        }
+    except Exception as e:
+        import logging as _log
+        _log.getLogger("api_server").warning("[dashboard] monitor() 실패: %s", e)
+        history_fallback2 = get_history()
+        fallback_price = float(history_fallback2[-1]["close"]) if history_fallback2 else snap.reference_price
+        mon_data = {
+            "elapsed": 0, "total": 31, "progress": 0, "containment": 100,
+            "status": "PREDICTED", "detail": "예측 단계",
+            "sigma_change": 0, "box_shift": 0, "cur_price": fallback_price,
+            "rev_ru": snap.recommended_upper, "rev_rl": snap.recommended_lower,
+            "rev_u2": snap.box_upper_2s, "rev_l2": snap.box_lower_2s,
+        }
+
+    # snap 직렬화
+    snap_data = {
+        "as_of":          snap.as_of_date,
+        "target":         snap.target_month,
+        "ref":            snap.reference_price,
+        "u1":             snap.box_upper_1s,
+        "l1":             snap.box_lower_1s,
+        "u2":             snap.box_upper_2s,
+        "l2":             snap.box_lower_2s,
+        "ru":             snap.recommended_upper,
+        "rl":             snap.recommended_lower,
+        "sigma":          snap.sigma_level_used,
+        "range_pct":      round(snap.box_range_pct, 2),
+        "monthly_sigma":  round(snap.monthly_sigma_pct, 2),
+        "daily_sigma":    round(snap.daily_sigma * 100, 2),
+        "confidence":     68.3,
+        "gi_pct":         snap.buy_interval_pct,
+        "gi_krw":         round(snap.buy_interval_pct / 100 * snap.reference_price) if snap.buy_interval_pct else 0,
+        "bots":           snap.bot_count,
+        "deployed":       snap.capital_deployed_krw,
+        "reserve":        snap.krw_reserve_krw,
+        "per_bot":        snap.capital_per_bot_krw,
+        "volume":         snap.estimated_monthly_volume_krw,
+        "reward":         snap.estimated_reward_krw,
+        "capital":        snap.capital_krw,
+    }
+
+    # 대상 월 파싱
+    ty, tm = map(int, snap.target_month.split("-"))
+    total_target_days = monthrange(ty, tm)[1]
+
+    # pre_* 배열: history_days일치 캔들 중 대상 월 시작 전 데이터
+    target_month_start = f"{ty:04d}-{tm:02d}-01"
+    pre_candles = [c for c in history if c["date"] < target_month_start]
+    pre_candles = pre_candles[-history_days:]
+
+    pre_x = [c["date"] for c in pre_candles]
+    pre_o = [c["open"]  for c in pre_candles]
+    pre_h = [c["high"]  for c in pre_candles]
+    pre_l = [c["low"]   for c in pre_candles]
+    pre_c = [c["close"] for c in pre_candles]
+
+    # fut: 대상 월 모든 날짜
+    pad2 = lambda n: str(n).zfill(2)
+    fut = [f"{ty:04d}-{pad2(tm)}-{pad2(d)}" for d in range(1, total_target_days + 1)]
+
+    # fut_rem: 오늘 이후 대상 월 날짜
+    today_iso = today.isoformat()
+    fut_rem = [d for d in fut if d >= today_iso]
+
+    # glines: buy_interval_pct 기준 그리드 라인
+    glines = []
+    if snap.buy_interval_pct and snap.box_lower_1s > 0:
+        price = snap.box_lower_1s
+        step = snap.buy_interval_pct / 100
+        while price <= snap.box_upper_1s * 1.01 and len(glines) < 80:
+            glines.append(round(price))
+            price *= (1 + step)
+
+    # meas_*: measured_candles 분류
+    meas_in  = {"x": [], "o": [], "h": [], "l": [], "c": []}
+    meas_w   = {"x": [], "o": [], "h": [], "l": [], "c": []}
+    meas_bu  = {"x": [], "o": [], "h": [], "l": [], "c": []}
+    meas_bl  = {"x": [], "o": [], "h": [], "l": [], "c": []}
+
+    # Build lookup dict for history by date
+    hist_by_date = {c["date"]: c for c in history}
+
+    zone_map = {"inner": meas_in, "warning": meas_w, "breach_upper": meas_bu, "breach_lower": meas_bl}
+    try:
+        for ds in mon_obj.measured_candles:
+            bucket = zone_map.get(ds.zone)
+            if bucket is None:
+                continue
+            candle = hist_by_date.get(ds.date)
+            if candle is None:
+                continue
+            bucket["x"].append(ds.date)
+            bucket["o"].append(candle["open"])
+            bucket["h"].append(candle["high"])
+            bucket["l"].append(candle["low"])
+            bucket["c"].append(candle["close"])
+    except Exception:
+        pass  # mon_obj may not exist if monitor() failed
+
+    return {
+        "snap":    snap_data,
+        "mon":     mon_data,
+        "pre_x":   pre_x,
+        "pre_o":   pre_o,
+        "pre_h":   pre_h,
+        "pre_l":   pre_l,
+        "pre_c":   pre_c,
+        "fut":     fut,
+        "fut_rem": fut_rem,
+        "glines":  glines,
+        "meas_in": meas_in,
+        "meas_w":  meas_w,
+        "meas_bu": meas_bu,
+        "meas_bl": meas_bl,
     }
 
 
