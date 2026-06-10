@@ -28,8 +28,10 @@ from config import (
     CAPITAL_KRW, KRW_HOLD_RATIO, HORIZON_DAYS, PREDICTION_DRIFT,
     GRID_AGGRESSIVENESS,
     SIGMA_UP_BTC, SIGMA_DN_BTC, SIGMA_UP_2_BTC, SIGMA_DN_2_BTC,
+    SIGMA_UP_USDT, SIGMA_DN_USDT, SIGMA_UP_2_USDT, SIGMA_DN_2_USDT,
     LAYER_A_RATIO_BTC, LAYER_B_RATIO_BTC, LAYER_C_RATIO_BTC,
-    DCA_TRIGGER_PCT, DCA_SIZE_EACH_PCT, DEAD_ZONE_RESET_DAYS,
+    LAYER_A_RATIO_USDT, LAYER_B_RATIO_USDT, LAYER_C_RATIO_USDT,
+    DCA_TRIGGER_PCT, DCA_TRIGGER_PCT_USDT, DCA_SIZE_EACH_PCT, DEAD_ZONE_RESET_DAYS,
 )
 from models.prediction_result import BoxPrediction
 from utils.statistics import (
@@ -107,7 +109,7 @@ class PredictionSnapshot:
     layer_a_krw: float = 0.0    # 1σ 그리드 운용 자본
     layer_b_krw: float = 0.0    # 하단 DCA 예비 현금
     layer_c_krw: float = 0.0    # 2σ 외부 역추세 자본
-    dca_levels: list = None     # DCA 트리거 가격 리스트
+    dca_levels: List[float] = field(default_factory=list)  # DCA 트리거 가격 리스트
     dead_zone_reset_days: int = 8  # 연속 이탈 후 재설정 권고 기준일
 
 
@@ -141,6 +143,7 @@ def predict_as_of(
     use_ml_sigma: bool = False,  # ML σ 보정 (라벨 생성 시에는 반드시 False — 순환 학습 방지)
     sigma_up: Optional[float] = None,   # 비대칭 상방 σ 배수 (None=config 기본값)
     sigma_dn: Optional[float] = None,   # 비대칭 하방 σ 배수 (None=config 기본값)
+    symbol: str = "BTC",   # "BTC" | "USDT" — σ 기본값 및 레이어 비율 선택
 ) -> PredictionSnapshot:
     """
     as_of 시점까지의 히스토리로 익월 박스권 + 그리드 설정을 예측.
@@ -180,12 +183,16 @@ def predict_as_of(
     u1, l1 = sigma_band(ref, dsig, horizon_days, 1.0, PREDICTION_DRIFT)
     u2, l2 = sigma_band(ref, dsig, horizon_days, 2.0, PREDICTION_DRIFT)
 
-    # 비대칭 밴드 (실운용 권장값) — config 기본값 또는 호출자 지정값
-    _su = sigma_up if sigma_up is not None else SIGMA_UP_BTC
-    _sd = sigma_dn if sigma_dn is not None else SIGMA_DN_BTC
+    # 비대칭 밴드 (실운용 권장값) — symbol별 config 기본값 또는 호출자 지정값
+    _is_usdt = symbol.upper() == "USDT"
+    _default_su = SIGMA_UP_USDT if _is_usdt else SIGMA_UP_BTC
+    _default_sd = SIGMA_DN_USDT if _is_usdt else SIGMA_DN_BTC
+    _su = sigma_up if sigma_up is not None else _default_su
+    _sd = sigma_dn if sigma_dn is not None else _default_sd
     u1a, l1a = asymmetric_sigma_band(ref, dsig, horizon_days, _su, _sd, PREDICTION_DRIFT)
+    # 2σ 배수는 1σ 배수의 2배 (비대칭 비율 유지)
     u2a, l2a = asymmetric_sigma_band(ref, dsig, horizon_days,
-                                     SIGMA_UP_2_BTC, SIGMA_DN_2_BTC, PREDICTION_DRIFT)
+                                     _su * 2.0, _sd * 2.0, PREDICTION_DRIFT)
 
     # σ 레벨 선택
     if use_sigma is not None:
@@ -201,12 +208,16 @@ def predict_as_of(
         rec_u = manual_box.get("upper", rec_u)
         rec_l = manual_box.get("lower", rec_l)
 
-    # 듀얼레이어 자본 배분
-    layer_a = capital_krw * LAYER_A_RATIO_BTC
-    layer_b = capital_krw * LAYER_B_RATIO_BTC
-    layer_c = capital_krw * LAYER_C_RATIO_BTC
-    # DCA 트리거 가격: 비대칭 1σ 하단 기준
-    dca_prices = [round(l1a * (1 + pct / 100)) for pct in DCA_TRIGGER_PCT]
+    # 듀얼레이어 자본 배분 (symbol별 비율)
+    _la_ratio = LAYER_A_RATIO_USDT if _is_usdt else LAYER_A_RATIO_BTC
+    _lb_ratio = LAYER_B_RATIO_USDT if _is_usdt else LAYER_B_RATIO_BTC
+    _lc_ratio = LAYER_C_RATIO_USDT if _is_usdt else LAYER_C_RATIO_BTC
+    layer_a = capital_krw * _la_ratio
+    layer_b = capital_krw * _lb_ratio
+    layer_c = capital_krw * _lc_ratio
+    # DCA 트리거 가격: 비대칭 1σ 하단 기준 (symbol별 트리거 %)
+    _dca_triggers = DCA_TRIGGER_PCT_USDT if _is_usdt else DCA_TRIGGER_PCT
+    dca_prices = [round(l1a * (1 + pct / 100)) for pct in _dca_triggers]
 
     box_range_pct = (rec_u - rec_l) / rec_l * 100 if rec_l else 0.0
     confidence = containment_probability(sigma_used) * 100

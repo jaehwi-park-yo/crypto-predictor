@@ -18,6 +18,8 @@ from config import (
     TRADING_DAYS_PER_MONTH, GRID_FILL_EFFICIENCY, DAILY_RANGE_SIGMA_MULT,
     GRID_AGGRESSIVENESS, AGGRESSIVENESS_INTERVAL_PCT,
     ASYMMETRIC_GRID, GRID_BUY_INTERVAL_PCT, GRID_SELL_INTERVAL_PCT,
+    PROGRESSIVE_SIZING, PROGRESSIVE_ALPHA,
+    ASYM_TP_ENABLED, ASYM_TP_MULT,
 )
 from typing import Optional
 from models.prediction_result import BoxPrediction, GridConfig
@@ -58,7 +60,11 @@ class GridOptimizerAgent:
         # 공격성 다이얼 → 기준 그리드 간격 (수수료 인지 최소 간격으로 하한 보정)
         if buy_interval_pct is None and sell_interval_pct is None and ASYMMETRIC_GRID:
             buy_interval_pct  = GRID_BUY_INTERVAL_PCT
-            sell_interval_pct = GRID_SELL_INTERVAL_PCT
+            # ASYM_TP: take-profit placed ASYM_TP_MULT × buy-interval above entry
+            sell_interval_pct = (
+                buy_interval_pct * ASYM_TP_MULT if ASYM_TP_ENABLED
+                else GRID_SELL_INTERVAL_PCT
+            )
         asymmetric = (buy_interval_pct is not None and sell_interval_pct is not None)
         if asymmetric:
             buy_gi  = max(buy_interval_pct,  MIN_GRID_INTERVAL_PCT / 2)
@@ -79,8 +85,21 @@ class GridOptimizerAgent:
 
         # 왕복 추정용 간격: 비대칭이면 사이클(매수+매도)/2 — 대칭 관례(cycle=2×gi)와 동일 규약
         rt_gi = (buy_gi + sell_gi) / 2 if asymmetric else gi_eff
-        est_vol = self._estimate_volume(deployed, rt_gi, daily_sigma, box_range_pct)
-        cap_per_bot = deployed / bots if bots else 0.0
+
+        # Progressive sizing: boundary bots get more capital → higher fill probability
+        # Weight_i = 1 + α × level, where level = distance from center (0-indexed)
+        if PROGRESSIVE_SIZING and bots > 1:
+            half = bots / 2.0
+            weights = [1.0 + PROGRESSIVE_ALPHA * abs(i - half + 0.5) for i in range(bots)]
+            w_sum = sum(weights)
+            cap_per_bot = deployed / w_sum   # center-level unit capital
+            # volume estimation uses effective "average weight" (weighted turnover)
+            avg_weight = w_sum / bots
+            est_vol = self._estimate_volume(deployed * avg_weight, rt_gi, daily_sigma, box_range_pct)
+        else:
+            cap_per_bot = deployed / bots if bots else 0.0
+            est_vol = self._estimate_volume(deployed, rt_gi, daily_sigma, box_range_pct)
+
         gi_krw = ref * gi_eff / 100
 
         reward = self.reward_agent.calculate_reward(est_vol)
