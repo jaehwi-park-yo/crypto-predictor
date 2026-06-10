@@ -21,3 +21,4 @@ data/*.csv
 .idea/
 .vscode/
 .claude/
+*.pdf
