@@ -120,6 +120,7 @@ def get_predict(
             capital_krw=capital,
             krw_hold_ratio=krw_hold,
             aggressiveness=aggressiveness,
+            use_ml_sigma=True,
         )
     except ValueError as e:
         raise HTTPException(status_code=422, detail=str(e))
@@ -174,6 +175,7 @@ def get_dashboard(
             capital_krw=capital,
             krw_hold_ratio=krw_hold,
             aggressiveness=aggressiveness,
+            use_ml_sigma=True,
         )
     except ValueError as e:
         raise HTTPException(status_code=422, detail=str(e))
@@ -369,6 +371,23 @@ def _minute_collector():
         log.warning("[minutes] 수집 실패: %s", e)
 
 
+def _train_ml_sigma():
+    """ML σ 보정 모델 학습 — 일봉 캐시가 준비된 후 백그라운드에서 실행."""
+    import logging as _lg
+    log = _lg.getLogger("api_server")
+    try:
+        from utils.ml_sigma import retrain, MODEL_PATH
+        if MODEL_PATH.exists():
+            log.info("[startup] ML σ 모델 존재 — 재학습으로 갱신")
+        m = retrain()
+        if m:
+            log.info("[startup] ML σ 모델 학습 완료 (%d개월)", m["n_train"])
+        else:
+            log.info("[startup] ML σ 학습 샘플 부족 — 통계 σ만 사용")
+    except Exception as e:
+        log.warning("[startup] ML σ 학습 실패 (통계 σ만 사용): %s", e)
+
+
 def _preload_usdt_history():
     """USDT/KRW 일봉 캐시 사전 로드 — 서버 기동 직후 백그라운드에서 실행."""
     import logging as _lg
@@ -386,6 +405,7 @@ def _start_minute_collector():
     restore_from_seed()
     threading.Thread(target=_minute_collector, daemon=True, name="minute-collector").start()
     threading.Thread(target=_preload_usdt_history, daemon=True, name="usdt-preload").start()
+    threading.Thread(target=_train_ml_sigma, daemon=True, name="ml-sigma-train").start()
 
 
 @app.get("/api/minutes/status")
