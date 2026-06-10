@@ -27,6 +27,8 @@ except ImportError:
     sys.exit(1)
 
 from calendar import monthrange
+import threading
+from utils import minute_data
 from utils.live_data import fetch_current_price, fetch_usdt_price
 from utils.data_cache import get_history
 from services.prediction_service import predict_as_of
@@ -319,6 +321,73 @@ def get_dashboard(
 @app.get("/api/health")
 def health():
     return {"status": "ok", "date": date.today().isoformat()}
+
+
+# ─── 분봉 데이터 파이프라인 (백그라운드 수집) ─────────────────────────────────
+_minute_status = {
+    "state": "idle",   # idle | collecting | done | error
+    "market": None,
+    "fetched": 0,
+    "oldest": None,
+    "newest": None,
+    "error": None,
+}
+
+
+def _minute_collector():
+    """서버 시작 시 백그라운드 스레드에서 분봉 증분 수집 (DB 비면 부트스트랩)."""
+    log = logging.getLogger("api_server")
+    _minute_status["state"] = "collecting"
+    try:
+        total = 0
+        for market in minute_data.MARKETS:
+            _minute_status["market"] = market
+
+            def _progress(fetched, oldest, m=market):
+                _minute_status["fetched"] = total + fetched
+                _minute_status["oldest"] = oldest
+                log.info("[minutes] %s 수집 중: %d개 (최고 %s)", m, total + fetched, oldest)
+
+            # sync는 자동으로 bootstrap으로 폴백 (bootstrap에만 progress_cb 적용)
+            conn_stats = minute_data.get_stats()
+            if market in conn_stats:
+                n = minute_data.sync(market)
+            else:
+                n = minute_data.bootstrap(market, progress_cb=_progress)
+            total += n
+            _minute_status["fetched"] = total
+        stats = minute_data.get_stats()
+        if stats:
+            _minute_status["oldest"] = min(s["oldest"] for s in stats.values())
+            _minute_status["newest"] = max(s["newest"] for s in stats.values())
+        _minute_status["state"] = "done"
+        log.info("[minutes] 수집 완료: %d행 신규", total)
+    except Exception as e:
+        _minute_status["state"] = "error"
+        _minute_status["error"] = str(e)
+        log.warning("[minutes] 수집 실패: %s", e)
+
+
+@app.on_event("startup")
+def _start_minute_collector():
+    threading.Thread(target=_minute_collector, daemon=True, name="minute-collector").start()
+
+
+@app.get("/api/minutes/status")
+def minutes_status():
+    return {"status": dict(_minute_status), "stats": minute_data.get_stats()}
+
+
+@app.get("/api/minutes")
+def minutes_api(
+    market: str = Query("KRW-BTC"),
+    unit: int = Query(5, ge=1, le=240),
+    days: int = Query(7, ge=1, le=30),
+):
+    from datetime import datetime as _dt
+    start = (_dt.now() - timedelta(days=days)).strftime("%Y-%m-%dT%H:%M:%S")
+    candles = minute_data.get_candles(market, unit, start=start)
+    return {"market": market, "unit": unit, "count": len(candles), "candles": candles}
 
 
 if __name__ == "__main__":

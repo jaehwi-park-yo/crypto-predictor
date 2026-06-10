@@ -271,6 +271,7 @@
       <b id="live-btc-price" style="font-size:.9rem;color:#f7931a">— </b>
       <span id="live-usdt-price" style="font-size:.72rem;color:#26a17b"></span>
       <span id="live-source" style="font-size:.68rem;color:#6a7180">⚪ 오프라인</span>
+      <span id="minute-status" style="display:none;font-size:.68rem;color:#8b929e"></span>
     </div>
     <div class="notice" id="api-notice">⚠️ API 서버 연결 중… — <code>python api_server.py</code> 실행 필요</div>
     <span class="badge">Beta v0.2</span>
@@ -2234,6 +2235,46 @@ async function fetchLivePrice() {
   }
 }
 
+// ─── 분봉 수집 상태 칩 ────────────────────────────────────────────────────────
+let minuteStatusTimer = null;
+async function pollMinuteStatus() {
+  const el = document.getElementById('minute-status');
+  if (!el) return;
+  try {
+    const res = await fetch(`${API_BASE}/api/minutes/status`, {signal: AbortSignal.timeout(3000)});
+    if (!res.ok) throw new Error('status ' + res.status);
+    const d = await res.json();
+    const st = d.status, stats = d.stats || {};
+    const totalRows = Object.values(stats).reduce((a, s) => a + (s.count || 0), 0);
+
+    if (st.state === 'collecting') {
+      const fetched = (st.fetched || totalRows).toLocaleString('ko-KR');
+      const oldest = st.oldest ? ` (${st.oldest.slice(0, 10)}까지)` : '';
+      el.textContent = `📥 분봉 수집 중… ${fetched}개${oldest}`;
+      el.style.display = '';
+      if (!minuteStatusTimer) minuteStatusTimer = setInterval(pollMinuteStatus, 30_000);
+    } else {
+      // done / error / idle → 폴링 중단, 보유 데이터가 있으면 정적 표시
+      if (minuteStatusTimer) { clearInterval(minuteStatusTimer); minuteStatusTimer = null; }
+      if (totalRows > 0) {
+        const oldestAll = Object.values(stats).map(s => s.oldest).filter(Boolean).sort()[0];
+        const cnt = totalRows >= 10000
+          ? (totalRows / 10000).toFixed(1) + '만개'
+          : totalRows.toLocaleString('ko-KR') + '개';
+        el.textContent = `🗄️ 분봉 ${cnt}${oldestAll ? ` (${oldestAll.slice(0, 7)}~)` : ''}`;
+        el.style.display = '';
+      } else {
+        el.style.display = 'none';
+        if (st.state === 'idle') setTimeout(pollMinuteStatus, 30_000); // 부팅 직후 재확인
+      }
+    }
+  } catch (e) {
+    // 서버 오프라인 → 칩 숨김
+    el.style.display = 'none';
+    if (minuteStatusTimer) { clearInterval(minuteStatusTimer); minuteStatusTimer = null; }
+  }
+}
+
 // ─── 초기화 ──────────────────────────────────────────────────────────────────
 window.onload = () => {
   updateCapitalDisplay(document.getElementById('capital').value);
@@ -2243,6 +2284,7 @@ window.onload = () => {
   setInterval(fetchLivePrice, 60_000);   // 1분마다 갱신
   fetchDashboard();
   setInterval(fetchDashboard, 10 * 60_000);  // 10분마다 대시보드 갱신
+  pollMinuteStatus();  // 분봉 수집 상태 칩 (수집 중이면 30초 폴링)
   // 차트는 해당 탭이 보일 때 그린다 (숨김 div 렌더 시 너비 0 문제 방지)
 };
 </script>

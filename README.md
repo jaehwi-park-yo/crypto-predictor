@@ -58,6 +58,16 @@ chmod +x start.sh   # 최초 1회
 
 > ⚠️ 본 앱의 모든 수치는 통계적 **추정치**이며 투자 권유가 아닙니다. 투자 손실 책임은 본인에게 있습니다.
 
+## 분봉 데이터셋 (F1 개선용)
+
+서버(`api_server.py`) 최초 부팅 시 업비트 공개 API에서 BTC/KRW·USDT/KRW **5분봉**을 최대 약 2년치 부트스트랩합니다 (일회성, 백그라운드 5~10분 — 대시보드는 즉시 사용 가능). 이후 부팅에서는 마지막 저장 시각 이후 누락분만 증분 수집(sync)합니다.
+
+- 저장 위치: `data/candles.db` (SQLite, WAL 모드)
+- 수집 상태: 대시보드 헤더 칩 + `GET /api/minutes/status`
+- 데이터 조회: `GET /api/minutes?market=KRW-BTC&unit=5&days=7`
+- 수동 실행: `python -m utils.minute_data --bootstrap | --sync | --stats`
+- 용도: 변동성 추정·그리드 체결률 캘리브레이션 등 예측 F1 개선
+
 ## 실행
 
 ```bash
