@@ -29,6 +29,7 @@ except ImportError:
 from calendar import monthrange
 import threading
 from utils import minute_data
+from utils.dataset_seed import restore_from_seed
 from utils.live_data import fetch_current_price, fetch_usdt_price
 from utils.data_cache import get_history, get_usdt_history
 from services.prediction_service import predict_as_of
@@ -380,6 +381,9 @@ def _preload_usdt_history():
 
 @app.on_event("startup")
 def _start_minute_collector():
+    # 시드 복원은 분봉 수집보다 먼저, 동기적으로 실행
+    # (DB가 비어있고 data/dataset_seed.zip 이 있을 때만 동작)
+    restore_from_seed()
     threading.Thread(target=_minute_collector, daemon=True, name="minute-collector").start()
     threading.Thread(target=_preload_usdt_history, daemon=True, name="usdt-preload").start()
 
