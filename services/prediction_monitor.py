@@ -258,6 +258,8 @@ def monitor(
                 use_sigma=snapshot.sigma_level_used,
                 horizon_days=remaining,        # 남은 일수로 지평 축소
                 lookback=lookback + elapsed,  # expand window to include measured period
+                buy_interval_pct=getattr(snapshot, 'buy_interval_pct', None),
+                sell_interval_pct=getattr(snapshot, 'sell_interval_pct', None),
             )
             revised_sigma = revised.daily_sigma
             sigma_change  = (revised_sigma - snapshot.daily_sigma) / snapshot.daily_sigma * 100

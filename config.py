@@ -70,7 +70,7 @@ USDT_ENABLED = True
 USDT_REFERENCE_PRICE_KRW = 1_400.0   # USDT/KRW 참고가 (설정값, 수집 시 갱신)
 USDT_DAILY_RANGE_KRW     = 8.0       # 일중 USDT 변동폭 ±(KRW) 참고치
 USDT_BUY_INTERVAL_KRW    = 1.0       # 매수 간격 (1원)
-USDT_SELL_INTERVAL_KRW   = 2.0   # 매도 2원: 수익/거래량 균형
+USDT_SELL_INTERVAL_KRW   = 3.0   # 매도 3원: 분석상 수익/리워드 최적 균형 (연 ~43%)
 
 # 리워드 캡 도달 후 봇 중단 기준 (거래량 기준)
 # 최상위 티어(0.02%) 기준: 300만원 리워드 = 150억원 거래량

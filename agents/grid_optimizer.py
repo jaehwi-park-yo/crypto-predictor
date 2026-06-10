@@ -56,6 +56,9 @@ class GridOptimizerAgent:
         reserve = capital_krw * krw_hold_ratio
 
         # 공격성 다이얼 → 기준 그리드 간격 (수수료 인지 최소 간격으로 하한 보정)
+        if buy_interval_pct is None and sell_interval_pct is None and ASYMMETRIC_GRID:
+            buy_interval_pct  = GRID_BUY_INTERVAL_PCT
+            sell_interval_pct = GRID_SELL_INTERVAL_PCT
         asymmetric = (buy_interval_pct is not None and sell_interval_pct is not None)
         if asymmetric:
             buy_gi  = max(buy_interval_pct,  MIN_GRID_INTERVAL_PCT / 2)
@@ -74,7 +77,9 @@ class GridOptimizerAgent:
             bots = MAX_BOTS
             gi_eff = box_range_pct / MAX_BOTS
 
-        est_vol = self._estimate_volume(deployed, gi_eff, daily_sigma, box_range_pct)
+        # 왕복 추정용 간격: 비대칭이면 사이클(매수+매도)/2 — 대칭 관례(cycle=2×gi)와 동일 규약
+        rt_gi = (buy_gi + sell_gi) / 2 if asymmetric else gi_eff
+        est_vol = self._estimate_volume(deployed, rt_gi, daily_sigma, box_range_pct)
         cap_per_bot = deployed / bots if bots else 0.0
         gi_krw = ref * gi_eff / 100
 
@@ -100,7 +105,7 @@ class GridOptimizerAgent:
             created_at=datetime.now(),
             net_reward_after_fee_krw=net_reward,
             grid_count=bots,
-            round_trips_per_day=self._daily_round_trips(gi_eff, daily_sigma, box_range_pct),
+            round_trips_per_day=self._daily_round_trips(rt_gi, daily_sigma, box_range_pct),
             aggressiveness=aggressiveness,
             buy_interval_pct=buy_gi if asymmetric else None,
             sell_interval_pct=sell_gi if asymmetric else None,

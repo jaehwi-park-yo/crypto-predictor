@@ -133,7 +133,11 @@ class OrchestratorAgent:
         L.append(f"  • 그리드 투입      : {_won(grid.capital_deployed_krw)} "
                  f"({(1-KRW_HOLD_RATIO)*100:.0f}%)")
         L.append(f"  • 원화 예비(헷지)  : {_won(grid.krw_reserve_krw)} ({KRW_HOLD_RATIO*100:.0f}%)")
-        L.append(f"  • 그리드 간격      : {grid.grid_interval_pct:.2f}% ({_won(grid.grid_interval_krw)})")
+        if getattr(grid, 'buy_interval_pct', None) and getattr(grid, 'sell_interval_pct', None):
+            L.append(f"  • 그리드 간격      : 매수 {grid.buy_interval_pct:.2f}% / "
+                     f"매도 {grid.sell_interval_pct:.2f}% (비대칭)")
+        else:
+            L.append(f"  • 그리드 간격      : {grid.grid_interval_pct:.2f}% ({_won(grid.grid_interval_krw)})")
         L.append(f"  • 봇 수           : {grid.bot_count}개 / 1,000개")
         L.append(f"  • 봇당 자본       : {_won(grid.capital_per_bot_krw)}")
         L.append(f"  • 일 예상 왕복     : {grid.round_trips_per_day:.1f}회/봇")

@@ -8,8 +8,8 @@ USDT-KRW 1원 그리드 전략 에이전트
   - BTC conservative 전략과 짝을 이뤄 복합전략을 구성
 
 핵심 공식 (비대칭 그리드):
-  avg_interval = (buy_interval + sell_interval) / 2
-  round_trips  = daily_range / avg_interval × efficiency
+  cycle_interval = buy_interval + sell_interval
+  round_trips  = daily_range / cycle_interval × efficiency
   profit_per_rt = sell_interval / price   (매도 레그에서 확정)
   fee_per_rt   = 2 × FEE_RATE × cap_per_bot  (매수 + 매도 각 1회)
 """
@@ -95,7 +95,8 @@ class UsdtGridAgent:
         #   round_trips = (daily_range / avg_interval) × efficiency
         #   day_range = daily_range_krw / reference_price × 100 → %
         daily_range_pct = daily_range_krw / reference_price * 100
-        daily_rt = (daily_range_pct / avg_pct) * GRID_FILL_EFFICIENCY
+        cycle_pct = buy_pct + sell_pct
+        daily_rt = (daily_range_pct / cycle_pct) * GRID_FILL_EFFICIENCY
 
         monthly_rt = daily_rt * TRADING_DAYS_PER_MONTH
 
@@ -124,11 +125,11 @@ class UsdtGridAgent:
                 if days_to_cap <= TRADING_DAYS_PER_MONTH:
                     stop_day = int(math.ceil(days_to_cap))
 
-        # 대안 시나리오: 1원 매수 / 2원 매도
-        alt_buy_krw, alt_sell_krw = buy_interval_krw, 2.0
-        alt_avg_pct = ((alt_buy_krw + alt_sell_krw) / 2) / reference_price * 100
+        # 대안 시나리오: 1원 매수 / 3원 매도 (분석상 권장 최적)
+        alt_buy_krw, alt_sell_krw = buy_interval_krw, 3.0
+        alt_cycle_pct = (alt_buy_krw + alt_sell_krw) / reference_price * 100
         alt_sell_pct = alt_sell_krw / reference_price * 100
-        alt_daily_rt = (daily_range_pct / alt_avg_pct) * GRID_FILL_EFFICIENCY
+        alt_daily_rt = (daily_range_pct / alt_cycle_pct) * GRID_FILL_EFFICIENCY
         alt_monthly_rt = alt_daily_rt * TRADING_DAYS_PER_MONTH
         alt_vol = alt_monthly_rt * 2 * cap_per_bot * bots
         alt_profit = alt_monthly_rt * (alt_sell_pct / 100) * cap_per_bot * bots
@@ -205,11 +206,11 @@ class UsdtGridAgent:
             L.append(f"  ℹ️  이 자본으로는 리워드 캡(150억) 미도달")
 
         L.append("")
-        L.append("  [ 대안: 1원 매수 / 2원 매도 비교 ]")
+        L.append("  [ 대안: 1원 매수 / 3원 매도 비교 ]")
         L.append(f"  거래량  : {cfg.alt_monthly_volume_krw / 1e8:.1f}억원  (vs {cfg.monthly_volume_krw / 1e8:.1f}억원)")
         L.append(f"  월 순익 : {cfg.alt_monthly_net_krw:,.0f}원  (vs {cfg.monthly_net_krw:,.0f}원)")
         delta = cfg.alt_monthly_net_krw - cfg.monthly_net_krw
-        L.append(f"  수익 차 : {delta:+,.0f}원 {'(2원매도 유리)' if delta > 0 else '(1원매도 유리)'}")
+        L.append(f"  수익 차 : {delta:+,.0f}원 {'(3원매도 유리)' if delta > 0 else '(기본설정 유리)'}")
 
         if cfg.notes:
             L.append("")
@@ -251,7 +252,7 @@ def _build_notes(
         notes.append("월 거래량이 리워드 캡의 50% 이상 — 상위 티어 리워드 달성 유력.")
     if alt_net > net * 1.1:
         notes.append(
-            f"1원 매수 / 2원 매도 전환 시 수익 {alt_net - net:+,.0f}원 개선 "
+            f"1원 매수 / 3원 매도 전환 시 수익 {alt_net - net:+,.0f}원 개선 "
             f"(거래량 {alt_vol / 1e8:.1f}억원으로 감소 감수)."
         )
     return notes

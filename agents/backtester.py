@@ -154,10 +154,12 @@ def _grid_profit_from_path(
         수수료 = C × FEE_RATE × cap_per_bot
 
     비대칭 그리드 (buy_interval ≠ sell_interval):
-        avg_interval = (buy_interval + sell_interval) / 2
-        round_trips  = HL / avg_interval × efficiency
+        교차수 C는 매수 간격 기준 → 이동거리 T ≈ C × buy_gi
+        왕복 1회 = (buy + sell) 거리 이동 필요
+        round_trips  = T / (buy + sell) = C × buy_gi / (buy_gi + sell_gi)
         수익  = round_trips × sell_interval × cap_per_bot  (매도 폭이 확정 수익)
         수수료 = round_trips × 2 × FEE_RATE × cap_per_bot
+        거래량 = round_trips × 2 × cap_per_bot
     """
     box_range_pct = (box_upper - box_lower) / box_lower * 100 if box_lower else 0.0
     asymmetric = (buy_interval_pct is not None and sell_interval_pct is not None)
@@ -200,15 +202,17 @@ def _grid_profit_from_path(
             round_trips = min(hl_pct / gi_pct, max_lines) * GRID_FILL_EFFICIENCY
             total_crossings += round_trips * 2
 
-    round_trips = total_crossings / 2.0
     if asymmetric:
-        # 비대칭: 수익은 매도 간격 기준, 수수료는 왕복 고정
+        # 왕복 1회 = 매수+매도 거리 이동 필요 → 교차수에 buy/(buy+sell) 보정
+        round_trips = total_crossings * buy_gi / (buy_gi + sell_gi)
         total_profit = round_trips * (sell_gi / 100) * cap_per_bot
         total_fee    = round_trips * 2 * FEE_RATE * cap_per_bot
+        total_volume = round_trips * 2 * cap_per_bot
     else:
+        round_trips = total_crossings / 2.0
         total_profit = round_trips * (gi_pct / 100) * cap_per_bot
         total_fee    = total_crossings * FEE_RATE * cap_per_bot
-    total_volume = total_crossings * cap_per_bot
+        total_volume = total_crossings * cap_per_bot
     return total_profit, total_fee, total_volume
 
 
