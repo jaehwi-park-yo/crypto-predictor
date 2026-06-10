@@ -258,7 +258,15 @@
 <header>
   <h1>📊 <span class="btc">BTC</span>/<span class="usdt">USDT</span> 레이어드 그리드 예측 시스템</h1>
   <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-    <div class="notice">⚠️ 합성 데이터 기반 데모 — 실데이터 연동 시 수치 변경됨</div>
+    <!-- 실시간 가격 배너 (api_server.py 실행 시 자동 갱신) -->
+    <div style="display:flex;align-items:center;gap:12px;background:#1a1d23;
+                border:1px solid #2e3240;border-radius:8px;padding:6px 14px">
+      <span style="font-size:.72rem;color:#8b929e">₿ BTC</span>
+      <b id="live-btc-price" style="font-size:.9rem;color:#f7931a">— </b>
+      <span id="live-usdt-price" style="font-size:.72rem;color:#26a17b"></span>
+      <span id="live-source" style="font-size:.68rem;color:#6a7180">⚪ 오프라인</span>
+    </div>
+    <div class="notice">⚠️ 합성 데이터 기반 데모 — <code>python api_server.py</code> 실행 시 실시간 전환</div>
     <span class="badge">Beta v0.2</span>
   </div>
 </header>
@@ -1372,9 +1380,45 @@ function submitFeedback() {
   setTimeout(()=>ok.style.display='none', 5000);
 }
 
+// ─── 실시간 가격 (api_server.py 연동) ─────────────────────────────────────────
+const API_BASE = 'http://localhost:8000';  // python api_server.py 실행 시 활성화
+
+async function fetchLivePrice() {
+  try {
+    const res = await fetch(`${API_BASE}/api/price`, {signal: AbortSignal.timeout(3000)});
+    if (!res.ok) throw new Error('status ' + res.status);
+    const d = await res.json();
+
+    // BTC 가격 배너 갱신
+    const btc = d.btc, usdt = d.usdt;
+    const btcEl = document.getElementById('live-btc-price');
+    const usdtEl = document.getElementById('live-usdt-price');
+    const srcEl  = document.getElementById('live-source');
+    if (btcEl) {
+      const sign = btc.change_pct >= 0 ? '+' : '';
+      btcEl.innerHTML = `${Math.round(btc.price).toLocaleString('ko-KR')}원
+        <span style="font-size:.75rem;color:${btc.change_pct>=0?'#4ec94e':'#d62728'}">
+          ${sign}${btc.change_pct.toFixed(2)}%</span>`;
+    }
+    if (usdtEl) usdtEl.textContent = btc.price > 0 ? `USDT ${usdt.price.toFixed(1)}원` : '';
+    if (srcEl)  srcEl.textContent  = btc.is_live ? `🟢 실시간 (${btc.source})` : `🟡 폴백`;
+
+    // 모니터 탭 현재가 갱신
+    const monEl = document.getElementById('monitor-live-price');
+    if (monEl) monEl.textContent = Math.round(btc.price).toLocaleString('ko-KR') + '원';
+    return d;
+  } catch(e) {
+    const srcEl = document.getElementById('live-source');
+    if (srcEl) srcEl.textContent = '⚪ 오프라인 (합성 데이터)';
+    return null;
+  }
+}
+
 // ─── 초기화 ──────────────────────────────────────────────────────────────────
 window.onload = () => {
   updateMetrics();
+  fetchLivePrice();
+  setInterval(fetchLivePrice, 60_000);   // 1분마다 갱신
   // 차트는 해당 탭이 보일 때 그린다 (숨김 div 렌더 시 너비 0 문제 방지)
 };
 </script>

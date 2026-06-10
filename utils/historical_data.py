@@ -35,7 +35,7 @@ _SLEEP = 0.3
 # ─────────────────────────────────────────────────────────
 def _fetch_upbit(max_candles: int = 3000) -> List[Dict]:
     base = "https://api.upbit.com/v1/candles/days"
-    headers = {"Accept": "application/json"}
+    headers = {"Accept": "application/json", "User-Agent": "Mozilla/5.0"}
     all_candles: List[Dict] = []
     to_param = None
 

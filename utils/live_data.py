@@ -54,7 +54,7 @@ def fetch_current_price(fallback_price: Optional[float] = None) -> LiveQuote:
         r = requests.get(
             f"{_UPBIT_BASE}/ticker",
             params={"markets": "KRW-BTC"},
-            headers={"Accept": "application/json"},
+            headers={"Accept": "application/json", "User-Agent": "Mozilla/5.0"},
             timeout=_TIMEOUT,
         )
         r.raise_for_status()
@@ -74,6 +74,7 @@ def fetch_current_price(fallback_price: Optional[float] = None) -> LiveQuote:
     try:
         r = requests.get(
             f"{_BITHUMB_BASE}/ticker/BTC_KRW",
+            headers={"User-Agent": "Mozilla/5.0"},
             timeout=_TIMEOUT,
         )
         r.raise_for_status()
@@ -93,6 +94,38 @@ def fetch_current_price(fallback_price: Optional[float] = None) -> LiveQuote:
     # 3) 폴백
     p = fallback_price or 0.0
     logger.warning("[LiveData] 모든 실시간 API 실패 → 폴백 가격 사용 (%s)", f"{p:,.0f}")
+    return LiveQuote(
+        price=p, prev_close=p, change_pct=0.0,
+        timestamp=datetime.now().isoformat(),
+        source="fallback", is_live=False,
+    )
+
+
+def fetch_usdt_price(fallback_price: Optional[float] = 1_401.0) -> LiveQuote:
+    """
+    USDT/KRW 현재가 수집. 업비트 KRW-USDT → 폴백.
+    """
+    try:
+        r = requests.get(
+            f"{_UPBIT_BASE}/ticker",
+            params={"markets": "KRW-USDT"},
+            headers={"Accept": "application/json"},
+            timeout=_TIMEOUT,
+        )
+        r.raise_for_status()
+        data = r.json()[0]
+        price      = float(data["trade_price"])
+        prev_close = float(data["prev_closing_price"])
+        return LiveQuote(
+            price=price, prev_close=prev_close,
+            change_pct=(price - prev_close) / prev_close * 100 if prev_close else 0.0,
+            timestamp=datetime.now().isoformat(),
+            source="upbit", is_live=True,
+        )
+    except Exception as e:
+        logger.warning("[LiveData] Upbit USDT ticker 실패: %s", e)
+
+    p = fallback_price or 1_401.0
     return LiveQuote(
         price=p, prev_close=p, change_pct=0.0,
         timestamp=datetime.now().isoformat(),

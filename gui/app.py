@@ -29,6 +29,7 @@ from config import (
     COMPOSITE_BTC_RATIO,
 )
 from utils.historical_data import fetch_max_history
+import utils.data_cache
 from utils.live_data import fetch_current_price, fetch_month_candles
 from services.prediction_service import predict_as_of, grid_lines
 from services.prediction_monitor import monitor, get_month_actuals
@@ -39,9 +40,9 @@ from agents.backtester import BacktestAgent
 # ──────────────────────────────────────────────────────────
 # 데이터 캐시
 # ──────────────────────────────────────────────────────────
-@st.cache_data(show_spinner="히스토리 수집 중 (업비트 API → 폴백)...")
+@st.cache_data(ttl=3600, show_spinner="히스토리 수집 중 (캐시 → 업비트 API → 폴백)...")
 def load_history():
-    return fetch_max_history(start="2020-01-01")
+    return utils.data_cache.get_history(start="2020-01-01")
 
 
 @st.cache_data(ttl=60, show_spinner="실시간 가격 조회 중...")

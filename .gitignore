@@ -10,6 +10,10 @@ reports/*.txt
 reports/*.csv
 reports/*.html
 
+# 캐시 데이터
+data/*.json
+data/*.csv
+
 # OS / IDE
 .DS_Store
 .idea/
