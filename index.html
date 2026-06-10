@@ -298,13 +298,11 @@
       <div class="sb-item">
         <label>거래량 목표: <span class="val" id="volTargetVal">자동 (0)</span></label>
         <div style="display:flex;align-items:center;gap:6px;margin-bottom:5px">
-          <button class="vol-btn" onclick="stepVolTarget(-100)" title="-100억">−100</button>
           <button class="vol-btn" onclick="stepVolTarget(-10)" title="-10억">−10</button>
           <button class="vol-btn" onclick="stepVolTarget(-1)"  title="-1억">−1</button>
           <span style="font-size:.7rem;color:var(--muted);flex:1;text-align:center">억</span>
           <button class="vol-btn" onclick="stepVolTarget(1)"   title="+1억">+1</button>
           <button class="vol-btn" onclick="stepVolTarget(10)"  title="+10억">+10</button>
-          <button class="vol-btn" onclick="stepVolTarget(100)"  title="+100억">+100</button>
         </div>
         <input type="range" id="volTarget" min="0" max="1000" value="0" step="1"
                oninput="onVolTargetChange(this.value)">
