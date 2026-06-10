@@ -596,7 +596,7 @@
               <table class="data">
                 <tr><td>내부존 자본 비중</td><td id="btc-inner-pct">60%</td></tr>
                 <tr><td>외부존 자본 비중</td><td id="btc-outer-pct">40%</td></tr>
-                <tr><td>리워드 티어 목표</td><td>10억/월</td></tr>
+                <tr><td>리워드 티어 목표</td><td>10억/월 → 차월 0.015%</td></tr>
                 <tr><td>2σ 이탈 시</td><td>봇 재설정</td></tr>
                 <tr><td>하방 손절 기준</td><td>2σ 하단 이하 30일+</td></tr>
               </table>
@@ -742,7 +742,7 @@
                 <tr><td>주 수익원</td><td>리워드 (거래량)</td></tr>
                 <tr><td>내부존 봇 활성률</td><td>~95%</td></tr>
                 <tr><td>외부존 봇 활성률</td><td>~27%</td></tr>
-                <tr><td>리워드 티어 목표</td><td>10억/월 이상</td></tr>
+                <tr><td>리워드 티어 목표</td><td>10억/월 이상 → 차월 0.015%</td></tr>
               </table>
             </div>
           </div>
@@ -1312,6 +1312,21 @@ function updatePnlTable() {
   setT('si-usdto-int', `${usdtApplied.outer.buy}원/${usdtApplied.outer.sell}원 (외부존)`);
   setT('si-usdti-bots', usdtCalc.ui.bots + '개');
   setT('si-usdti-pbot', fmt(Math.round(usdtCalc.ui.capPerBot)) + '원');
+
+  // 거래량 목표 설정 중이면 — 수동 슬라이더 조정 포함 모든 변경에 달성 현황 실시간 갱신
+  const tgtEl = document.getElementById('volTarget');
+  const statusEl = document.getElementById('volTargetStatus');
+  const tgt = tgtEl ? +tgtEl.value : 0;
+  if (tgt > 0 && statusEl) {
+    const tgtKrw = tgt * 1e8;
+    if (tot.vol >= tgtKrw) {
+      statusEl.textContent = `✔ 목표 달성: 예상 ${eok(tot.vol)} / 목표 ${tgt}억 · 순익 +${(tot.net/1e4).toFixed(0)}만/월`;
+      statusEl.style.color = '#4ec94e';
+    } else {
+      statusEl.textContent = `⚠️ 예상 ${eok(tot.vol)} / 목표 ${tgt}억 — 미달 (${((tot.vol/tgtKrw)*100).toFixed(0)}%)`;
+      statusEl.style.color = '#d4b44a';
+    }
+  }
   setT('si-usdto-bots', usdtCalc.uo.bots + '개');
   setT('si-usdto-pbot', fmt(Math.round(usdtCalc.uo.capPerBot)) + '원');
 }
@@ -1395,15 +1410,12 @@ function onVolTargetChange(val) {
   // 슬라이더·직접입력 양방향 동기화
   document.getElementById('volTarget').value = target;
   document.getElementById('volTargetInput').value = target;
-  const lbl = document.getElementById('volTargetVal');
   const status = document.getElementById('volTargetStatus');
   if (target === 0) {
-    lbl.textContent = '자동 (0)';
     status.textContent = '0 = 수동 모드 · 1~200억 설정 시 아래 3개 변수 자동 추천';
     status.style.color = 'var(--muted)';
     return;
   }
-  lbl.textContent = target + '억';
   const { pick, reached } = recommendParams(target * 1e8);
   // 추천값으로 슬라이더 이동
   const setSlider = (id, v, lblId) => {
