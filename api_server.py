@@ -146,7 +146,11 @@ def get_dashboard(
     history_days: int = Query(default=120, ge=30, le=365),
 ):
     """대시보드 전체 데이터: 예측 스냅, 모니터링, 차트용 캔들, 그리드 라인."""
-    history = get_history()
+    # 실시간 가격을 먼저 확보 → 캐시가 실가격과 30% 이상 괴리되면 강제 재수집
+    # (합성 데이터로 오염된 캐시가 영구 사용되는 것을 방지)
+    live_check = fetch_current_price(fallback_price=None)
+    live_px = live_check.price if (live_check.is_live and live_check.price > 0) else None
+    history = get_history(live_price=live_px)
     today = date.today()
 
     # 예측 시점 결정

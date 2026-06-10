@@ -61,7 +61,7 @@ sudo apt update && sudo apt install python3 python3-pip python3-venv -y
 ├── main.py             ← CLI 예측 엔진
 ├── config.py           ← 전략 파라미터 설정
 ├── data/
-│   └── btc_history.json  ← 사전 로드된 BTC 히스토리 캐시
+│   └── (최초 실행 시 실거래 히스토리 자동 수집·캐시)
 └── ...
 ```
 
@@ -228,7 +228,7 @@ btc-grid-prediction-beta/
 │   ├── historical_data.py  히스토리 수집
 │   └── data_cache.py       디스크 캐시
 └── data/
-    └── btc_history.json    사전 로드 캐시 (오프라인 폴백용)
+    └── (최초 실행 시 자동 생성 — 실거래 데이터 캐시)
 ```
 
 ---

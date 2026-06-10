@@ -620,9 +620,9 @@
       <div id="tab-usdt" class="tab-panel">
         <div style="margin-top:16px;display:flex;flex-direction:column;gap:16px">
           <div style="font-size:.8rem;color:var(--muted)">
-            기준 시점: <b>2026-05 합성 데이터</b> &nbsp;|&nbsp;
-            기준가: <b style="color:var(--usdt)">1,401원</b> &nbsp;|&nbsp;
-            1σ: <b>1,386~1,416원</b> (±2.2%) &nbsp;|&nbsp; 2σ: <b>1,371~1,430원</b> (±4.4%)
+            기준 시점: <b id="usdt-asof">로딩 중…</b> &nbsp;|&nbsp;
+            기준가: <b style="color:var(--usdt)" id="usdt-ref-label">─</b> &nbsp;|&nbsp;
+            1σ: <b id="usdt-1s-label">─</b> (±2.2%) &nbsp;|&nbsp; 2σ: <b id="usdt-2s-label">─</b> (±4.4%)
           </div>
 
           <div class="chart-box">
@@ -711,7 +711,7 @@
                 <tbody>
                   <tr class="inner-row">
                     <td><span style="color:var(--inner-border);font-weight:700">1σ 내부 (보수)</span></td>
-                    <td>1,386 ~ 1,416원</td>
+                    <td id="usdt-inner-range">─</td>
                     <td id="usdt-inner-int">1원 / 3원</td>
                     <td id="usdt-inner-cap">6.7M</td>
                     <td id="usdt-inner-bots">31개</td>
@@ -721,7 +721,7 @@
                   </tr>
                   <tr class="outer-row">
                     <td><span style="color:var(--outer-border);font-weight:700">1σ~2σ 외부 (공격)</span></td>
-                    <td>1,371~1,386 / 1,416~1,430원</td>
+                    <td id="usdt-outer-range">─</td>
                     <td id="usdt-outer-int">1원 / 3원</td>
                     <td id="usdt-outer-cap">4.5M</td>
                     <td id="usdt-outer-bots">30개</td>
@@ -738,12 +738,12 @@
             <div class="info-card">
               <h3>📦 USDT 박스권 상세</h3>
               <table class="data">
-                <tr><td>기준가</td><td style="color:var(--usdt)">1,401원</td></tr>
-                <tr><td>1σ 상단</td><td>1,416원 (+2.2%)</td></tr>
-                <tr><td>1σ 하단</td><td>1,386원 (-2.2%)</td></tr>
-                <tr><td>2σ 상단</td><td>1,430원 (+4.4%)</td></tr>
-                <tr><td>2σ 하단</td><td>1,371원 (-4.4%)</td></tr>
-                <tr><td>1σ 범위</td><td>30원 (2.2%)</td></tr>
+                <tr><td>기준가</td><td style="color:var(--usdt)" id="usdt-box-ref">─</td></tr>
+                <tr><td>1σ 상단</td><td id="usdt-box-u1">─</td></tr>
+                <tr><td>1σ 하단</td><td id="usdt-box-l1">─</td></tr>
+                <tr><td>2σ 상단</td><td id="usdt-box-u2">─</td></tr>
+                <tr><td>2σ 하단</td><td id="usdt-box-l2">─</td></tr>
+                <tr><td>1σ 범위</td><td id="usdt-box-range">─</td></tr>
               </table>
             </div>
             <div class="info-card">
@@ -961,13 +961,54 @@ let D = {
   meas_bl:{x:[],o:[],h:[],l:[],c:[]}
 };
 
-// ─── USDT/KRW 데이터 (합성) ─────────────────────────────────────────────────
+// ─── USDT/KRW 박스 모델 — 실시간 가격 기준으로 동적 갱신 ────────────────────
 const USDT = {
-  ref: 1401,
-  u1: 1416, l1: 1386,
-  u2: 1430, l2: 1371,
+  ref: 0,
+  u1: 0, l1: 0,
+  u2: 0, l2: 0,
   sigma_pct: 2.2,
+  loaded: false,
 };
+function updateUsdtModel(livePrice, isLive = true) {
+  if (!livePrice || livePrice <= 0) return;
+  const s = USDT.sigma_pct / 100;
+  USDT.ref = livePrice;
+  USDT.u1 = +(livePrice * (1 + s)).toFixed(1);
+  USDT.l1 = +(livePrice * (1 - s)).toFixed(1);
+  USDT.u2 = +(livePrice * (1 + 2*s)).toFixed(1);
+  USDT.l2 = +(livePrice * (1 - 2*s)).toFixed(1);
+  USDT_REF = livePrice;
+  // 시뮬레이터 박스폭(원)도 실가격 기준 1σ 폭으로 갱신
+  const boxW = Math.max(10, Math.round(USDT.u1 - USDT.l1));
+  usdtSim.inner.box = boxW;
+  usdtSim.outer.box = Math.max(10, Math.round((USDT.u2 - USDT.u1) * 2));
+  USDT.loaded = true;
+  // UI 라벨 갱신
+  const fmt1 = n => n.toLocaleString('ko-KR', {maximumFractionDigits: 1});
+  const set = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+  set('usdt-asof', (isLive ? '실시간 (' : '참고값 (') + new Date().toLocaleDateString('ko-KR') + ')');
+  set('usdt-ref-label', fmt1(USDT.ref) + '원');
+  set('usdt-1s-label', `${fmt1(USDT.l1)}~${fmt1(USDT.u1)}원`);
+  set('usdt-2s-label', `${fmt1(USDT.l2)}~${fmt1(USDT.u2)}원`);
+  set('usdt-inner-range', `${fmt1(USDT.l1)} ~ ${fmt1(USDT.u1)}원`);
+  set('usdt-outer-range', `${fmt1(USDT.l2)}~${fmt1(USDT.l1)} / ${fmt1(USDT.u1)}~${fmt1(USDT.u2)}원`);
+  set('usdt-box-ref', fmt1(USDT.ref) + '원');
+  set('usdt-box-u1', `${fmt1(USDT.u1)}원 (+${USDT.sigma_pct}%)`);
+  set('usdt-box-l1', `${fmt1(USDT.l1)}원 (-${USDT.sigma_pct}%)`);
+  set('usdt-box-u2', `${fmt1(USDT.u2)}원 (+${(USDT.sigma_pct*2).toFixed(1)}%)`);
+  set('usdt-box-l2', `${fmt1(USDT.l2)}원 (-${(USDT.sigma_pct*2).toFixed(1)}%)`);
+  set('usdt-box-range', `${fmt1(USDT.u1 - USDT.l1)}원 (${USDT.sigma_pct}%)`);
+  // 시뮬레이터·존별 상세·P&L 재계산 (박스폭 변경 반영)
+  renderUsdtSim('inner', 'sim-inner');
+  renderUsdtSim('outer', 'sim-outer');
+  syncUsdtDetail();
+  updatePnlTable();
+  // USDT 차트가 이미 그려져 있으면 새 기준가로 재빌드
+  if (window._chartUSDT) {
+    window._chartUSDT = false;
+    if (document.getElementById('tab-usdt')?.classList.contains('active')) buildUSDTChart();
+  }
+}
 
 // 결정론적 랜덤 시드 함수
 function seededRandom(seed) {
@@ -979,14 +1020,18 @@ function seededRandom(seed) {
 }
 
 function generateUSDTPriceSeries() {
-  const rng = seededRandom(20260501);
+  // 실시간 기준가 기반 참고용 경로 (USDT 분봉 미수집 — 시각화 목적)
+  const now = new Date();
+  const y = now.getFullYear(), m = now.getMonth() + 1;
+  const daysInMonth = new Date(y, m, 0).getDate();
+  const rng = seededRandom(y * 100 + m);
   const dates = [];
   const prices = [];
-  let price = 1401;
+  let price = USDT.ref || 1401;
   const sigma_daily = 0.0035; // 0.35%
 
-  for (let d = 1; d <= 31; d++) {
-    const dateStr = `2026-05-${String(d).padStart(2,'0')}`;
+  for (let d = 1; d <= daysInMonth; d++) {
+    const dateStr = `${y}-${String(m).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
     dates.push(dateStr);
     const u = rng();
     const v = rng();
@@ -1214,7 +1259,8 @@ const usdtSim = {
   outer: { buy: 1, sell: 3, cap: 4_480_000, box: 30, active: 0.27 },
 };
 const USDT_FEE = 0.0004, USDT_DAILY_RANGE = 8.0, USDT_EFF = 0.40,
-      USDT_REF = 1401.0, USDT_TDAYS = 30;
+      USDT_TDAYS = 30;
+let   USDT_REF = 1401.0; // 실시간 가격 수신 시 updateUsdtModel()이 갱신
 
 // 리워드율은 "직전월 계정 전체 거래량" 기준으로 결정되어 당월 모든 거래에 적용됨
 const REWARD_TIERS = [
@@ -1543,6 +1589,7 @@ function stepUsdt(zoneKey, side, delta) {
 // ─── USDT 차트 ──────────────────────────────────────────────────────────────
 function buildUSDTChart() {
   window._chartUSDT = true;
+  if (!USDT.loaded) updateUsdtModel(USDT_REF, false); // 실시간 미수신 시 참고값으로 초기화
   renderUsdtSim('inner', 'sim-inner');
   renderUsdtSim('outer', 'sim-outer');
   const {dates, prices} = generateUSDTPriceSeries();
@@ -1554,17 +1601,18 @@ function buildUSDTChart() {
     innerGridLines.push(p);
   }
 
+  const f1 = n => n.toLocaleString('ko-KR', {maximumFractionDigits: 1});
   const traces = [
     // 2σ fill (orange)
     {type:'scatter', x:[...dates,...[...dates].reverse()],
      y:[...dates.map(()=>U.u2),...[...dates].reverse().map(()=>U.l2)],
      fill:'toself', fillcolor:'rgba(255,127,14,0.10)', line:{width:0},
-     name:'2σ 외부존 (1,371~1,430원)', hoverinfo:'skip'},
+     name:`2σ 외부존 (${f1(U.l2)}~${f1(U.u2)}원)`, hoverinfo:'skip'},
     // 1σ fill (blue)
     {type:'scatter', x:[...dates,...[...dates].reverse()],
      y:[...dates.map(()=>U.u1),...[...dates].reverse().map(()=>U.l1)],
      fill:'toself', fillcolor:'rgba(79,142,247,0.15)', line:{width:0},
-     name:'1σ 내부존 (1,386~1,416원)', hoverinfo:'skip'},
+     name:`1σ 내부존 (${f1(U.l1)}~${f1(U.u1)}원)`, hoverinfo:'skip'},
     // 1원 grid lines inside inner zone
     ...innerGridLines.filter((_,i)=>i%2===0).map((gl,i)=>({
       type:'scatter', x:dates, y:dates.map(()=>gl), mode:'lines',
@@ -1573,18 +1621,18 @@ function buildUSDTChart() {
     })),
     // Band lines
     {type:'scatter', x:dates, y:dates.map(()=>U.u2), mode:'lines',
-     line:{color:'#ff7f0e',width:1,dash:'dot'}, name:'2σ 상단 (1,430원)'},
+     line:{color:'#ff7f0e',width:1,dash:'dot'}, name:`2σ 상단 (${f1(U.u2)}원)`},
     {type:'scatter', x:dates, y:dates.map(()=>U.l2), mode:'lines',
-     line:{color:'#ff7f0e',width:1,dash:'dot'}, name:'2σ 하단 (1,371원)'},
+     line:{color:'#ff7f0e',width:1,dash:'dot'}, name:`2σ 하단 (${f1(U.l2)}원)`},
     {type:'scatter', x:dates, y:dates.map(()=>U.u1), mode:'lines',
-     line:{color:'#4f8ef7',width:1.5,dash:'dash'}, name:'1σ 상단 (1,416원)'},
+     line:{color:'#4f8ef7',width:1.5,dash:'dash'}, name:`1σ 상단 (${f1(U.u1)}원)`},
     {type:'scatter', x:dates, y:dates.map(()=>U.l1), mode:'lines',
-     line:{color:'#4f8ef7',width:1.5,dash:'dash'}, name:'1σ 하단 (1,386원)'},
+     line:{color:'#4f8ef7',width:1.5,dash:'dash'}, name:`1σ 하단 (${f1(U.l1)}원)`},
     {type:'scatter', x:dates, y:dates.map(()=>U.ref), mode:'lines',
-     line:{color:'#888',width:1,dash:'dot'}, name:'기준가 (1,401원)'},
+     line:{color:'#888',width:1,dash:'dot'}, name:`기준가 (${f1(U.ref)}원)`},
     // Price line
     {type:'scatter', x:dates, y:prices, mode:'lines',
-     line:{color:'#26a17b',width:2.5}, name:'USDT/KRW (합성)'},
+     line:{color:'#26a17b',width:2.5}, name:'USDT/KRW (참고 경로)'},
   ];
 
   Plotly.newPlot('chart-usdt', traces, {
@@ -1888,6 +1936,10 @@ async function fetchLivePrice() {
           ${sign}${btc.change_pct.toFixed(2)}%</span>`;
     }
     if (usdtEl) usdtEl.textContent = btc.price > 0 ? `USDT ${usdt.price.toFixed(1)}원` : '';
+    // USDT 박스 모델을 실시간 가격으로 갱신 (기준가 1% 이상 변동 시에만)
+    if (usdt.price > 0 && (!USDT.loaded || Math.abs(usdt.price - USDT.ref) / usdt.price > 0.01)) {
+      updateUsdtModel(usdt.price, usdt.is_live !== false);
+    }
     if (srcEl)  srcEl.textContent  = btc.is_live ? `🟢 실시간 (${btc.source})` : `🟡 폴백`;
 
     // 모니터 탭 현재가 갱신

@@ -13,7 +13,6 @@ reports/*.html
 # 캐시 데이터 (시드 캐시는 포함 — 네트워크 차단 환경 폴백용)
 data/*.json
 data/*.csv
-!data/btc_history.json
 
 # 배포 패키지 (산출물)
 *.zip
