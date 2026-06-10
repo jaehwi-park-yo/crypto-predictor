@@ -272,7 +272,7 @@
       <span id="live-usdt-price" style="font-size:.72rem;color:#26a17b"></span>
       <span id="live-source" style="font-size:.68rem;color:#6a7180">⚪ 오프라인</span>
     </div>
-    <div class="notice">⚠️ 합성 데이터 기반 데모 — <code>python api_server.py</code> 실행 시 실시간 전환</div>
+    <div class="notice" id="api-notice">⚠️ API 서버 연결 중… — <code>python api_server.py</code> 실행 필요</div>
     <span class="badge">Beta v0.2</span>
   </div>
 </header>
@@ -593,13 +593,13 @@
             <div class="info-card">
               <h3>📦 BTC 박스권 상세</h3>
               <table class="data">
-                <tr><td>기준가</td><td style="color:var(--btc)">313,439,106원</td></tr>
-                <tr><td>1σ 상단</td><td>364,748,527원</td></tr>
-                <tr><td>1σ 하단</td><td>269,347,415원</td></tr>
-                <tr><td>1σ 범위</td><td>35.4%</td></tr>
-                <tr><td>2σ 상단</td><td>424,457,210원</td></tr>
-                <tr><td>2σ 하단</td><td>231,458,132원</td></tr>
-                <tr><td>월간 σ</td><td>15.2%</td></tr>
+                <tr><td>기준가</td><td id="btc-ref" style="color:var(--btc)">─</td></tr>
+                <tr><td>1σ 상단</td><td id="btc-u1">─</td></tr>
+                <tr><td>1σ 하단</td><td id="btc-l1">─</td></tr>
+                <tr><td>1σ 범위</td><td id="btc-range">─</td></tr>
+                <tr><td>2σ 상단</td><td id="btc-u2">─</td></tr>
+                <tr><td>2σ 하단</td><td id="btc-l2">─</td></tr>
+                <tr><td>월간 σ</td><td id="btc-monthly-sigma">─</td></tr>
               </table>
             </div>
             <div class="info-card">
@@ -764,57 +764,57 @@
       <div id="tab-monitor" class="tab-panel">
         <div style="margin-top:16px;display:flex;flex-direction:column;gap:14px">
           <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
-            <h2 style="font-size:1rem">📡 2026-05 예측→측정 전환 모니터 (BTC)</h2>
-            <span style="background:#1e3a5f;color:var(--accent);border:1px solid #2c5282;
+            <h2 id="mon-heading" style="font-size:1rem">📡 예측→측정 전환 모니터 (BTC)</h2>
+            <span id="mon-status-badge" style="background:#1e3a5f;color:var(--accent);border:1px solid #2c5282;
                          border-radius:20px;padding:3px 12px;font-size:.75rem">
-              🟢 ON_TRACK
+              ─
             </span>
-            <span style="font-size:.8rem;color:var(--muted)">기준일: 2026-05-15 | 데이터: 히스토리(합성)</span>
+            <span id="mon-info-label" style="font-size:.8rem;color:var(--muted)">로딩 중…</span>
           </div>
 
           <div class="progress-wrap">
             <div class="progress-label">
               <span>예측 → 측정 전환</span>
-              <span>15 / 31일 완료 (48%)</span>
+              <span id="mon-progress-label">─</span>
             </div>
             <div class="progress-bar">
-              <div class="progress-fill" style="width:48%"></div>
+              <div id="mon-progress-fill" class="progress-fill" style="width:0%"></div>
             </div>
           </div>
 
-          <div class="status-banner green">
-            <span style="font-size:1.2rem">✅</span>
+          <div id="mon-status-banner" class="status-banner blue">
+            <span id="mon-banner-icon" style="font-size:1.2rem">─</span>
             <div>
-              <div style="font-weight:700">15/31일 경과 (48%) — Containment 100%</div>
-              <div style="font-size:.78rem;margin-top:3px;opacity:.8">정상 운영 유지.</div>
+              <div id="mon-banner-title" style="font-weight:700">로딩 중…</div>
+              <div id="mon-banner-detail" style="font-size:.78rem;margin-top:3px;opacity:.8"></div>
             </div>
           </div>
 
           <div style="background:#1a222e;border:1px solid #1a3a5f;border-radius:8px;padding:12px 16px;font-size:.82rem;color:#6ea8c9">
-            💱 현재가 (히스토리 폴백): <b style="color:#fff;font-size:.9rem" id="monitor-live-price">337,454,075원</b>
-            &nbsp;|&nbsp; 원본 기준가: 313,439,106원
-            &nbsp;|&nbsp; <span style="color:#4ec94e">+7.7%</span>
+            💱 현재가: <b style="color:#fff;font-size:.9rem" id="monitor-live-price">─</b>
+            &nbsp;|&nbsp; 원본 기준가: <b id="mon-ref-price" style="color:#fff">─</b>
+            &nbsp;|&nbsp; <span id="mon-ref-change" style="color:#4ec94e"></span>
           </div>
 
           <div class="metrics">
             <div class="metric green">
               <div class="label">측정 Containment</div>
-              <div class="value">100%</div>
+              <div id="mon-containment" class="value">─</div>
               <div class="sub">경과일 모두 박스 내</div>
             </div>
             <div class="metric">
-              <div class="label">경고 구간 일수</div>
-              <div class="value">0일</div>
+              <div class="label">경과 / 전체 일수</div>
+              <div id="mon-elapsed-label" class="value">─</div>
             </div>
             <div class="metric">
               <div class="label">σ 변화 (수정예측)</div>
-              <div class="value" style="color:#4f8ef7">-8.7%</div>
-              <div class="sub">변동성 하향 재추정</div>
+              <div id="mon-sigma-change" class="value" style="color:#4f8ef7">─</div>
+              <div class="sub">변동성 재추정</div>
             </div>
             <div class="metric">
               <div class="label">박스 중심 이동</div>
-              <div class="value" style="color:#ff7f0e">-3.04%</div>
-              <div class="sub">수정 박스 하향</div>
+              <div id="mon-box-shift" class="value" style="color:#ff7f0e">─</div>
+              <div class="sub">수정 박스 이동</div>
             </div>
           </div>
 
@@ -827,27 +827,22 @@
               <h3>📐 수정 예측 vs 원본 비교</h3>
               <table class="data">
                 <tr><td></td><td style="color:var(--muted)">원본</td><td style="color:var(--orange)">수정</td></tr>
-                <tr><td>일간 σ</td><td>2.77%</td><td>2.53%</td></tr>
-                <tr><td>권장 상단</td><td style="color:var(--green)">364,748,527원</td><td style="color:var(--orange)">338,382,104원</td></tr>
-                <tr><td>권장 하단</td><td style="color:var(--green)">269,347,415원</td><td style="color:var(--orange)">276,444,233원</td></tr>
-                <tr><td>박스 중심</td><td>기준</td><td style="color:var(--orange)">-3.04%</td></tr>
+                <tr><td>일간 σ</td><td id="mon-orig-sigma">─</td><td id="mon-rev-sigma">─</td></tr>
+                <tr><td>권장 상단</td><td id="mon-orig-ru" style="color:var(--green)">─</td><td id="mon-rev-ru" style="color:var(--orange)">─</td></tr>
+                <tr><td>권장 하단</td><td id="mon-orig-rl" style="color:var(--green)">─</td><td id="mon-rev-rl" style="color:var(--orange)">─</td></tr>
+                <tr><td>박스 중심</td><td>기준</td><td id="mon-rev-shift" style="color:var(--orange)">─</td></tr>
               </table>
             </div>
             <div class="info-card">
               <h3>ℹ️ 수정 예측 근거</h3>
-              <div style="font-size:.8rem;color:var(--muted);line-height:1.7">
-                <b style="color:var(--text)">원본:</b> 4/30 이전 31일 σ 추정<br>
-                <b style="color:var(--text)">수정:</b> 원본 + 실제 5/1~5/15 (15일) 포함<br><br>
-                더 긴 데이터 → <b style="color:#4ec94e">σ 추정 정밀도 향상</b><br>
-                실제 변동이 예측보다 작아<br>
-                → σ -8.7% 하향, 박스 소폭 수렴<br><br>
-                <b style="color:var(--accent)">남은 16일:</b> 수정 박스(주황)로 운영
+              <div id="mon-revision-note" style="font-size:.8rem;color:var(--muted);line-height:1.7">
+                로딩 중…
               </div>
             </div>
           </div>
 
           <div class="info-card">
-            <h3>📅 일별 측정 내역 (2026-05-01 ~ 2026-05-15)</h3>
+            <h3 id="meas-table-heading">📅 일별 측정 내역</h3>
             <div style="overflow-x:auto">
               <table class="data" style="min-width:500px">
                 <thead>
@@ -1639,12 +1634,13 @@ function buildMonitorChart() {
       type:'scatter', x:D.fut_rem, y:D.fut_rem.map(()=>y), mode:'lines',
       line:{color,width,dash}, name,
     })) : [],
-    {type:'scatter', x:['2026-05-15'], y:[m.cur_price], mode:'markers+text',
+    {type:'scatter', x:[m.today || D.pre_x[D.pre_x.length-1]], y:[m.cur_price], mode:'markers+text',
      marker:{size:12, color:'gold', symbol:'diamond'},
      text:['  현재가<br>  '+fmt(m.cur_price)+'원'], textposition:'middle right',
      name:'현재가'},
   ];
 
+  const todayMark = m.today || D.pre_x[D.pre_x.length-1] || '';
   Plotly.newPlot('chart-monitor', traces, {
     paper_bgcolor:'#1a1d23', plot_bgcolor:'#1a1d23',
     font:{color:'#e0e0e0'}, height:480,
@@ -1653,15 +1649,113 @@ function buildMonitorChart() {
     legend:{orientation:'h', yanchor:'bottom', y:1.01, bgcolor:'rgba(30,33,40,0.8)',
             bordercolor:'#444', borderwidth:1, font:{size:11}},
     margin:{l:70,r:20,t:20,b:40},
-    shapes:[{type:'line', x0:'2026-05-15', x1:'2026-05-15',
+    shapes: todayMark ? [{type:'line', x0:todayMark, x1:todayMark,
              y0:0, y1:1, yref:'paper',
-             line:{color:'rgba(150,150,150,0.5)', width:1, dash:'dash'}}],
+             line:{color:'rgba(150,150,150,0.5)', width:1, dash:'dash'}}] : [],
   }, {responsive:true});
 }
 
+// ─── 모니터 탭 패널 갱신 ─────────────────────────────────────────────────────
+function updateMonitorPanel() {
+  const s = D.snap; const m = D.mon;
+  const set = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
+
+  // 헤딩
+  set('mon-heading', `📡 ${s.target || '─'} 예측→측정 전환 모니터 (BTC)`);
+
+  // 상태 배지
+  const badge = document.getElementById('mon-status-badge');
+  const statusColors = { ON_TRACK: '#4ec94e', WARNING: '#d4b44a', BREACH: '#d62728', PREDICTED: '#4f8ef7' };
+  const statusIcons  = { ON_TRACK: '🟢', WARNING: '🟡', BREACH: '🔴', PREDICTED: '🔵' };
+  if (badge) {
+    badge.textContent = `${statusIcons[m.status] || '─'} ${m.status}`;
+    badge.style.color = statusColors[m.status] || 'var(--accent)';
+  }
+
+  // 기준일 라벨
+  const today = m.today || '';
+  set('mon-info-label', `기준일: ${today} | 경과 ${m.elapsed}일`);
+
+  // 진행 바
+  set('mon-progress-label', `${m.elapsed} / ${m.total}일 완료 (${m.progress}%)`);
+  const fill = document.getElementById('mon-progress-fill');
+  if (fill) fill.style.width = m.progress + '%';
+
+  // 상태 배너
+  const banner = document.getElementById('mon-status-banner');
+  const bannerClass = { ON_TRACK: 'green', WARNING: 'yellow', BREACH: 'red', PREDICTED: 'blue' };
+  if (banner) banner.className = 'status-banner ' + (bannerClass[m.status] || 'blue');
+  set('mon-banner-icon', statusIcons[m.status] || '─');
+  set('mon-banner-title', m.detail || '─');
+  set('mon-banner-detail', m.status === 'ON_TRACK' ? '정상 운영 유지.' :
+      m.status === 'WARNING' ? '모니터링 강화 필요.' :
+      m.status === 'BREACH'  ? '리스크 프로토콜 점검 필요.' : '예측 단계.');
+
+  // 현재가 & 기준가
+  set('monitor-live-price', m.cur_price ? fmt(m.cur_price) + '원' : '─');
+  set('mon-ref-price', s.ref ? fmt(s.ref) + '원' : '─');
+  if (s.ref && m.cur_price) {
+    const chg = (m.cur_price - s.ref) / s.ref * 100;
+    const el = document.getElementById('mon-ref-change');
+    if (el) { el.textContent = (chg >= 0 ? '+' : '') + chg.toFixed(1) + '%'; el.style.color = chg >= 0 ? '#4ec94e' : '#d62728'; }
+  }
+
+  // 메트릭 카드
+  set('mon-containment', m.containment + '%');
+  set('mon-elapsed-label', `${m.elapsed} / ${m.total}일`);
+  set('mon-sigma-change', (m.sigma_change >= 0 ? '+' : '') + m.sigma_change + '%');
+  set('mon-box-shift', (m.box_shift >= 0 ? '+' : '') + m.box_shift + '%');
+
+  // 수정 예측 vs 원본 비교 테이블
+  const dSig = s.daily_sigma ? s.daily_sigma.toFixed(2) + '%' : '─';
+  set('mon-orig-sigma', dSig);
+  set('mon-orig-ru', s.ru ? fmt(s.ru) + '원' : '─');
+  set('mon-orig-rl', s.rl ? fmt(s.rl) + '원' : '─');
+
+  // 수정 예측: rev_u/l from mon
+  const revSigChange = m.sigma_change;
+  const revDSig = s.daily_sigma ? ((s.daily_sigma * (1 + revSigChange / 100)).toFixed(2) + '%') : '─';
+  set('mon-rev-sigma', revDSig);
+  set('mon-rev-ru', m.rev_ru ? fmt(m.rev_ru) + '원' : '─');
+  set('mon-rev-rl', m.rev_rl ? fmt(m.rev_rl) + '원' : '─');
+  set('mon-rev-shift', (m.box_shift >= 0 ? '+' : '') + m.box_shift + '%');
+
+  // 수정 예측 근거 노트
+  const asOfParts = s.as_of ? s.as_of.split('-') : [];
+  const asOfStr = asOfParts.length === 3 ? `${asOfParts[1]}/${asOfParts[2]}` : '';
+  const noteEl = document.getElementById('mon-revision-note');
+  if (noteEl) {
+    const rem = m.total - m.elapsed;
+    noteEl.innerHTML =
+      `<b style="color:var(--text)">원본:</b> ${asOfStr ? asOfStr + ' 이전' : ''} 31일 σ 추정<br>` +
+      `<b style="color:var(--text)">수정:</b> 원본 + 실제 ${m.elapsed}일 포함<br><br>` +
+      `더 긴 데이터 → <b style="color:#4ec94e">σ 추정 정밀도 향상</b><br>` +
+      `σ ${(m.sigma_change >= 0 ? '+' : '') + m.sigma_change}% 변화, 박스 ${(m.box_shift >= 0 ? '+' : '') + m.box_shift}% 이동<br><br>` +
+      `<b style="color:var(--accent)">남은 ${rem}일:</b> 수정 박스(주황)로 운영`;
+  }
+
+  // 일별 측정 테이블 헤딩
+  const allMeasDates = [...D.meas_in.x, ...D.meas_w.x, ...D.meas_bu.x, ...D.meas_bl.x].sort();
+  if (allMeasDates.length) {
+    set('meas-table-heading', `📅 일별 측정 내역 (${allMeasDates[0]} ~ ${allMeasDates[allMeasDates.length-1]})`);
+  } else {
+    set('meas-table-heading', `📅 일별 측정 내역 (${s.target || '─'} 아직 없음)`);
+  }
+
+  // BTC 박스권 상세 카드
+  set('btc-ref', s.ref ? fmt(s.ref) + '원' : '─');
+  set('btc-u1', s.u1 ? fmt(s.u1) + '원' : '─');
+  set('btc-l1', s.l1 ? fmt(s.l1) + '원' : '─');
+  set('btc-range', s.range_pct ? s.range_pct + '%' : '─');
+  set('btc-u2', s.u2 ? fmt(s.u2) + '원' : '─');
+  set('btc-l2', s.l2 ? fmt(s.l2) + '원' : '─');
+  set('btc-monthly-sigma', s.monthly_sigma ? s.monthly_sigma + '%' : '─');
+}
+
 // ─── 일별 측정 테이블 ────────────────────────────────────────────────────────
-(function buildMeasTable() {
+function buildMeasTable() {
   const tbody = document.getElementById('meas-table');
+  if (!tbody) return;
   const inner_set = new Set(D.meas_in.x);
   const warn_set  = new Set(D.meas_w.x);
   const bu_set    = new Set(D.meas_bu.x);
@@ -1673,6 +1767,7 @@ function buildMonitorChart() {
   D.meas_bl.x.forEach((d,i)=>closes[d]=D.meas_bl.c[i]);
 
   const allDates = [...D.meas_in.x,...D.meas_w.x,...D.meas_bu.x,...D.meas_bl.x].sort();
+  tbody.innerHTML = '';
   allDates.forEach(d=>{
     const c = closes[d]||0;
     let icon='🟢 박스 내', dev='-', style='';
@@ -1681,7 +1776,7 @@ function buildMonitorChart() {
     else if (warn_set.has(d)) {icon='🟡 경고'; style='color:#d4b44a';}
     tbody.innerHTML += '<tr style="'+style+'"><td>'+d+'</td><td style="text-align:right">'+fmt(c)+'원</td><td style="text-align:right">'+icon+'</td><td style="text-align:right">'+dev+'</td></tr>';
   });
-})();
+}
 
 // ─── 별점 ────────────────────────────────────────────────────────────────────
 const starRatings = {};
@@ -1743,8 +1838,14 @@ async function fetchDashboard() {
     if (asofEl)   asofEl.textContent   = (data.snap?.as_of || '') + ' (업데이트 ' + now + ')';
     if (daysEl)   daysEl.textContent   = `${daysLeft}일`;
 
+    // 공지 배너 업데이트
+    const noticeEl = document.getElementById('api-notice');
+    if (noticeEl) noticeEl.textContent = '✅ 실시간 API 연결됨 — 실제 BTC/KRW 히스토리 기반 예측';
+
     // 메트릭 + 차트 재빌드
     updateMetrics();
+    buildMeasTable();
+    updateMonitorPanel();
     window._chartBTC = false;
     window._chartM   = false;
     if (document.getElementById('tab-btc')?.classList.contains('active')) {
@@ -1757,6 +1858,8 @@ async function fetchDashboard() {
     console.warn('[대시보드 로딩 실패]', e);
     const modeEl = document.getElementById('predict-mode-label');
     if (modeEl) modeEl.textContent = '오프라인 (데이터 없음)';
+    const noticeEl = document.getElementById('api-notice');
+    if (noticeEl) noticeEl.textContent = '⚠️ API 서버 연결 실패 — python api_server.py 실행 후 새로고침';
   } finally {
     if (loadingEl) loadingEl.style.display = 'none';
   }

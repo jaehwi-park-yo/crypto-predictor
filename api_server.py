@@ -172,11 +172,13 @@ def get_dashboard(
         raise HTTPException(status_code=422, detail=str(e))
 
     # monitor() 호출
+    mon_obj = None  # 아래 meas_* 루프에서 참조하므로 None으로 초기화
     try:
         history_fallback = get_history()
         fallback_btc = float(history_fallback[-1]["close"]) if history_fallback else None
         price_obj = fetch_current_price(fallback_price=fallback_btc)
-        live_price = price_obj.price if price_obj.is_live else None
+        # 실시간 가격이 없으면 폴백 가격도 전달 (monitor가 latest close 대신 사용)
+        live_price = price_obj.price if price_obj.price and price_obj.price > 0 else None
 
         mon_obj = monitor_prediction(snap, history, today.isoformat(), live_price=live_price)
         mon_data = {
@@ -193,6 +195,7 @@ def get_dashboard(
             "rev_rl":      mon_obj.forecast_revised_lower,
             "rev_u2":      mon_obj.forecast_upper_2s,
             "rev_l2":      mon_obj.forecast_lower_2s,
+            "today":       today.isoformat(),
         }
     except Exception as e:
         import logging as _log
@@ -205,6 +208,7 @@ def get_dashboard(
             "sigma_change": 0, "box_shift": 0, "cur_price": fallback_price,
             "rev_ru": snap.recommended_upper, "rev_rl": snap.recommended_lower,
             "rev_u2": snap.box_upper_2s, "rev_l2": snap.box_lower_2s,
+            "today": today.isoformat(),
         }
 
     # snap 직렬화
@@ -276,7 +280,7 @@ def get_dashboard(
     hist_by_date = {c["date"]: c for c in history}
 
     zone_map = {"inner": meas_in, "warning": meas_w, "breach_upper": meas_bu, "breach_lower": meas_bl}
-    try:
+    if mon_obj is not None:
         for ds in mon_obj.measured_candles:
             bucket = zone_map.get(ds.zone)
             if bucket is None:
@@ -289,8 +293,6 @@ def get_dashboard(
             bucket["h"].append(candle["high"])
             bucket["l"].append(candle["low"])
             bucket["c"].append(candle["close"])
-    except Exception:
-        pass  # mon_obj may not exist if monitor() failed
 
     return {
         "snap":    snap_data,

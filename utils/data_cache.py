@@ -5,7 +5,7 @@ utils/data_cache.py — 히스토리컬 데이터 디스크 캐시
 - 없거나 outdated면 historical_data.fetch_max_history() 호출 후 저장
 """
 import json, os, logging
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import List, Dict, Optional
 
@@ -18,8 +18,8 @@ def _is_fresh(data: List[Dict]) -> bool:
     if not data:
         return False
     last_date = data[-1]["date"]
-    today = date.today().isoformat()
-    yesterday = (date.today().replace(day=date.today().day-1)).isoformat()
+    today = date.today()
+    yesterday = (today - timedelta(days=1)).isoformat()
     # simple: if last date >= yesterday
     return last_date >= yesterday
 
