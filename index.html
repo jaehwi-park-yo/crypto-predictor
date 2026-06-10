@@ -1246,7 +1246,7 @@ function buildBTCChart() {
            })()},
     legend:{orientation:'h', yanchor:'bottom', y:1.01, bgcolor:'rgba(30,33,40,0.8)',
             bordercolor:'#444', borderwidth:1, font:{size:11}},
-    margin:{l:70,r:20,t:20,b:40},
+    margin:{l:90,r:20,t:20,b:40},
   }, {responsive:true});
   // 레이아웃 반영 후 컨테이너 너비에 다시 맞춤
   requestAnimationFrame(() => Plotly.Plots.resize('chart-btc'));
@@ -1696,7 +1696,7 @@ function buildMonitorChart() {
     yaxis:{title:'가격 (KRW)', tickformat:',.0f', gridcolor:'rgba(80,80,80,0.3)'},
     legend:{orientation:'h', yanchor:'bottom', y:1.01, bgcolor:'rgba(30,33,40,0.8)',
             bordercolor:'#444', borderwidth:1, font:{size:11}},
-    margin:{l:70,r:20,t:20,b:40},
+    margin:{l:90,r:20,t:20,b:40},
     shapes: todayMark ? [{type:'line', x0:todayMark, x1:todayMark,
              y0:0, y1:1, yref:'paper',
              line:{color:'rgba(150,150,150,0.5)', width:1, dash:'dash'}}] : [],
