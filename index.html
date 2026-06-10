@@ -548,6 +548,8 @@
             <span id="predict-loading" style="display:none;color:var(--muted)">불러오는 중…</span>
           </div>
 
+          <div id="revision-notice" style="display:none;border-radius:8px;padding:10px 14px;font-size:.82rem;font-weight:600;border:1px solid transparent"></div>
+
           <div class="chart-box">
             <div id="chart-btc" style="height:480px"></div>
           </div>
@@ -624,6 +626,8 @@
             기준가: <b style="color:var(--usdt)" id="usdt-ref-label">─</b> &nbsp;|&nbsp;
             1σ: <b id="usdt-1s-label">─</b> (±2.2%) &nbsp;|&nbsp; 2σ: <b id="usdt-2s-label">─</b> (±4.4%)
           </div>
+
+          <div id="usdt-revision-notice" style="display:none;border-radius:8px;padding:10px 14px;font-size:.82rem;font-weight:600;border:1px solid transparent"></div>
 
           <div class="chart-box">
             <div id="chart-usdt" style="height:400px"></div>
@@ -763,6 +767,17 @@
       <!-- ═══════════════════════════════════ 탭4: 모니터 ═══════════════════════ -->
       <div id="tab-monitor" class="tab-panel">
         <div style="margin-top:16px;display:flex;flex-direction:column;gap:14px">
+
+          <!-- 모니터 서브탭: BTC / USDT -->
+          <div id="monitor-subtabs" style="display:flex;gap:4px;border-bottom:1px solid var(--border)">
+            <button id="monitor-subtab-btc" onclick="switchMonitorSub('btc')"
+                    style="background:rgba(79,142,247,.07);color:var(--accent);border:none;border-bottom:2px solid var(--accent);padding:6px 14px;font-size:.82rem;font-weight:600;cursor:pointer;border-radius:6px 6px 0 0">₿ BTC 리스크</button>
+            <button id="monitor-subtab-usdt" onclick="switchMonitorSub('usdt')"
+                    style="background:transparent;color:var(--muted);border:none;border-bottom:2px solid transparent;padding:6px 14px;font-size:.82rem;font-weight:600;cursor:pointer;border-radius:6px 6px 0 0">₮ USDT 리스크</button>
+          </div>
+
+          <!-- ── BTC 리스크 패널 ── -->
+          <div id="monitor-btc-panel" style="display:flex;flex-direction:column;gap:14px">
           <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
             <h2 id="mon-heading" style="font-size:1rem">📡 예측→측정 전환 모니터 (BTC)</h2>
             <span id="mon-status-badge" style="background:#1e3a5f;color:var(--accent);border:1px solid #2c5282;
@@ -857,6 +872,59 @@
               </table>
             </div>
           </div>
+          </div><!-- /monitor-btc-panel -->
+
+          <!-- ── USDT 리스크 패널 ── -->
+          <div id="monitor-usdt-panel" style="display:none;flex-direction:column;gap:14px">
+            <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+              <h2 style="font-size:1rem">📡 USDT/KRW 박스 리스크 모니터</h2>
+              <span id="umon-mode-label" style="background:#1e3a5f;color:var(--accent);border:1px solid #2c5282;border-radius:20px;padding:3px 12px;font-size:.75rem">─</span>
+            </div>
+
+            <div id="umon-status-banner" class="status-banner blue">
+              <span id="umon-banner-icon" style="font-size:1.2rem">─</span>
+              <div>
+                <div id="umon-banner-title" style="font-weight:700">로딩 중…</div>
+                <div id="umon-banner-detail" style="font-size:.78rem;margin-top:3px;opacity:.8"></div>
+              </div>
+            </div>
+
+            <div style="background:#1a222e;border:1px solid #1a3a5f;border-radius:8px;padding:12px 16px;font-size:.82rem;color:#6ea8c9">
+              💱 현재가: <b style="color:#fff;font-size:.9rem" id="umon-price">─</b>
+              &nbsp;|&nbsp; 기준가: <b id="umon-ref" style="color:#fff">─</b>
+              &nbsp;|&nbsp; 1σ 박스: <b id="umon-1s-box" style="color:#4f8ef7">─</b>
+              &nbsp;|&nbsp; 2σ 박스: <b id="umon-2s-box" style="color:#ff7f0e">─</b>
+            </div>
+
+            <div class="metrics">
+              <div class="metric blue">
+                <div class="label">현재가</div>
+                <div id="umon-m-price" class="value">─</div>
+                <div id="umon-m-price-sub" class="sub">USDT/KRW</div>
+              </div>
+              <div class="metric">
+                <div class="label">기준가 대비 변동률</div>
+                <div id="umon-m-change" class="value">─</div>
+                <div class="sub">기준가 = 박스 중심</div>
+              </div>
+              <div class="metric green">
+                <div class="label">1σ 잔여폭</div>
+                <div id="umon-m-1s-room" class="value">─</div>
+                <div id="umon-m-1s-room-sub" class="sub">가까운 1σ 밴드까지</div>
+              </div>
+              <div class="metric orange">
+                <div class="label">2σ 잔여폭</div>
+                <div id="umon-m-2s-room" class="value">─</div>
+                <div id="umon-m-2s-room-sub" class="sub">가까운 2σ 밴드까지</div>
+              </div>
+            </div>
+
+            <div class="info-card">
+              <h3>🛡️ 리스크 대응 가이드 (비대칭 전략)</h3>
+              <div id="umon-guidance" style="font-size:.8rem;color:var(--muted);line-height:1.7">로딩 중…</div>
+            </div>
+          </div><!-- /monitor-usdt-panel -->
+
         </div>
       </div>
 
@@ -968,6 +1036,9 @@ const USDT = {
   u2: 0, l2: 0,
   sigma_pct: 2.2,
   loaded: false,
+  is_live: false,
+  last_price: 0,   // 마지막 수신 실시간 가격 (모델 갱신과 무관)
+  orig: null,      // 월초 원본 박스 스냅샷 (localStorage 영속)
 };
 function updateUsdtModel(livePrice, isLive = true) {
   if (!livePrice || livePrice <= 0) return;
@@ -982,6 +1053,18 @@ function updateUsdtModel(livePrice, isLive = true) {
   const boxW = Math.max(10, Math.round(USDT.u1 - USDT.l1));
   usdtSim.inner.box = boxW;
   usdtSim.outer.box = Math.max(10, Math.round((USDT.u2 - USDT.u1) * 2));
+  // 최초 로딩 시 당월 원본 박스 스냅샷 (월 단위로 localStorage에 고정)
+  if (!USDT.loaded) {
+    const mkey = 'usdt_orig_box_' + new Date().toISOString().slice(0, 7);
+    let orig = null;
+    try { orig = JSON.parse(localStorage.getItem(mkey) || 'null'); } catch (e) { orig = null; }
+    if (!orig || !(orig.ref > 0)) {
+      orig = { ref: USDT.ref, u1: USDT.u1, l1: USDT.l1, u2: USDT.u2, l2: USDT.l2 };
+      try { localStorage.setItem(mkey, JSON.stringify(orig)); } catch (e) {}
+    }
+    USDT.orig = orig;
+  }
+  USDT.is_live = isLive;
   USDT.loaded = true;
   // UI 라벨 갱신
   const fmt1 = n => n.toLocaleString('ko-KR', {maximumFractionDigits: 1});
@@ -1003,6 +1086,9 @@ function updateUsdtModel(livePrice, isLive = true) {
   renderUsdtSim('outer', 'sim-outer');
   syncUsdtDetail();
   updatePnlTable();
+  // 모니터 탭 USDT 패널 + 차트 위 수정 공지 갱신
+  updateUsdtMonitorPanel();
+  updateUsdtRevisionNotice();
   // USDT 차트가 이미 그려져 있으면 새 기준가로 재빌드
   if (window._chartUSDT) {
     window._chartUSDT = false;
@@ -1056,7 +1142,35 @@ function switchTab(id, el) {
     else { fetchDashboard().then(() => { if (!window._chartBTC) buildBTCChart(); }); }
   }
   if (id === 'usdt')    { window._chartUSDT ? Plotly.Plots.resize('chart-usdt')    : buildUSDTChart(); }
-  if (id === 'monitor') { window._chartM    ? Plotly.Plots.resize('chart-monitor') : buildMonitorChart(); }
+  if (id === 'monitor') {
+    window._chartM ? Plotly.Plots.resize('chart-monitor') : buildMonitorChart();
+    updateUsdtMonitorPanel();
+  }
+}
+
+// ─── 모니터 서브탭 (BTC / USDT) ─────────────────────────────────────────────
+function switchMonitorSub(which) {
+  const btcPanel  = document.getElementById('monitor-btc-panel');
+  const usdtPanel = document.getElementById('monitor-usdt-panel');
+  const btcBtn  = document.getElementById('monitor-subtab-btc');
+  const usdtBtn = document.getElementById('monitor-subtab-usdt');
+  const activate = (btn, on) => {
+    btn.style.background = on ? 'rgba(79,142,247,.07)' : 'transparent';
+    btn.style.color = on ? 'var(--accent)' : 'var(--muted)';
+    btn.style.borderBottomColor = on ? 'var(--accent)' : 'transparent';
+  };
+  if (which === 'usdt') {
+    btcPanel.style.display = 'none';
+    usdtPanel.style.display = 'flex';
+    activate(btcBtn, false); activate(usdtBtn, true);
+    if (!USDT.loaded) updateUsdtModel(USDT_REF, false); // 실시간 미수신 시 참고값
+    updateUsdtMonitorPanel();
+  } else {
+    usdtPanel.style.display = 'none';
+    btcPanel.style.display = 'flex';
+    activate(btcBtn, true); activate(usdtBtn, false);
+    window._chartM ? Plotly.Plots.resize('chart-monitor') : buildMonitorChart();
+  }
 }
 
 // ─── 유틸 ───────────────────────────────────────────────────────────────────
@@ -1221,6 +1335,17 @@ function buildBTCChart() {
       type:'scatter', x:bandX, y:bandX.map(()=>y), mode:'lines',
       line:{color,width,dash}, name,
     })),
+    // 수정 권장 밴드 (오늘 기준 일일 수정예측 — 잔여 기간에만 표시)
+    ...(D.fut_rem.length > 0 && D.mon.rev_ru > 0 ? [
+      {type:'scatter', x:[...D.fut_rem,...[...D.fut_rem].reverse()],
+       y:[...D.fut_rem.map(()=>D.mon.rev_ru),...[...D.fut_rem].reverse().map(()=>D.mon.rev_rl)],
+       fill:'toself', fillcolor:'rgba(44,160,44,0.07)', line:{width:0},
+       showlegend:false, hoverinfo:'skip'},
+      {type:'scatter', x:D.fut_rem, y:D.fut_rem.map(()=>D.mon.rev_ru), mode:'lines',
+       line:{color:'#2ca02c',width:2}, name:'수정권장 상단 (오늘 기준)'},
+      {type:'scatter', x:D.fut_rem, y:D.fut_rem.map(()=>D.mon.rev_rl), mode:'lines',
+       line:{color:'#2ca02c',width:2}, name:'수정권장 하단 (오늘 기준)'},
+    ] : []),
     // Grid lines (inner zone only, blue tint)
     ...D.glines.slice(0,60).map((gl,i)=>({
       type:'scatter', x:D.fut, y:D.fut.map(()=>gl), mode:'lines',
@@ -1590,6 +1715,7 @@ function stepUsdt(zoneKey, side, delta) {
 function buildUSDTChart() {
   window._chartUSDT = true;
   if (!USDT.loaded) updateUsdtModel(USDT_REF, false); // 실시간 미수신 시 참고값으로 초기화
+  updateUsdtRevisionNotice();
   renderUsdtSim('inner', 'sim-inner');
   renderUsdtSim('outer', 'sim-outer');
   const {dates, prices} = generateUSDTPriceSeries();
@@ -1630,6 +1756,15 @@ function buildUSDTChart() {
      line:{color:'#4f8ef7',width:1.5,dash:'dash'}, name:`1σ 하단 (${f1(U.l1)}원)`},
     {type:'scatter', x:dates, y:dates.map(()=>U.ref), mode:'lines',
      line:{color:'#888',width:1,dash:'dot'}, name:`기준가 (${f1(U.ref)}원)`},
+    // 월초 원본 박스 (회색 점선) — 현재(수정) 박스와 비교용
+    ...(U.orig && U.orig.ref > 0 ? [
+      {type:'scatter', x:dates, y:dates.map(()=>U.orig.u2), mode:'lines',
+       line:{color:'#9aa0a6',width:1,dash:'dash'}, name:`월초 2σ 상단 (${f1(U.orig.u2)}원)`},
+      {type:'scatter', x:dates, y:dates.map(()=>U.orig.l2), mode:'lines',
+       line:{color:'#9aa0a6',width:1,dash:'dash'}, name:`월초 2σ 하단 (${f1(U.orig.l2)}원)`},
+      {type:'scatter', x:dates, y:dates.map(()=>U.orig.ref), mode:'lines',
+       line:{color:'#9aa0a6',width:1,dash:'dot'}, name:`월초 기준가 (${f1(U.orig.ref)}원)`},
+    ] : []),
     // Price line
     {type:'scatter', x:dates, y:prices, mode:'lines',
      line:{color:'#26a17b',width:2.5}, name:'USDT/KRW (참고 경로)'},
@@ -1641,7 +1776,7 @@ function buildUSDTChart() {
     xaxis:{gridcolor:'rgba(80,80,80,0.2)', type:'date'},
     yaxis:{title:'가격 (KRW/USDT)', tickformat:',.1f',
            gridcolor:'rgba(80,80,80,0.3)',
-           range:[U.l2 - 8, U.u2 + 8]},
+           range:[Math.min(U.l2, U.orig?.l2 ?? U.l2) - 8, Math.max(U.u2, U.orig?.u2 ?? U.u2) + 8]},
     legend:{orientation:'h', yanchor:'bottom', y:1.01, bgcolor:'rgba(30,33,40,0.8)',
             bordercolor:'#444', borderwidth:1, font:{size:10}},
     margin:{l:60,r:20,t:20,b:40},
@@ -1800,6 +1935,145 @@ function updateMonitorPanel() {
   set('btc-monthly-sigma', s.monthly_sigma ? s.monthly_sigma + '%' : '─');
 }
 
+// ─── USDT 리스크 모니터 패널 갱신 ────────────────────────────────────────────
+function updateUsdtMonitorPanel() {
+  const panel = document.getElementById('monitor-usdt-panel');
+  if (!panel || !USDT.loaded) return;
+  const set = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
+  const f1 = n => n.toLocaleString('ko-KR', { maximumFractionDigits: 1 });
+  const price = USDT.last_price > 0 ? USDT.last_price : USDT.ref;
+  const isLive = USDT.is_live !== false;
+
+  // 모드 배지
+  const modeEl = document.getElementById('umon-mode-label');
+  if (modeEl) {
+    modeEl.textContent = isLive ? '🟢 실시간' : '🟡 참고값 (실시간 미수신)';
+    modeEl.style.color = isLive ? '#4ec94e' : '#d4b44a';
+  }
+
+  // 존 판정
+  let zone, icon, title, detail, bannerClass;
+  if (price >= USDT.l1 && price <= USDT.u1) {
+    zone = 'inner'; icon = '🟢'; bannerClass = 'green';
+    title = '정상 — 1σ 내부존 운영 중';
+    detail = `현재가 ${f1(price)}원이 1σ 박스(${f1(USDT.l1)}~${f1(USDT.u1)}원) 내부에 있습니다. 보수 그리드 정상 가동.`;
+  } else if (price >= USDT.l2 && price <= USDT.u2) {
+    zone = 'outer'; icon = '🟡'; bannerClass = 'yellow';
+    title = '경고 — 외부존 거래 중 (1σ~2σ)';
+    detail = `현재가 ${f1(price)}원이 1σ 박스를 벗어나 외부존(${f1(USDT.l2)}~${f1(USDT.l1)} / ${f1(USDT.u1)}~${f1(USDT.u2)}원)에서 거래 중입니다. 공격 그리드 가동 구간 — 2σ 접근 여부 모니터링 강화.`;
+  } else if (price > USDT.u2) {
+    zone = 'breach-up'; icon = '🔴'; bannerClass = 'red';
+    title = '상방 이탈 — 2σ 상단 돌파';
+    detail = `현재가 ${f1(price)}원이 2σ 상단(${f1(USDT.u2)}원)을 넘었습니다. 그리드 매도 전량 체결 상태로 추정 — 리스크 프로토콜 점검.`;
+  } else {
+    zone = 'breach-down'; icon = '🔴'; bannerClass = 'red';
+    title = '하방 이탈 — 2σ 하단 돌파';
+    detail = `현재가 ${f1(price)}원이 2σ 하단(${f1(USDT.l2)}원) 아래입니다. 그리드 매수 전량 체결 + 미체결 매도 잔량 상태 — 대응 필요.`;
+  }
+  const banner = document.getElementById('umon-status-banner');
+  if (banner) banner.className = 'status-banner ' + bannerClass;
+  set('umon-banner-icon', icon);
+  set('umon-banner-title', title);
+  set('umon-banner-detail', detail);
+
+  // 가격/박스 요약 줄
+  set('umon-price', f1(price) + '원');
+  set('umon-ref', f1(USDT.ref) + '원');
+  set('umon-1s-box', `${f1(USDT.l1)} ~ ${f1(USDT.u1)}원`);
+  set('umon-2s-box', `${f1(USDT.l2)} ~ ${f1(USDT.u2)}원`);
+
+  // 메트릭 카드
+  set('umon-m-price', f1(price) + '원');
+  set('umon-m-price-sub', isLive ? 'USDT/KRW (실시간)' : 'USDT/KRW (참고값)');
+  const chg = USDT.ref > 0 ? (price - USDT.ref) / USDT.ref * 100 : 0;
+  const chgEl = document.getElementById('umon-m-change');
+  if (chgEl) {
+    chgEl.textContent = (chg >= 0 ? '+' : '') + chg.toFixed(2) + '%';
+    chgEl.style.color = chg >= 0 ? '#4ec94e' : '#d62728';
+  }
+  // 잔여폭: 가까운 밴드 가장자리까지 (이탈 시 음수)
+  const room = (lo, hi) => Math.min(price - lo, hi - price);
+  const room1 = room(USDT.l1, USDT.u1);
+  const room2 = room(USDT.l2, USDT.u2);
+  const roomTxt = r => (r >= 0 ? '' : '−') + f1(Math.abs(r)) + '원';
+  const roomPct = r => (price > 0 ? (Math.abs(r) / price * 100).toFixed(2) + '%' : '─');
+  set('umon-m-1s-room', roomTxt(room1));
+  set('umon-m-1s-room-sub', room1 >= 0 ? `밴드까지 ${roomPct(room1)} 남음` : `1σ 밖 ${roomPct(room1)} 이탈`);
+  set('umon-m-2s-room', roomTxt(room2));
+  set('umon-m-2s-room-sub', room2 >= 0 ? `밴드까지 ${roomPct(room2)} 남음` : `2σ 밖 ${roomPct(room2)} 이탈`);
+
+  // 리스크 대응 가이드 (비대칭 전략)
+  const gEl = document.getElementById('umon-guidance');
+  if (gEl) {
+    let g;
+    if (zone === 'breach-up') {
+      g = `<b style="color:#4ec94e">📈 상방 이탈 → 관망</b><br>` +
+          `그리드 전량 매도 완료 상태 — KRW 확보된 안전한 상황입니다.<br>` +
+          `추격 매수 금지, 가격이 박스로 회귀하면 그리드가 자동 재가동됩니다.`;
+    } else if (zone === 'breach-down') {
+      g = `<b style="color:#c96e6e">📉 하방 이탈 → 적극 대응</b><br>` +
+          `① 예비 KRW 투입 검토 — 낮아진 가격대에 추가 그리드 배치<br>` +
+          `② 박스 하향 재설정 권고 — 현재가 ${f1(price)}원 기준 ±${USDT.sigma_pct}% 박스로 재배치<br>` +
+          `③ 기존 보유 USDT는 손절하지 않고 매도 그리드 유지 (회귀 대기)`;
+    } else if (zone === 'outer') {
+      g = `<b style="color:#d4b44a">🟡 외부존 거래 중 → 모니터링 강화</b><br>` +
+          `공격 그리드 가동 구간 — 2σ 밴드까지 잔여 ${roomTxt(room2)} (${roomPct(room2)}).<br>` +
+          `<b>상방 2σ 접근 시:</b> 관망 준비 (매도 완료 후 KRW 보유)<br>` +
+          `<b>하방 2σ 접근 시:</b> 예비 KRW 투입 + 박스 하향 재설정 검토`;
+    } else {
+      g = `<b style="color:#4ec94e">🟢 정상 — 1σ 내부존 운영</b><br>` +
+          `보수 그리드 정상 가동 구간입니다. 별도 조치 불필요.<br>` +
+          `비대칭 원칙: <b>상방 이탈 시 관망</b> (매도 완료 = 안전) / <b>하방 이탈 시 예비 KRW 투입 + 박스 하향 재설정</b>.`;
+    }
+    if (!isLive) g += `<br><br><span style="color:#d4b44a">⚠️ 참고값 모드 — 실시간 가격 미수신 상태로, 위 판정은 참고용입니다.</span>`;
+    gEl.innerHTML = g;
+  }
+}
+
+// ─── BTC 차트 위 수정권장 밴드 공지 ─────────────────────────────────────────
+function updateBtcRevisionNotice() {
+  const el = document.getElementById('revision-notice');
+  if (!el) return;
+  const m = D.mon, s = D.snap;
+  if (!s.ru || !m.rev_ru) { el.style.display = 'none'; return; }
+  const shift = m.box_shift || 0;
+  const a = Math.abs(shift);
+  const shiftStr = (shift >= 0 ? '+' : '') + shift + '%';
+  if (a >= 10) {
+    el.style.background = '#2e1a1a'; el.style.borderColor = '#5a1a1a'; el.style.color = '#c96e6e';
+    el.textContent = `🔴 박스 크게 이탈 — 원예측 대비 중심 ${shiftStr} 이동. 그리드 중단 후 수정권장 밴드(${fmt(m.rev_rl)}~${fmt(m.rev_ru)}원) 기준 재배치 권고`;
+  } else if (a >= 5) {
+    el.style.background = '#2e2a10'; el.style.borderColor = '#5a4a10'; el.style.color = '#d4b44a';
+    el.textContent = `⚠️ 박스 중심이 원예측 대비 ${shiftStr} 이동 — 그리드 재설정 검토 필요 (수정권장 밴드 ${fmt(m.rev_rl)}~${fmt(m.rev_ru)}원 참조)`;
+  } else {
+    el.style.background = '#1a2e1a'; el.style.borderColor = '#2d5a1a'; el.style.color = '#86c96e';
+    el.textContent = `✅ 원예측 박스 유효 — 수정폭 ${shiftStr} (5% 이내)`;
+  }
+  el.style.display = 'block';
+}
+
+// ─── USDT 차트 위 수정 박스 공지 ─────────────────────────────────────────────
+function updateUsdtRevisionNotice() {
+  const el = document.getElementById('usdt-revision-notice');
+  if (!el) return;
+  if (!USDT.loaded || !USDT.orig || !(USDT.orig.ref > 0)) { el.style.display = 'none'; return; }
+  const f1 = n => n.toLocaleString('ko-KR', { maximumFractionDigits: 1 });
+  const shift = (USDT.ref - USDT.orig.ref) / USDT.orig.ref * 100;
+  const a = Math.abs(shift);
+  const shiftStr = (shift >= 0 ? '+' : '') + shift.toFixed(2) + '%';
+  if (a >= 10) {
+    el.style.background = '#2e1a1a'; el.style.borderColor = '#5a1a1a'; el.style.color = '#c96e6e';
+    el.textContent = `🔴 박스 크게 이탈 — 월초 박스 대비 중심 ${shiftStr} 이동. 그리드 중단 후 수정 박스(${f1(USDT.l1)}~${f1(USDT.u1)}원) 기준 재배치 권고`;
+  } else if (a >= 5) {
+    el.style.background = '#2e2a10'; el.style.borderColor = '#5a4a10'; el.style.color = '#d4b44a';
+    el.textContent = `⚠️ 박스 중심이 월초 대비 ${shiftStr} 이동 — 그리드 재설정 검토 필요 (수정 박스 ${f1(USDT.l1)}~${f1(USDT.u1)}원 참조)`;
+  } else {
+    el.style.background = '#1a2e1a'; el.style.borderColor = '#2d5a1a'; el.style.color = '#86c96e';
+    el.textContent = `✅ 월초 박스 유효 — 수정폭 ${shiftStr} (5% 이내)`;
+  }
+  el.style.display = 'block';
+}
+
 // ─── 일별 측정 테이블 ────────────────────────────────────────────────────────
 function buildMeasTable() {
   const tbody = document.getElementById('meas-table');
@@ -1894,6 +2168,7 @@ async function fetchDashboard() {
     updateMetrics();
     buildMeasTable();
     updateMonitorPanel();
+    updateBtcRevisionNotice();
     window._chartBTC = false;
     window._chartM   = false;
     if (document.getElementById('tab-btc')?.classList.contains('active')) {
@@ -1937,8 +2212,14 @@ async function fetchLivePrice() {
     }
     if (usdtEl) usdtEl.textContent = btc.price > 0 ? `USDT ${usdt.price.toFixed(1)}원` : '';
     // USDT 박스 모델을 실시간 가격으로 갱신 (기준가 1% 이상 변동 시에만)
+    if (usdt.price > 0) {
+      USDT.last_price = usdt.price;
+      USDT.is_live = usdt.is_live !== false;
+    }
     if (usdt.price > 0 && (!USDT.loaded || Math.abs(usdt.price - USDT.ref) / usdt.price > 0.01)) {
       updateUsdtModel(usdt.price, usdt.is_live !== false);
+    } else if (usdt.price > 0) {
+      updateUsdtMonitorPanel();  // 모델 갱신 없이도 현재가 표시 갱신
     }
     if (srcEl)  srcEl.textContent  = btc.is_live ? `🟢 실시간 (${btc.source})` : `🟡 폴백`;
 
