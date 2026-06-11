@@ -19,7 +19,8 @@ data/*.db
 data/*.db-wal
 data/*.db-shm
 
-# 배포 패키지 (산출물)
+# 배포 패키지 (산출물) — patch ZIP은 배포자가 별도 보관, git에는 미포함
+btc-grid-patch-*.zip
 *.zip
 .DS_Store
 .idea/
