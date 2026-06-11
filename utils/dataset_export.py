@@ -291,6 +291,9 @@ def export_dataset(out_path: Path | str = DEFAULT_OUT) -> Dict:
             "daily_btc.csv": "BTC/KRW 일봉",
             "daily_usdt.csv": "USDT/KRW 일봉",
             "minute_*.csv": "5분봉 (업비트, 수집된 범위)",
+            "fx_usdkrw.csv": "USD/KRW 일별 환율 (ECB, 주말 전일 채움)",
+            "daily_btc_usd.csv": "BTC/USD 일봉 (Binance)",
+            "kimchi_premium.csv": "일별 김치프리미엄(%) = KRW BTC / (USD BTC × 환율) − 1",
         },
         "notes": "as_of 이전 데이터만으로 예측을 재현했으므로 미래 정보 누설 없음. "
                  "진행 중인 월(실측 5일 미만)은 라벨에서 제외됨.",
@@ -313,6 +316,27 @@ def export_dataset(out_path: Path | str = DEFAULT_OUT) -> Dict:
                 name = f"minute_{market}_5m.csv"
                 zf.writestr(name, mb)
                 meta["files"][name] = mb.count(b"\n") - 1
+
+        # 글로벌 시장 데이터 (환율 · 달러 BTC · 김치프리미엄) — 있을 때만
+        try:
+            from utils.fx_data import get_fx_history, get_btc_usd_history, kimchi_premium_series
+            fx = get_fx_history()
+            if fx:
+                fb = _csv_bytes(fx, ["date", "close"])
+                zf.writestr("fx_usdkrw.csv", fb)
+                meta["files"]["fx_usdkrw.csv"] = len(fx)
+            btc_usd = get_btc_usd_history()
+            if btc_usd:
+                ub = _csv_bytes(btc_usd, ["date", "open", "high", "low", "close", "volume"])
+                zf.writestr("daily_btc_usd.csv", ub)
+                meta["files"]["daily_btc_usd.csv"] = len(btc_usd)
+            kimp = kimchi_premium_series()
+            if kimp:
+                kb = _csv_bytes(kimp, ["date", "kimp_pct", "btc_krw", "btc_usd", "usdkrw"])
+                zf.writestr("kimchi_premium.csv", kb)
+                meta["files"]["kimchi_premium.csv"] = len(kimp)
+        except Exception as e:
+            logger.warning("[내보내기] 글로벌 시장 데이터 생략: %s", e)
 
         labels = build_monthly_labels()
         if labels:

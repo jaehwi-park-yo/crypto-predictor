@@ -32,6 +32,7 @@ from config import (
     LAYER_A_RATIO_BTC, LAYER_B_RATIO_BTC, LAYER_C_RATIO_BTC,
     LAYER_A_RATIO_USDT, LAYER_B_RATIO_USDT, LAYER_C_RATIO_USDT,
     DCA_TRIGGER_PCT, DCA_TRIGGER_PCT_USDT, DCA_SIZE_EACH_PCT, DEAD_ZONE_RESET_DAYS,
+    FX_SIGMA_BLEND_WEIGHT,
 )
 from models.prediction_result import BoxPrediction
 from utils.statistics import (
@@ -100,6 +101,8 @@ class PredictionSnapshot:
     # 비대칭 σ 밴드 (상방/하방 독립 배수)
     sigma_up: float = 1.0
     sigma_dn: float = 1.0
+    sigma_up_2: float = 2.0   # 2σ 상방 배수 (1σ×2 아님 — config 독립값)
+    sigma_dn_2: float = 2.0   # 2σ 하방 배수
     box_upper_1s_asym: float = 0.0   # asymmetric 1σ 상단
     box_lower_1s_asym: float = 0.0   # asymmetric 1σ 하단
     box_upper_2s_asym: float = 0.0   # asymmetric 2σ 상단
@@ -179,6 +182,19 @@ def predict_as_of(
         except Exception as e:
             logger.warning("[예측서비스] ML σ 보정 실패 (통계 σ 사용): %s", e)
 
+    # USDT: 원/달러 환율 σ 블렌딩 — USDT/KRW 표본 부족 보완 (FX 데이터 없으면 무시)
+    if symbol.upper() == "USDT" and FX_SIGMA_BLEND_WEIGHT > 0:
+        try:
+            from utils.fx_data import fx_daily_sigma_asof
+            fx_sig = fx_daily_sigma_asof(as_of)
+            if fx_sig and fx_sig > 0:
+                blended = (1 - FX_SIGMA_BLEND_WEIGHT) * dsig + FX_SIGMA_BLEND_WEIGHT * fx_sig
+                logger.info("[예측서비스] USDT σ FX 블렌딩: %.4f → %.4f (FX σ=%.4f)",
+                            dsig, blended, fx_sig)
+                dsig = blended
+        except Exception as e:
+            logger.debug("[예측서비스] FX σ 블렌딩 생략: %s", e)
+
     # 대칭 밴드 (기존 호환용 — 리포트/라벨 생성에 사용)
     u1, l1 = sigma_band(ref, dsig, horizon_days, 1.0, PREDICTION_DRIFT)
     u2, l2 = sigma_band(ref, dsig, horizon_days, 2.0, PREDICTION_DRIFT)
@@ -190,9 +206,14 @@ def predict_as_of(
     _su = sigma_up if sigma_up is not None else _default_su
     _sd = sigma_dn if sigma_dn is not None else _default_sd
     u1a, l1a = asymmetric_sigma_band(ref, dsig, horizon_days, _su, _sd, PREDICTION_DRIFT)
-    # 2σ 배수는 1σ 배수의 2배 (비대칭 비율 유지)
+    # 2σ 배수: config 독립 상수 (단순 ×2는 과대 — 스윕 결과 BTC 1.8/2.0, USDT 1.5/1.65)
+    # 호출자가 1σ 배수를 덮어쓴 경우 같은 비율로 2σ도 스케일
+    _default_su2 = SIGMA_UP_2_USDT if _is_usdt else SIGMA_UP_2_BTC
+    _default_sd2 = SIGMA_DN_2_USDT if _is_usdt else SIGMA_DN_2_BTC
+    _su2 = _default_su2 * (_su / _default_su) if _default_su else _default_su2
+    _sd2 = _default_sd2 * (_sd / _default_sd) if _default_sd else _default_sd2
     u2a, l2a = asymmetric_sigma_band(ref, dsig, horizon_days,
-                                     _su * 2.0, _sd * 2.0, PREDICTION_DRIFT)
+                                     _su2, _sd2, PREDICTION_DRIFT)
 
     # σ 레벨 선택
     if use_sigma is not None:
@@ -280,6 +301,7 @@ def predict_as_of(
         sell_interval_pct=grid.sell_interval_pct,
         # 비대칭 σ
         sigma_up=_su, sigma_dn=_sd,
+        sigma_up_2=_su2, sigma_dn_2=_sd2,
         box_upper_1s_asym=u1a, box_lower_1s_asym=l1a,
         box_upper_2s_asym=u2a, box_lower_2s_asym=l2a,
         # 듀얼레이어 자본 배분

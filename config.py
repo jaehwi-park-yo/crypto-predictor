@@ -33,11 +33,15 @@ SIGMA_DN_BTC = 1.2    # 하방 σ 배수 (하방 fat tail 보완)
 SIGMA_UP_USDT = 1.0   # 상방 σ 배수 (보수적 — 상단 돌파는 드묾)
 SIGMA_DN_USDT = 1.1   # 하방 σ 배수 (KRW 강세 국면 대비)
 
-# 2σ 외부 밴드 배수 (비대칭 동일 비율로 확대)
-SIGMA_UP_2_BTC  = SIGMA_UP_BTC  * 2.0   # = 2.2
-SIGMA_DN_2_BTC  = SIGMA_DN_BTC  * 2.0   # = 2.4
-SIGMA_UP_2_USDT = SIGMA_UP_USDT * 2.0   # = 2.0
-SIGMA_DN_2_USDT = SIGMA_DN_USDT * 2.0   # = 2.2
+# 2σ 외부 밴드 배수 — 1σ 배수와 독립 (단순 ×2는 박스가 과도하게 넓어짐)
+# walk-forward 스윕 (BTC 100개월 / USDT 19개월, 2026-06):
+#   BTC  2.2/2.4 → ok 85/100, 폭 116%  |  1.8/2.0 → ok 77/100, 폭 87%, cont 91.7%
+#   USDT 2.0/2.2 → ok 18/19,  폭 17.2% |  1.5/1.65 → ok 17/19, 폭 12.6%, 하방이탈 0일 유지
+# → Layer C(역추세) 가동 빈도·자본효율 개선을 위해 축소 채택
+SIGMA_UP_2_BTC  = 1.8
+SIGMA_DN_2_BTC  = 2.0
+SIGMA_UP_2_USDT = 1.5
+SIGMA_DN_2_USDT = 1.65
 
 # Risk management
 UPSIDE_BREAKOUT_ACTION = "hold"              # Do nothing on upside
@@ -152,6 +156,18 @@ ASYM_TP_MULT    = 2.0   # 기본 간격의 2배 위에서 매도 (수익 확대,
 UPBIT_BASE_URL  = "https://api.upbit.com"
 UPBIT_MARKET_BTC  = "KRW-BTC"
 UPBIT_MARKET_USDT = "KRW-USDT"
+
+# ──────────────────────────────────────────────────────────
+# 글로벌 시장 데이터 (원/달러 환율 · 달러 BTC · 김치프리미엄)
+# ──────────────────────────────────────────────────────────
+# USDT/KRW는 환율 앵커 자산 → FX 변동성과 김프를 예측에 반영
+FRANKFURTER_BASE_URL = "https://api.frankfurter.app"   # ECB 기준환율 (무료·키 불필요)
+ERAPI_FX_URL = "https://open.er-api.com/v6/latest/USD" # 환율 폴백 (당일 시세)
+BINANCE_BASE_URL = "https://api.binance.com"           # BTC/USDT 일봉 (무료·키 불필요)
+
+# USDT σ 추정 시 FX 변동성 블렌딩 가중치 (0=미사용)
+#   σ_blend = (1-w)·σ_usdt + w·σ_fx — USDT/KRW 분봉/일봉 표본 부족 보완
+FX_SIGMA_BLEND_WEIGHT = 0.3
 
 # Retry settings
 MAX_RETRIES = 3

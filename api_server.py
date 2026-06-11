@@ -253,6 +253,8 @@ def get_dashboard(
         # 비대칭 σ 밴드
         "sigma_up":       snap.sigma_up,
         "sigma_dn":       snap.sigma_dn,
+        "sigma_up_2":     snap.sigma_up_2,
+        "sigma_dn_2":     snap.sigma_dn_2,
         "u1a":            snap.box_upper_1s_asym,
         "l1a":            snap.box_lower_1s_asym,
         "u2a":            snap.box_upper_2s_asym,
@@ -344,6 +346,23 @@ def health():
     return {"status": "ok", "date": date.today().isoformat()}
 
 
+@app.get("/api/global")
+def global_market():
+    """글로벌 시장 컨텍스트: 원/달러 환율 · 달러 BTC · 김치프리미엄 (캐시 기반)."""
+    from utils.fx_data import get_fx_history, get_btc_usd_history, kimchi_premium_series
+    fx = get_fx_history()
+    usd = get_btc_usd_history()
+    kimp = kimchi_premium_series()
+    return {
+        "fx_days": len(fx),
+        "btc_usd_days": len(usd),
+        "fx_latest": fx[-1] if fx else None,
+        "btc_usd_latest": {"date": usd[-1]["date"], "close": usd[-1]["close"]} if usd else None,
+        "kimp_latest": kimp[-1] if kimp else None,
+        "kimp_tail_30d": kimp[-30:] if kimp else [],
+    }
+
+
 # ─── 분봉 데이터 파이프라인 (백그라운드 수집) ─────────────────────────────────
 _minute_status = {
     "state": "idle",   # idle | collecting | done | error
@@ -406,6 +425,20 @@ def _train_ml_sigma():
         log.warning("[startup] ML σ 학습 실패 (통계 σ만 사용): %s", e)
 
 
+def _sync_global_then_train():
+    """환율·달러 BTC 동기화 후 ML 학습 — 김프/FX 특징이 학습에 포함되도록 순서 보장."""
+    import logging as _lg
+    log = _lg.getLogger("api_server")
+    try:
+        from utils.fx_data import sync_all
+        stats = sync_all()
+        log.info("[startup] 글로벌 데이터 동기화: 환율 %d일, 달러BTC %d일",
+                 stats["fx_days"], stats["btc_usd_days"])
+    except Exception as e:
+        log.warning("[startup] 글로벌 데이터 동기화 실패 (특징 중립값 사용): %s", e)
+    _train_ml_sigma()
+
+
 def _preload_usdt_history():
     """USDT/KRW 일봉 캐시 사전 로드 — 서버 기동 직후 백그라운드에서 실행."""
     import logging as _lg
@@ -423,7 +456,7 @@ def _start_minute_collector():
     restore_from_seed()
     threading.Thread(target=_minute_collector, daemon=True, name="minute-collector").start()
     threading.Thread(target=_preload_usdt_history, daemon=True, name="usdt-preload").start()
-    threading.Thread(target=_train_ml_sigma, daemon=True, name="ml-sigma-train").start()
+    threading.Thread(target=_sync_global_then_train, daemon=True, name="global-sync-ml-train").start()
 
 
 @app.get("/api/minutes/status")

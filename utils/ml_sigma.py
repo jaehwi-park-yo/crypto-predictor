@@ -10,8 +10,9 @@ utils/ml_sigma.py — ML 기반 월간 σ 보정 (Ridge 회귀)
 구조:
   - 순수 파이썬 closed-form Ridge (sklearn 불필요)
   - 학습 데이터: dataset_export.build_monthly_labels() (ML 미적용 통계 라벨)
-  - 특징 9개: 일간σ, 월간σ, 31일 수익률, |수익률|, σ30/σ90 비율,
-              90/180일 σ 투영, 5분봉 일중 실현변동성(RV30), RV/σ 괴리
+  - 특징 12개: 일간σ, 월간σ, 31일 수익률, |수익률|, σ30/σ90 비율,
+               90/180일 σ 투영, 5분봉 일중 실현변동성(RV30), RV/σ 괴리,
+               김치프리미엄(수준·30일 변화), 원/달러 환율 30일 σ (v2)
   - 모델 파라미터는 data/ml_sigma_model.json 에 캐시 (재학습: retrain())
 
 사용:
@@ -97,7 +98,7 @@ def build_features(history: List[Dict], as_of: str,
     if rv30 is None:
         rv30 = daily_sigma  # 분봉 없으면 일봉 σ로 대체 (rv_ratio=1)
 
-    return [
+    feats = [
         daily_sigma,
         monthly_sigma_pct,
         ret_prev_31d,
@@ -108,6 +109,21 @@ def build_features(history: List[Dict], as_of: str,
         rv30 * math.sqrt(30) * 100,
         rv30 / daily_sigma if daily_sigma > 0 else 1.0,
     ]
+
+    # 글로벌 시장 특징 (v2): 김치프리미엄 수준·30일 변화, 환율 30일 σ
+    # 데이터 없으면 중립값 (김프 0, FX σ는 BTC 월σ의 1/10 근사)
+    kimp_pct, kimp_chg, fx_ms = 0.0, 0.0, monthly_sigma_pct * 0.1
+    try:
+        from utils.fx_data import kimp_features_asof
+        kf = kimp_features_asof(as_of)
+        if kf:
+            kimp_pct = kf["kimp_pct"]
+            kimp_chg = kf["kimp_chg_30d"]
+            fx_ms = kf["fx_sigma30_monthly_pct"]
+    except Exception as e:
+        logger.debug("[ml_sigma] 김프/FX 특징 생략: %s", e)
+    feats += [kimp_pct, kimp_chg, fx_ms]
+    return feats
 
 
 # ──────────────────────────────────────────────────────────────
@@ -131,7 +147,9 @@ def _ridge_fit(X: np.ndarray, y: np.ndarray, alpha: float = _ALPHA) -> Dict:
 def _ridge_predict(model: Dict, x: List[float]) -> float:
     mu = np.asarray(model["mu"]); sd = np.asarray(model["sd"])
     w = np.asarray(model["w"])
-    xs = (np.asarray(x, dtype=float) - mu) / sd
+    # 구버전 모델(9특징) 호환: 모델 차원에 맞게 특징 절단
+    xv = np.asarray(x, dtype=float)[: mu.size]
+    xs = (xv - mu) / sd
     return float(xs @ w + model["b"])
 
 

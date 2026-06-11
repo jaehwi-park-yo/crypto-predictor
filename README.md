@@ -68,6 +68,19 @@ chmod +x start.sh   # 최초 1회
 - 수동 실행: `python -m utils.minute_data --bootstrap | --sync | --stats`
 - 용도: 변동성 추정·그리드 체결률 캘리브레이션 등 예측 F1 개선
 
+## 글로벌 시장 데이터 (환율·달러 BTC·김치프리미엄)
+
+USDT/KRW는 원/달러 환율에 앵커링된 자산이므로, 부팅 시 환율과 달러 BTC를
+함께 수집해 예측에 반영합니다 (`utils/fx_data.py`, 모두 무료 API·키 불필요).
+
+- **원/달러 환율**: Frankfurter(ECB 기준환율) — `data/fx_usdkrw.json`, 주말 전일 채움
+- **달러 BTC 일봉**: Binance BTCUSDT(폴백 CoinGecko) — `data/btc_usd_history.json`
+- **김치프리미엄**: `KRW BTC / (USD BTC × 환율) − 1` 일별 시계열
+- **예측 반영**: ① USDT σ에 환율 EWMA σ 30% 블렌딩(표본 부족 보완, `FX_SIGMA_BLEND_WEIGHT`),
+  ② ML σ 보정 특징 9→12개 확장(김프 수준·30일 변화·환율 30일 σ)
+- 조회: `GET /api/global` · 데이터셋 내보내기 ZIP에 `fx_usdkrw.csv`/`daily_btc_usd.csv`/`kimchi_premium.csv` 포함
+- 네트워크 차단 시 캐시 폴백, 캐시도 없으면 자동 비활성(중립 특징·블렌딩 생략)
+
 ## 실행
 
 ```bash

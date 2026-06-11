@@ -634,7 +634,7 @@
           <div style="font-size:.8rem;color:var(--muted)">
             기준 시점: <b id="usdt-asof">로딩 중…</b> &nbsp;|&nbsp;
             기준가: <b style="color:var(--usdt)" id="usdt-ref-label">─</b> &nbsp;|&nbsp;
-            1σ: <b id="usdt-1s-label">─</b> (±2.2%) &nbsp;|&nbsp; 2σ: <b id="usdt-2s-label">─</b> (±4.4%)
+            1σ: <b id="usdt-1s-label">─</b> (±2.2%) &nbsp;|&nbsp; 2σ: <b id="usdt-2s-label">─</b> (≈±3.3%)
           </div>
 
           <div id="usdt-revision-notice" style="display:none;border-radius:8px;padding:10px 14px;font-size:.82rem;font-weight:600;border:1px solid transparent"></div>
@@ -765,7 +765,7 @@
             <div class="info-card">
               <h3>🤖 USDT 그리드 특성</h3>
               <table class="data">
-                <tr><td>가격 변동성</td><td>매우 낮음 (±4.4% 2σ)</td></tr>
+                <tr><td>가격 변동성</td><td>매우 낮음 (≈±3.3% 2σ)</td></tr>
                 <tr><td>주 수익원</td><td>리워드 (거래량)</td></tr>
                 <tr><td>내부존 봇 활성률</td><td>~95%</td></tr>
                 <tr><td>외부존 봇 활성률</td><td>~27%</td></tr>
@@ -1085,14 +1085,16 @@ const USDT = {
 // USDT 비대칭 σ 배수 — 백테스트(23개월): up=1.0/dn=1.1 (하방이탈 9일 감소)
 // USDT 로그수익률 왜도=+0.90 (상방 쏠림)이지만 하방(KRW 강세)에서 데드존 위험이 커서 dn 확대
 const USDT_SIGMA_UP = 1.0, USDT_SIGMA_DN = 1.1;
+// 2σ 배수는 1σ×2가 아닌 독립값 — walk-forward 스윕: 1.5/1.65로 축소해도 ok 17/19 유지, 폭 17.2%→12.6%
+const USDT_SIGMA_UP_2 = 1.5, USDT_SIGMA_DN_2 = 1.65;
 function updateUsdtModel(livePrice, isLive = true) {
   if (!livePrice || livePrice <= 0) return;
   const s = USDT.sigma_pct / 100;
   USDT.ref = livePrice;
   USDT.u1 = +(livePrice * (1 + USDT_SIGMA_UP * s)).toFixed(1);
   USDT.l1 = +(livePrice * (1 - USDT_SIGMA_DN * s)).toFixed(1);
-  USDT.u2 = +(livePrice * (1 + 2 * USDT_SIGMA_UP * s)).toFixed(1);
-  USDT.l2 = +(livePrice * (1 - 2 * USDT_SIGMA_DN * s)).toFixed(1);
+  USDT.u2 = +(livePrice * (1 + USDT_SIGMA_UP_2 * s)).toFixed(1);
+  USDT.l2 = +(livePrice * (1 - USDT_SIGMA_DN_2 * s)).toFixed(1);
   USDT_REF = livePrice;
   // 시뮬레이터 박스폭(원)도 실가격 기준 1σ 폭으로 갱신
   const boxW = Math.max(10, Math.round(USDT.u1 - USDT.l1));
@@ -1123,8 +1125,8 @@ function updateUsdtModel(livePrice, isLive = true) {
   set('usdt-box-ref', fmt1(USDT.ref) + '원');
   set('usdt-box-u1', `${fmt1(USDT.u1)}원 (+${USDT.sigma_pct}%)`);
   set('usdt-box-l1', `${fmt1(USDT.l1)}원 (-${USDT.sigma_pct}%)`);
-  set('usdt-box-u2', `${fmt1(USDT.u2)}원 (+${(USDT.sigma_pct*2).toFixed(1)}%)`);
-  set('usdt-box-l2', `${fmt1(USDT.l2)}원 (-${(USDT.sigma_pct*2).toFixed(1)}%)`);
+  set('usdt-box-u2', `${fmt1(USDT.u2)}원 (+${(USDT.sigma_pct*USDT_SIGMA_UP_2).toFixed(1)}%)`);
+  set('usdt-box-l2', `${fmt1(USDT.l2)}원 (-${(USDT.sigma_pct*USDT_SIGMA_DN_2).toFixed(1)}%)`);
   set('usdt-box-range', `${fmt1(USDT.u1 - USDT.l1)}원 (${USDT.sigma_pct}%)`);
   // 시뮬레이터·존별 상세·P&L 재계산 (박스폭 변경 반영)
   renderUsdtSim('inner', 'sim-inner');
@@ -1362,6 +1364,8 @@ function buildBTCChart() {
   const _u1a = s.u1a || s.u1, _l1a = s.l1a || s.l1;
   const _u2a = s.u2a || s.u2, _l2a = s.l2a || s.l2;
   const _su = s.sigma_up || 1.0, _sd = s.sigma_dn || 1.0;
+  // 2σ 배수: API 독립값 (구버전 응답 폴백: ×2)
+  const _su2 = s.sigma_up_2 || _su*2, _sd2 = s.sigma_dn_2 || _sd*2;
 
   const traces = [
     {type:'candlestick', x:cx, open:co, high:ch, low:cl, close:cc,
@@ -1369,15 +1373,15 @@ function buildBTCChart() {
     // 2σ fill (orange) — 비대칭
     {type:'scatter', x:[...bandX,...[...bandX].reverse()],
      y:[...bandX.map(()=>_u2a),...[...bandX].reverse().map(()=>_l2a)],
-     fill:'toself', fillcolor:'rgba(255,127,14,0.10)', line:{width:0}, name:`2σ 외부존 (↑${_su*2}/↓${_sd*2})`, hoverinfo:'skip'},
+     fill:'toself', fillcolor:'rgba(255,127,14,0.10)', line:{width:0}, name:`2σ 외부존 (↑${_su2}/↓${_sd2})`, hoverinfo:'skip'},
     // 1σ fill (blue) — 비대칭
     {type:'scatter', x:[...bandX,...[...bandX].reverse()],
      y:[...bandX.map(()=>_u1a),...[...bandX].reverse().map(()=>_l1a)],
      fill:'toself', fillcolor:'rgba(79,142,247,0.12)', line:{width:0}, name:`1σ 내부존 (↑${_su}/↓${_sd})`, hoverinfo:'skip'},
     // Band lines — 비대칭
     ...[
-      [_u2a,'#ff7f0e',`2σ 상단 (×${_su*2})`,'dot',1],
-      [_l2a,'#ff7f0e',`2σ 하단 (×${_sd*2})`,'dot',1],
+      [_u2a,'#ff7f0e',`2σ 상단 (×${_su2})`,'dot',1],
+      [_l2a,'#ff7f0e',`2σ 하단 (×${_sd2})`,'dot',1],
       [_u1a,'#4f8ef7',`1σ 상단 (×${_su})`,'dash',1.5],
       [_l1a,'#4f8ef7',`1σ 하단 (×${_sd})`,'dash',1.5],
       [s.ref,'#888','기준가','dot',1],

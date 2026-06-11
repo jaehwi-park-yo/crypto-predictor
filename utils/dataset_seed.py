@@ -39,6 +39,8 @@ SEED_DONE_PATH = ROOT / "data" / "dataset_seed.zip.imported"
 DB_PATH = ROOT / "data" / "candles.db"
 BTC_CACHE = ROOT / "data" / "btc_history.json"
 USDT_CACHE = ROOT / "data" / "usdt_history.json"
+FX_CACHE = ROOT / "data" / "fx_usdkrw.json"
+BTC_USD_CACHE = ROOT / "data" / "btc_usd_history.json"
 
 
 def _seed_available() -> Optional[Path]:
@@ -154,6 +156,23 @@ def _restore_daily(zf: zipfile.ZipFile, csv_name: str,
     return len(converted)
 
 
+def _restore_fx(zf: zipfile.ZipFile) -> int:
+    """fx_usdkrw.csv → JSON 캐시 (date/close 2컬럼 — _restore_daily와 스키마 다름)."""
+    rows = _read_csv_from_zip(zf, "fx_usdkrw.csv")
+    if len(rows) < 30:
+        return 0
+    converted = []
+    for r in rows:
+        try:
+            converted.append({"date": r["date"], "close": float(r["close"])})
+        except (KeyError, ValueError):
+            continue
+    FX_CACHE.parent.mkdir(parents=True, exist_ok=True)
+    FX_CACHE.write_text(json.dumps(converted, ensure_ascii=False), encoding="utf-8")
+    logger.info("[시드] fx_usdkrw.csv → %s (%d행)", FX_CACHE.name, len(converted))
+    return len(converted)
+
+
 def restore_from_seed(force: bool = False) -> bool:
     """
     시드 ZIP이 있고 DB/캐시가 비어있으면 복원한다.
@@ -176,6 +195,8 @@ def restore_from_seed(force: bool = False) -> bool:
             _restore_minutes(zf)
             _restore_daily(zf, "daily_btc.csv", BTC_CACHE, min_rows=100)
             _restore_daily(zf, "daily_usdt.csv", USDT_CACHE, min_rows=30)
+            _restore_fx(zf)
+            _restore_daily(zf, "daily_btc_usd.csv", BTC_USD_CACHE, min_rows=100)
     except Exception as e:
         logger.error("[시드] 복원 실패: %s", e)
         return False
