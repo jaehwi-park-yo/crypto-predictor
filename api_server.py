@@ -203,6 +203,8 @@ def get_dashboard(
             "cur_price":   mon_obj.current_price,
             "rev_ru":      mon_obj.forecast_revised_upper,
             "rev_rl":      mon_obj.forecast_revised_lower,
+            "rev_u1":      mon_obj.forecast_upper_1s,
+            "rev_l1":      mon_obj.forecast_lower_1s,
             "rev_u2":      mon_obj.forecast_upper_2s,
             "rev_l2":      mon_obj.forecast_lower_2s,
             "today":       today.isoformat(),
@@ -221,7 +223,10 @@ def get_dashboard(
             "status": "PREDICTED", "detail": "예측 단계",
             "sigma_change": 0, "box_shift": 0, "cur_price": fallback_price,
             "rev_ru": snap.recommended_upper, "rev_rl": snap.recommended_lower,
-            "rev_u2": snap.box_upper_2s, "rev_l2": snap.box_lower_2s,
+            "rev_u1": snap.box_upper_1s_asym or snap.box_upper_1s,
+            "rev_l1": snap.box_lower_1s_asym or snap.box_lower_1s,
+            "rev_u2": snap.box_upper_2s_asym or snap.box_upper_2s,
+            "rev_l2": snap.box_lower_2s_asym or snap.box_lower_2s,
             "today": today.isoformat(),
         }
 

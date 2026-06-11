@@ -256,10 +256,10 @@ def monitor(
     revised_sigma = snapshot.daily_sigma
     sigma_change = 0.0
     box_shift = 0.0
-    forecast_u1 = snapshot.box_upper_1s
-    forecast_l1 = snapshot.box_lower_1s
-    forecast_u2 = snapshot.box_upper_2s
-    forecast_l2 = snapshot.box_lower_2s
+    forecast_u1 = snapshot.box_upper_1s_asym or snapshot.box_upper_1s
+    forecast_l1 = snapshot.box_lower_1s_asym or snapshot.box_lower_1s
+    forecast_u2 = snapshot.box_upper_2s_asym or snapshot.box_upper_2s
+    forecast_l2 = snapshot.box_lower_2s_asym or snapshot.box_lower_2s
     forecast_ru = snapshot.recommended_upper
     forecast_rl = snapshot.recommended_lower
 
@@ -286,11 +286,11 @@ def monitor(
             rev_mid  = (revised.recommended_upper  + revised.recommended_lower)  / 2
             box_shift = (rev_mid - orig_mid) / orig_mid * 100
 
-            # 수정 예측 밴드: 현재가 기준으로 남은 기간 투영
-            forecast_u1 = revised.box_upper_1s
-            forecast_l1 = revised.box_lower_1s
-            forecast_u2 = revised.box_upper_2s
-            forecast_l2 = revised.box_lower_2s
+            # 수정 예측 밴드: 현재가 기준으로 남은 기간 투영 (비대칭 우선)
+            forecast_u1 = revised.box_upper_1s_asym or revised.box_upper_1s
+            forecast_l1 = revised.box_lower_1s_asym or revised.box_lower_1s
+            forecast_u2 = revised.box_upper_2s_asym or revised.box_upper_2s
+            forecast_l2 = revised.box_lower_2s_asym or revised.box_lower_2s
             forecast_ru = revised.recommended_upper
             forecast_rl = revised.recommended_lower
         except Exception as e:

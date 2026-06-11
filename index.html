@@ -881,14 +881,24 @@
 
           <div class="info-grid">
             <div class="info-card">
-              <h3>📐 수정 예측 vs 원본 비교</h3>
+              <h3>📐 수정 예측 vs 원본 비교 (1σ/2σ)</h3>
               <table class="data">
-                <tr><td></td><td style="color:var(--muted)">원본</td><td style="color:var(--orange)">수정</td></tr>
-                <tr><td>일간 σ</td><td id="mon-orig-sigma">─</td><td id="mon-rev-sigma">─</td></tr>
-                <tr><td>권장 상단</td><td id="mon-orig-ru" style="color:var(--green)">─</td><td id="mon-rev-ru" style="color:var(--orange)">─</td></tr>
-                <tr><td>권장 하단</td><td id="mon-orig-rl" style="color:var(--green)">─</td><td id="mon-rev-rl" style="color:var(--orange)">─</td></tr>
-                <tr><td>박스 중심</td><td>기준</td><td id="mon-rev-shift" style="color:var(--orange)">─</td></tr>
+                <tr style="border-bottom:2px solid var(--border)">
+                  <td></td>
+                  <td style="color:var(--muted);text-align:right">원본</td>
+                  <td style="color:var(--orange);text-align:right">수정</td>
+                  <td style="color:var(--muted);text-align:right">Δ</td>
+                </tr>
+                <tr><td>일간 σ</td><td id="mon-orig-sigma" style="text-align:right">─</td><td id="mon-rev-sigma" style="text-align:right">─</td><td id="mon-d-sigma" style="text-align:right">─</td></tr>
+                <tr><td>1σ 상단 <span style="color:var(--muted);font-size:.75em">(권장)</span></td><td id="mon-orig-ru" style="color:var(--green);text-align:right">─</td><td id="mon-rev-ru" style="color:var(--orange);text-align:right">─</td><td id="mon-d-ru" style="text-align:right">─</td></tr>
+                <tr><td>1σ 하단 <span style="color:var(--muted);font-size:.75em">(권장)</span></td><td id="mon-orig-rl" style="color:var(--green);text-align:right">─</td><td id="mon-rev-rl" style="color:var(--orange);text-align:right">─</td><td id="mon-d-rl" style="text-align:right">─</td></tr>
+                <tr><td>2σ 상단</td><td id="mon-orig-u2" style="color:var(--green);text-align:right">─</td><td id="mon-rev-u2" style="color:var(--orange);text-align:right">─</td><td id="mon-d-u2" style="text-align:right">─</td></tr>
+                <tr><td>2σ 하단</td><td id="mon-orig-l2" style="color:var(--green);text-align:right">─</td><td id="mon-rev-l2" style="color:var(--orange);text-align:right">─</td><td id="mon-d-l2" style="text-align:right">─</td></tr>
+                <tr style="border-top:1px solid var(--border)"><td>박스 중심</td><td style="text-align:right">기준</td><td id="mon-rev-shift" style="color:var(--orange);text-align:right">─</td><td></td></tr>
               </table>
+              <div style="font-size:.72rem;color:var(--muted);margin-top:6px;line-height:1.5">
+                Δ = (수정 − 원본) / 원본. 수정 예측은 월중 3일 경과 후부터 경과 데이터로 σ를 재추정해 산출됩니다.
+              </div>
             </div>
             <div class="info-card">
               <h3>ℹ️ 수정 예측 근거</h3>
@@ -1062,7 +1072,7 @@ let D = {
         monthly_sigma:15,daily_sigma:2.8,confidence:68.3,gi_pct:0.5,gi_krw:0,
         bots:0,deployed:0,reserve:0,per_bot:0,volume:0,reward:0,capital:40000000},
   mon:{elapsed:0,total:31,progress:0,containment:100,status:'PREDICTED',detail:'로딩 중…',
-       sigma_change:0,box_shift:0,cur_price:0,rev_ru:0,rev_rl:0,rev_u2:0,rev_l2:0},
+       sigma_change:0,box_shift:0,cur_price:0,rev_ru:0,rev_rl:0,rev_u1:0,rev_l1:0,rev_u2:0,rev_l2:0},
   pre_x:[],pre_o:[],pre_h:[],pre_l:[],pre_c:[],
   fut:[],fut_rem:[],glines:[],
   meas_in:{x:[],o:[],h:[],l:[],c:[]},
@@ -1395,10 +1405,16 @@ function buildBTCChart() {
        y:[...D.fut_rem.map(()=>D.mon.rev_ru),...[...D.fut_rem].reverse().map(()=>D.mon.rev_rl)],
        fill:'toself', fillcolor:'rgba(44,160,44,0.07)', line:{width:0},
        showlegend:false, hoverinfo:'skip'},
-      {type:'scatter', x:D.fut_rem, y:D.fut_rem.map(()=>D.mon.rev_ru), mode:'lines',
-       line:{color:'#2ca02c',width:2}, name:'수정권장 상단 (오늘 기준)'},
-      {type:'scatter', x:D.fut_rem, y:D.fut_rem.map(()=>D.mon.rev_rl), mode:'lines',
-       line:{color:'#2ca02c',width:2}, name:'수정권장 하단 (오늘 기준)'},
+      ...[
+        [D.mon.rev_ru,'#2ca02c','수정권장 상단 (오늘 기준)','solid',2],
+        [D.mon.rev_rl,'#2ca02c','수정권장 하단 (오늘 기준)','solid',2],
+        [D.mon.rev_u2,'#d4a017','수정 2σ 상단 (오늘 기준)','dot',1.5],
+        [D.mon.rev_l2,'#d4a017','수정 2σ 하단 (오늘 기준)','dot',1.5],
+      ].filter(([y])=>y>0).map(([y,color,name,dash,width])=>({
+        type:'scatter', x:D.fut_rem, y:D.fut_rem.map(()=>y), mode:'lines',
+        line:{color,width,dash}, name,
+        hovertemplate:`${name}: %{y:,.0f}원<extra></extra>`,
+      })),
     ] : []),
     // Grid lines (inner zone only, blue tint)
     ...D.glines.slice(0,60).map((gl,i)=>({
@@ -1860,16 +1876,19 @@ function buildMonitorChart() {
     ...(D.fut_rem.length ? [{
       type:'scatter', x:[...D.fut_rem,...[...D.fut_rem].reverse()],
       y:[...D.fut_rem.map(()=>m.rev_u2),...[...D.fut_rem].reverse().map(()=>m.rev_l2)],
-      fill:'toself', fillcolor:'rgba(255,165,0,0.08)', line:{width:0}, name:'수정 2σ', hoverinfo:'skip',
+      fill:'toself', fillcolor:'rgba(255,165,0,0.08)', line:{width:0}, name:'수정 2σ 존', hoverinfo:'skip',
     }] : []),
     ...D.fut_rem.length ? [
       [s.ru,'#2ca02c','원본 권장 상단','dot',1.5],
       [s.rl,'#2ca02c','원본 권장 하단','dot',1.5],
       [m.rev_ru,'#ff7f0e','수정 권장 상단','solid',2.5],
       [m.rev_rl,'#ff7f0e','수정 권장 하단','solid',2.5],
-    ].map(([y,color,name,dash,width])=>({
+      [m.rev_u2,'#d4a017','수정 2σ 상단','dot',1.5],
+      [m.rev_l2,'#d4a017','수정 2σ 하단','dot',1.5],
+    ].filter(([y])=>y>0).map(([y,color,name,dash,width])=>({
       type:'scatter', x:D.fut_rem, y:D.fut_rem.map(()=>y), mode:'lines',
       line:{color,width,dash}, name,
+      hovertemplate:`${name}: %{y:,.0f}원<extra></extra>`,
     })) : [],
     {type:'scatter', x:[m.today || D.pre_x[D.pre_x.length-1]], y:[m.cur_price], mode:'markers+text',
      marker:{size:12, color:'gold', symbol:'diamond'},
@@ -2003,6 +2022,27 @@ function updateMonitorPanel() {
   set('mon-rev-ru', m.rev_ru ? fmt(m.rev_ru) + '원' : '─');
   set('mon-rev-rl', m.rev_rl ? fmt(m.rev_rl) + '원' : '─');
   set('mon-rev-shift', (m.box_shift >= 0 ? '+' : '') + m.box_shift + '%');
+
+  // 2σ 원본/수정 + Δ열 (1σ/2σ 모두)
+  const origU2 = s.u2a || s.u2, origL2 = s.l2a || s.l2;
+  set('mon-orig-u2', origU2 ? fmt(origU2) + '원' : '─');
+  set('mon-orig-l2', origL2 ? fmt(origL2) + '원' : '─');
+  set('mon-rev-u2', m.rev_u2 ? fmt(m.rev_u2) + '원' : '─');
+  set('mon-rev-l2', m.rev_l2 ? fmt(m.rev_l2) + '원' : '─');
+  const setDelta = (id, orig, rev) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    if (!orig || !rev) { el.textContent = '─'; return; }
+    const d = (rev - orig) / orig * 100;
+    if (Math.abs(d) < 0.05) { el.textContent = '0%'; el.style.color = 'var(--muted)'; return; }
+    el.textContent = (d > 0 ? '+' : '') + d.toFixed(1) + '%';
+    el.style.color = d > 0 ? '#d24f45' : '#4f8ef7';  // 상향=빨강, 하향=파랑 (국내 관례)
+  };
+  setDelta('mon-d-sigma', s.daily_sigma, s.daily_sigma * (1 + revSigChange / 100));
+  setDelta('mon-d-ru', s.ru, m.rev_ru);
+  setDelta('mon-d-rl', s.rl, m.rev_rl);
+  setDelta('mon-d-u2', origU2, m.rev_u2);
+  setDelta('mon-d-l2', origL2, m.rev_l2);
 
   // 수정 예측 근거 노트
   const asOfParts = s.as_of ? s.as_of.split('-') : [];
