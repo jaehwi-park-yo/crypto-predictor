@@ -25,7 +25,9 @@ if not exist "%VENV_DIR%\Scripts\activate.bat" (
 call %VENV_DIR%\Scripts\activate.bat
 
 echo [2/4] Installing dependencies...
-pip install -q -r requirements.txt
+rem python -m pip avoids running pip.exe directly (blocked by some
+rem Device Guard / AppLocker policies on managed PCs)
+python -m pip install -q -r requirements.txt
 
 if not exist "data" mkdir data
 

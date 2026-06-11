@@ -27,7 +27,7 @@ source "$VENV_DIR/bin/activate"
 
 # 의존성 설치
 echo "[2/4] 의존성 확인 중..."
-pip install -q -r "$SCRIPT_DIR/requirements.txt"
+python3 -m pip install -q -r "$SCRIPT_DIR/requirements.txt"
 
 # 데이터 디렉토리 생성
 mkdir -p "$SCRIPT_DIR/data"
