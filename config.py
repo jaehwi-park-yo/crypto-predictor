@@ -96,6 +96,12 @@ COMFORTABLE_DAILY_TURNOVER = 10.0             # 목표구간 자동선정용 일
 HORIZON_DAYS = 30                             # 익월 1개월 예측 지평
 PREDICTION_DRIFT = 0.0                        # 박스권 매매 = 평균회귀 가정 → drift 0
 
+# ──────────────────────────────────────────────────────────
+# 자동 업데이트 (GitHub 저장소 VERSION 비교 → 원클릭 적용)
+# ──────────────────────────────────────────────────────────
+GITHUB_REPO = "jaehwi-park-yo/crypto-predictor"
+UPDATE_BRANCH = "main"
+
 # API endpoints
 BITHUMB_BASE_URL = "https://api.bithumb.com"
 COINGECKO_BASE_URL = "https://api.coingecko.com/api/v3"

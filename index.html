@@ -2465,6 +2465,8 @@ window.onload = () => {
   fetchDashboard();
   setInterval(fetchDashboard, 10 * 60_000);  // 10분마다 대시보드 갱신
   pollMinuteStatus();  // 분봉 수집 상태 칩 (수집 중이면 30초 폴링)
+  checkUpdate();       // 새 버전 있으면 좌하단 업데이트 배지 표시
+  setInterval(checkUpdate, 60 * 60_000);  // 1시간마다 재확인
   // 차트는 해당 탭이 보일 때 그린다 (숨김 div 렌더 시 너비 0 문제 방지)
 };
 
@@ -2474,12 +2476,59 @@ async function shutdownServer() {
   btn.disabled = true;
   btn.textContent = '종료 중…';
   try {
-    await fetch('/api/shutdown', { method: 'POST' });
+    await fetch(`${API_BASE}/api/shutdown`, { method: 'POST' });
   } catch (_) {}
   btn.textContent = '서버 종료됨';
   btn.style.background = '#555';
 }
+
+// ── 자동 업데이트 확인 ──────────────────────────────
+async function checkUpdate() {
+  try {
+    const res = await fetch(`${API_BASE}/api/update/check`, {signal: AbortSignal.timeout(15000)});
+    const j = await res.json();
+    if (j.available) {
+      const badge = document.getElementById('btn-update');
+      badge.textContent = `⬆ v${j.latest} 업데이트`;
+      badge.style.display = 'block';
+    }
+  } catch (_) { /* 서버 꺼짐/네트워크 차단 — 배지 미표시 */ }
+}
+
+async function applyUpdate() {
+  const badge = document.getElementById('btn-update');
+  if (!confirm(`새 버전으로 업데이트하시겠습니까?\n적용 후 서버가 자동 재시작되고 페이지가 새로고침됩니다.\n(데이터 폴더는 보존됩니다)`)) return;
+  badge.disabled = true;
+  badge.textContent = '업데이트 적용 중…';
+  try {
+    const res = await fetch(`${API_BASE}/api/update/apply`, {method: 'POST', signal: AbortSignal.timeout(180000)});
+    if (!res.ok) throw new Error((await res.json()).detail || res.statusText);
+    badge.textContent = '서버 재시작 대기…';
+    // 서버가 재기동될 때까지 /api/health 폴링 후 새로고침
+    const t0 = Date.now();
+    const poll = setInterval(async () => {
+      if (Date.now() - t0 > 120000) { clearInterval(poll); badge.textContent = '재시작 확인 실패 — 수동 새로고침 필요'; return; }
+      try {
+        const h = await fetch(`${API_BASE}/api/health`, {signal: AbortSignal.timeout(2000)});
+        if (h.ok) { clearInterval(poll); location.reload(); }
+      } catch (_) {}
+    }, 3000);
+  } catch (e) {
+    badge.disabled = false;
+    badge.textContent = '업데이트 실패 — 다시 시도';
+    alert('업데이트 실패: ' + e.message);
+  }
+}
 </script>
+
+<button id="btn-update"
+  onclick="applyUpdate()"
+  style="display:none;position:fixed;left:16px;bottom:64px;z-index:9999;
+         background:#2980b9;color:#fff;border:none;border-radius:8px;
+         padding:10px 20px;font-size:14px;font-weight:600;cursor:pointer;
+         box-shadow:0 2px 8px rgba(0,0,0,0.4);letter-spacing:0.5px;"
+  title="클릭 시 최신 버전을 받아 적용하고 서버를 자동 재시작합니다">
+</button>
 
 <button id="btn-shutdown"
   onclick="shutdownServer()"

@@ -42,7 +42,7 @@ app = FastAPI(title="BTC Grid Prediction API", version="1.0.0")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_methods=["GET"],
+    allow_methods=["GET", "POST"],
     allow_headers=["*"],
 )
 
@@ -496,6 +496,29 @@ def export_dataset_api():
         raise HTTPException(status_code=500, detail=f"데이터셋 생성 실패: {e}")
     fname = f"btc-grid-dataset_{date.today().isoformat()}.zip"
     return FileResponse(meta["zip_path"], media_type="application/zip", filename=fname)
+
+
+@app.get("/api/update/check")
+def update_check_api(force: bool = Query(False)):
+    """GitHub 최신 버전 확인. {current, latest, available}"""
+    from utils.update_check import check_update
+    try:
+        return check_update(force=force)
+    except Exception as e:
+        return {"current": None, "latest": None, "available": False, "error": str(e)}
+
+
+@app.post("/api/update/apply")
+def update_apply_api():
+    """최신 버전 다운로드·덮어쓰기 후 서버 자동 재시작."""
+    from utils.update_check import apply_update, restart_server
+    try:
+        result = apply_update()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"업데이트 적용 실패: {e}")
+    restart_server(delay=1.0)
+    return {"status": "ok", **result,
+            "message": "업데이트 적용 완료 — 서버를 재시작합니다."}
 
 
 @app.post("/api/shutdown")
