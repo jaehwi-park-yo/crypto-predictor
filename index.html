@@ -29,8 +29,13 @@
   header h1 .usdt { color: var(--usdt); }
   .badge { background: #1e3a5f; color: var(--accent); border: 1px solid #2c5282;
            font-size: .7rem; padding: 3px 10px; border-radius: 20px; }
-  .notice { background: #1e2a1a; border: 1px solid #2d5a1a; border-radius: 8px;
-            padding: 8px 14px; color: #86c96e; font-size: .78rem; }
+  .notice { border-radius: 8px; padding: 6px 14px; font-size: .78rem; transition: all .3s; }
+  .notice.connecting { background: #1e2424; border: 1px solid #2d5a5a; color: #6ec9c9; }
+  .notice.connected  { background: #1e2a1a; border: 1px solid #2d5a1a; color: #86c96e; }
+  .notice.error      { background: #2a1a1a; border: 1px solid #5a2d2d; color: #e07070; }
+  /* chart placeholder */
+  .chart-placeholder { display:flex; align-items:center; justify-content:center;
+    height:100%; min-height:300px; color:var(--muted); font-size:.85rem; }
 
   .layout { display: flex; min-height: calc(100vh - 57px); }
 
@@ -38,6 +43,7 @@
     width: 240px; min-width: 200px; background: var(--panel);
     border-right: 1px solid var(--border); padding: 20px 16px;
     display: flex; flex-direction: column; gap: 16px; flex-shrink: 0;
+    overflow-x: hidden; word-break: keep-all; overflow-wrap: break-word;
   }
   .sb-title { font-size: .7rem; font-weight: 700; color: var(--muted);
               text-transform: uppercase; letter-spacing: .08em; margin-bottom: 4px; }
@@ -85,10 +91,10 @@
   .strat-card .sc-badge { font-size: .66rem; padding: 2px 8px; border-radius: 12px; }
   .inner .sc-badge { background: rgba(79,142,247,.2); color: var(--inner-border); }
   .outer .sc-badge { background: rgba(255,127,14,.2); color: var(--outer-border); }
-  .strat-card table.sc-tbl { width: 100%; border-collapse: collapse; font-size: .78rem; }
-  .strat-card table.sc-tbl td { padding: 4px 2px; }
-  .strat-card table.sc-tbl td:first-child { color: var(--muted); }
-  .strat-card table.sc-tbl td:last-child { text-align: right; font-weight: 600; }
+  .strat-card table.sc-tbl { width: 100%; border-collapse: collapse; font-size: .82rem; }
+  .strat-card table.sc-tbl td { padding: 5px 3px; }
+  .strat-card table.sc-tbl td:first-child { color: var(--muted); font-size: .78rem; }
+  .strat-card table.sc-tbl td:last-child { text-align: right; font-weight: 700; font-size: .88rem; }
 
   /* Eval card */
   .eval-card {
@@ -273,7 +279,7 @@
       <span id="live-source" style="font-size:.68rem;color:#6a7180">⚪ 오프라인</span>
       <span id="minute-status" style="display:none;font-size:.68rem;color:#8b929e"></span>
     </div>
-    <div class="notice" id="api-notice">⚠️ API 서버 연결 중… — <code>python api_server.py</code> 실행 필요</div>
+    <div class="notice connecting" id="api-notice">⏳ API 서버 연결 중… <code style="opacity:.7">python api_server.py</code></div>
     <span class="badge">Beta v0.2</span>
   </div>
 </header>
@@ -553,7 +559,9 @@
           <div id="revision-notice" style="display:none;border-radius:8px;padding:10px 14px;font-size:.82rem;font-weight:600;border:1px solid transparent"></div>
 
           <div class="chart-box">
-            <div id="chart-btc" style="height:480px"></div>
+            <div id="chart-btc" style="height:480px">
+              <div class="chart-placeholder">📊 BTC 탭 클릭 시 차트가 여기에 표시됩니다</div>
+            </div>
           </div>
 
           <!-- BTC zone detail -->
@@ -632,7 +640,9 @@
           <div id="usdt-revision-notice" style="display:none;border-radius:8px;padding:10px 14px;font-size:.82rem;font-weight:600;border:1px solid transparent"></div>
 
           <div class="chart-box">
-            <div id="chart-usdt" style="height:400px"></div>
+            <div id="chart-usdt" style="height:400px">
+              <div class="chart-placeholder">📊 USDT 탭 클릭 시 차트가 여기에 표시됩니다</div>
+            </div>
           </div>
 
           <!-- USDT 간격 시뮬레이터 -->
@@ -836,7 +846,9 @@
           </div>
 
           <div class="chart-box">
-            <div id="chart-monitor" style="height:480px"></div>
+            <div id="chart-monitor" style="height:480px">
+              <div class="chart-placeholder">📡 모니터 탭 클릭 시 예측→측정 차트가 여기에 표시됩니다</div>
+            </div>
           </div>
 
           <!-- 데드존/그리드락 경보 (연속 이탈 시에만 표시) -->
@@ -1172,7 +1184,7 @@ function switchTab(id, el) {
   document.getElementById('tab-'+id).classList.add('active');
   if (id === 'btc')     {
     if (window._chartBTC) { Plotly.Plots.resize('chart-btc'); }
-    else { fetchDashboard().then(() => { if (!window._chartBTC) buildBTCChart(); }); }
+    else { fetchDashboard().then(() => { try { if (!window._chartBTC) buildBTCChart(); } catch(e) { console.warn('BTC 차트 빌드 실패:', e); } }); }
   }
   if (id === 'usdt')    { window._chartUSDT ? Plotly.Plots.resize('chart-usdt')    : buildUSDTChart(); }
   if (id === 'monitor') {
@@ -2022,8 +2034,8 @@ function updateMonitorPanel() {
   set('btc-l2', l2a ? fmt(l2a) + '원' : '─');
   set('btc-monthly-sigma', s.monthly_sigma ? s.monthly_sigma + '%' : '─');
   // σ 배수 배지
-  const badge = document.getElementById('btc-sigma-badge');
-  if (badge && s.sigma_up) badge.textContent = `σ↑${s.sigma_up} / σ↓${s.sigma_dn}`;
+  const sigmaBadge = document.getElementById('btc-sigma-badge');
+  if (sigmaBadge && s.sigma_up) sigmaBadge.textContent = `σ↑${s.sigma_up} / σ↓${s.sigma_dn}`;
 }
 
 // ─── USDT 리스크 모니터 패널 갱신 ────────────────────────────────────────────
@@ -2138,7 +2150,8 @@ function updateBtcRevisionNotice() {
     el.textContent = `⚠️ 박스 중심이 원예측 대비 ${shiftStr} 이동 — 그리드 재설정 검토 필요 (수정권장 밴드 ${fmt(m.rev_rl)}~${fmt(m.rev_ru)}원 참조)`;
   } else {
     el.style.background = '#1a2e1a'; el.style.borderColor = '#2d5a1a'; el.style.color = '#86c96e';
-    el.textContent = `✅ 원예측 박스 유효 — 수정폭 ${shiftStr} (5% 이내)`;
+    const shiftLabel = a < 0.1 ? '수정 없음' : `수정폭 ${shiftStr}`;
+    el.textContent = `✅ 원예측 박스 유효 — ${shiftLabel} (5% 이내)`;
   }
   el.style.display = 'block';
 }
@@ -2160,7 +2173,8 @@ function updateUsdtRevisionNotice() {
     el.textContent = `⚠️ 박스 중심이 월초 대비 ${shiftStr} 이동 — 그리드 재설정 검토 필요 (수정 박스 ${f1(USDT.l1)}~${f1(USDT.u1)}원 참조)`;
   } else {
     el.style.background = '#1a2e1a'; el.style.borderColor = '#2d5a1a'; el.style.color = '#86c96e';
-    el.textContent = `✅ 월초 박스 유효 — 수정폭 ${shiftStr} (5% 이내)`;
+    const shiftLabel = a < 0.05 ? '수정 없음' : `수정폭 ${shiftStr}`;
+    el.textContent = `✅ 월초 박스 유효 — ${shiftLabel} (5% 이내)`;
   }
   el.style.display = 'block';
 }
@@ -2279,7 +2293,10 @@ async function fetchDashboard() {
 
     // 공지 배너 업데이트
     const noticeEl = document.getElementById('api-notice');
-    if (noticeEl) noticeEl.textContent = '✅ 실시간 API 연결됨 — 실제 BTC/KRW 히스토리 기반 예측';
+    if (noticeEl) {
+      noticeEl.className = 'notice connected';
+      noticeEl.textContent = '✅ 서버 연결됨 — 실시간 히스토리 기반 예측';
+    }
 
     // 메트릭 + 차트 재빌드
     updateMetrics();
@@ -2299,7 +2316,10 @@ async function fetchDashboard() {
     const modeEl = document.getElementById('predict-mode-label');
     if (modeEl) modeEl.textContent = '오프라인 (데이터 없음)';
     const noticeEl = document.getElementById('api-notice');
-    if (noticeEl) noticeEl.textContent = '⚠️ API 서버 연결 실패 — python api_server.py 실행 후 새로고침';
+    if (noticeEl) {
+      noticeEl.className = 'notice error';
+      noticeEl.textContent = '⚠️ 서버 연결 실패 — python api_server.py 실행 후 새로고침';
+    }
   } finally {
     if (loadingEl) loadingEl.style.display = 'none';
   }
