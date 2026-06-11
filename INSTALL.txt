@@ -21,7 +21,7 @@
 
   항목    최소 사양                           권장
   -------------------------------------------------------------------
-  OS      Windows 10, macOS 12, Ubuntu 20.04  최신 버전
+  OS      Windows 10 이상 (Windows 전용)
   Python  3.10 이상                           3.11 또는 3.12
   RAM     512 MB                              2 GB 이상
   디스크  200 MB                              1 GB 이상
@@ -39,13 +39,8 @@
 2. Download Python 3.12.x 클릭
 3. 설치 시 "Add Python to PATH" 반드시 체크 ✔
 
-[macOS]
-    # Homebrew가 없는 경우 먼저 설치
-    /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-    brew install python@3.12
 
-[Ubuntu / Debian]
-    sudo apt update && sudo apt install python3 python3-pip python3-venv -y
+
 
 ────────────────────────────────────────────────────────────────
 
@@ -59,7 +54,6 @@ btc-grid-prediction-beta.zip을 원하는 폴더에 압축 해제하세요.
     📁 btc-grid-prediction-beta/
     ├── index.html          ← 대시보드 (브라우저로 열기)
     ├── start.bat           ← Windows 실행 스크립트
-    ├── start.sh            ← macOS/Linux 실행 스크립트
     ├── requirements.txt    ← Python 의존성 목록
     ├── api_server.py       ← 실시간 API 서버
     ├── main.py             ← CLI 예측 엔진
@@ -72,15 +66,6 @@ btc-grid-prediction-beta.zip을 원하는 폴더에 압축 해제하세요.
 
 Windows — start.bat 파일을 더블클릭
 
-macOS / Linux — 터미널에서 실행
-    # 압축 해제 폴더로 이동
-    cd btc-grid-prediction-beta
-    
-    # 실행 권한 부여 (최초 1회)
-    chmod +x start.sh
-    
-    # 실행
-    ./start.sh
 
 실행 시 다음이 자동으로 진행됩니다:
 
@@ -100,7 +85,7 @@ macOS / Linux — 터미널에서 실행
 
   방법                      특징               명령
   -----------------------------------------------------------------------
-  start.bat / start.sh  원클릭, 권장       더블클릭 또는 `./start.sh`
+  start.bat             원클릭, 권장       더블클릭
   수동 API 서버             디버깅, 로그 확인  `python api_server.py`
   Streamlit 대시보드        추가 분석 화면     `streamlit run gui/app.py`
   CLI 예측 엔진             텍스트 리포트      `python main.py`
@@ -146,7 +131,7 @@ macOS / Linux — 터미널에서 실행
  6. 실시간 가격 수신
 ================================================================
 
-API 서버(start.sh / start.bat)가 실행 중이면 대시보드가 60초 주기로 자동 갱신됩니다.
+API 서버(start.bat)가 실행 중이면 대시보드가 60초 주기로 자동 갱신됩니다.
 
 - 🟢 실시간: 업비트/빗썸 API에서 현재가 수신 중
 - 🟡 폴백: 인터넷 미연결 시 사전 캐시 데이터 사용 (기능은 정상)
@@ -180,10 +165,10 @@ API 서버(start.sh / start.bat)가 실행 중이면 대시보드가 60초 주�
 ================================================================
 
 Q. 브라우저를 열었는데 차트가 안 보여요
-→ start.bat / start.sh로 API 서버를 먼저 실행하세요. 또는 파일을 직접 열어도 차트는 표시되며, 실시간 가격만 폴백 데이터로 표시됩니다.
+→ start.bat로 API 서버를 먼저 실행하세요. 또는 파일을 직접 열어도 차트는 표시되며, 실시간 가격만 폴백 데이터로 표시됩니다.
 
 Q. 포트 8000이 이미 사용 중이라고 나와요
-→ 이미 API 서버가 실행 중입니다. start.sh는 자동으로 기존 프로세스를 종료하고 재시작합니다. Windows에서는 기존 "API Server" 창을 닫고 다시 실행하세요.
+→ 이미 API 서버가 실행 중입니다. start.bat는 자동으로 기존 프로세스를 종료하고 재시작합니다. Windows에서는 기존 "API Server" 창을 닫고 다시 실행하세요.
 
 Q. 패키지 설치 중 에러가 나요
 → Python 버전을 확인하세요(python --version). 3.10 미만이면 업그레이드가 필요합니다. 회사 PC 등 네트워크가 제한된 경우 IT 담당자에게 pip 프록시 설정을 문의하세요.
@@ -195,7 +180,7 @@ Q. 예측 박스권이 실제와 많이 달라요
 → 본 예측은 과거 변동성 기반 통계 모델(1σ/2σ)로 익월 박스권을 추정합니다. 급등락·뉴스 이벤트는 반영되지 않으며, 참고 지표로만 활용하시기 바랍니다.
 
 Q. Streamlit 대시보드를 열었더니 pandas 에러가 나요
-→ 가상환경이 활성화된 상태에서 pip install pandas를 실행하거나, start.sh / start.bat를 통해 환경을 재설치하세요.
+→ 가상환경이 활성화된 상태에서 pip install pandas를 실행하거나, start.bat를 통해 환경을 재설치하세요.
 
 ────────────────────────────────────────────────────────────────
 
@@ -218,7 +203,6 @@ Q. Streamlit 대시보드를 열었더니 pandas 에러가 나요
     btc-grid-prediction-beta/
     ├── index.html              대시보드 (브라우저 단일 파일)
     ├── start.bat               Windows 실행
-    ├── start.sh                macOS/Linux 실행
     ├── api_server.py           FastAPI 실시간 API 서버
     ├── main.py                 오케스트레이터 (CLI)
     ├── backtest.py             백테스터

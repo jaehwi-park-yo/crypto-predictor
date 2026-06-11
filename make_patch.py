@@ -6,7 +6,7 @@ make_patch.py — 배포자용 패치 ZIP 생성 스크립트
     python make_patch.py --out my.zip
 
 생성되는 ZIP 구조 (설치 폴더에 그대로 덮어쓰면 업데이트 완료):
-    patch.bat / patch.sh   — 사용자용 원클릭 패치 스크립트
+    patch.bat              — 사용자용 원클릭 패치 스크립트 (Windows 전용)
     VERSION                — 버전 파일
     CHANGELOG.md           — 변경 이력
     *.py, *.html 등        — 소스 코드 (data/, .venv/ 제외)
@@ -33,10 +33,10 @@ SRC_DIRS = ["agents", "models", "services", "utils", "gui"]
 SRC_FILES = [
     "api_server.py", "config.py", "main.py", "backtest.py", "make_pdf.py",
     "requirements.txt", "index.html",
-    "start.bat", "start.sh",
+    "start.bat",
     "VERSION", "CHANGELOG.md", "README.md", "INSTALL.md", "INSTALL.txt",
     "make_patch.py",
-    "patch.bat", "patch.sh",
+    "patch.bat",
 ]
 
 # data/ 내에서 패치에 포함할 파일 (시드 ZIP만)
@@ -104,7 +104,7 @@ def build_patch(out_path: Path) -> None:
     print(f"   크기: {size_mb:.1f} MB | 항목: {total}개 | 버전: v{version}")
     print(f"\n배포 방법:")
     print(f"  1. {out_path.name} 를 사용자에게 전달")
-    print(f"  2. 사용자: ZIP을 설치 폴더에 압축 해제 후 patch.bat (Win) / patch.sh (Mac/Linux) 실행")
+    print(f"  2. 사용자: ZIP을 설치 폴더에 압축 해제 후 patch.bat 실행")
 
 
 if __name__ == "__main__":

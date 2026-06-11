@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.4.2 (2026-06-11)
+### 변경
+- Windows 전용으로 정리: start.sh / patch.sh 제거, 설치 문서(INSTALL/README/PDF)에서
+  macOS·Linux 안내 삭제 — 배포 대상을 Windows로 한정해 패키지 경량화
+
 ## v0.4.1 (2026-06-11)
 ### 개선
 - 모니터/BTC 차트: 수정 2σ 상·하단 라인 추가 + 전체 수정 밴드에 호버 수치 표시

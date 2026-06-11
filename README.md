@@ -39,11 +39,6 @@
 
 **Windows** — `start.bat` 더블클릭
 
-**macOS / Linux**
-```bash
-chmod +x start.sh   # 최초 1회
-./start.sh
-```
 
 자동으로 ① 가상환경 생성 ② 의존성 설치 ③ FastAPI 서버 기동(`http://localhost:8000`)
 ④ 대시보드(`index.html`) 브라우저 오픈까지 수행합니다.

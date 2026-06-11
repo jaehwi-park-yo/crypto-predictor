@@ -226,7 +226,7 @@ def make_story():
     tbl(
         ['항목', '최소 사양', '권장'],
         [
-            ['OS',     'Windows 10 / macOS 12 / Ubuntu 20.04', '최신 버전'],
+            ['OS',     'Windows 10', 'Windows 11'],
             ['Python', '3.10 이상', '3.11 또는 3.12'],
             ['RAM',    '512 MB', '2 GB 이상'],
             ['디스크', '200 MB', '1 GB 이상'],
@@ -247,13 +247,6 @@ def make_story():
     ])
     sp(1)
 
-    h3('macOS  (Homebrew)')
-    code('brew install python@3.12')
-    note('Homebrew 미설치 시: https://brew.sh 에서 먼저 설치하세요.')
-    sp(1)
-
-    h3('Ubuntu / Debian')
-    code('sudo apt update &amp;&amp; sudo apt install python3 python3-pip python3-venv -y')
 
     # ── 섹션 3: 앱 설치 ───────────────────────────────────────────────────────
     h2('3.  앱 설치')
@@ -264,8 +257,7 @@ def make_story():
         'btc-grid-prediction-beta/\n'
         '├── index.html          ← 대시보드 (브라우저로 열기)\n'
         '├── start.bat           ← Windows 실행 스크립트\n'
-        '├── start.sh            ← macOS / Linux 실행 스크립트\n'
-        '├── requirements.txt    ← Python 의존성 목록\n'
+                '├── requirements.txt    ← Python 의존성 목록\n'
         '├── api_server.py       ← 실시간 API 서버\n'
         '├── data/\n'
         '│   └── btc_history.json  ← 사전 로드 BTC 히스토리 캐시\n'
@@ -275,8 +267,6 @@ def make_story():
 
     h3('3-2.  최초 실행 (자동 환경 설정)')
     body('**Windows** — `start.bat` 파일을 **더블클릭**')
-    body('**macOS / Linux** — 터미널에서:')
-    code('chmod +x start.sh   # 최초 1회\n./start.sh')
     sp(1)
     body('실행 시 다음이 자동으로 진행됩니다:')
     bullet([
@@ -292,7 +282,7 @@ def make_story():
     tbl(
         ['방법', '특징', '명령 / 방법'],
         [
-            ['start.bat / start.sh', '원클릭 실행 (권장)', '더블클릭 또는 ./start.sh'],
+            ['start.bat', '원클릭 실행 (권장)', '더블클릭'],
             ['수동 API 서버',         '로그·디버깅 확인',  'python api_server.py'],
             ['Streamlit 대시보드',    '추가 분석 화면',    'streamlit run gui/app.py'],
             ['CLI 예측 엔진',         '텍스트 리포트 생성','python main.py'],
@@ -343,7 +333,7 @@ def make_story():
 
     # ── 섹션 6: 실시간 가격 ───────────────────────────────────────────────────
     h2('6.  실시간 가격 수신')
-    body('API 서버(`start.sh` / `start.bat`)가 실행 중이면 대시보드가 **60초 주기로 자동 갱신**됩니다.')
+    body('API 서버(`start.bat`)가 실행 중이면 대시보드가 **60초 주기로 자동 갱신**됩니다.')
     sp(1)
     tbl(
         ['상태', '의미'],
@@ -392,9 +382,9 @@ def make_story():
 
     faqs = [
         ('차트가 안 보여요',
-         'start.bat / start.sh 로 API 서버를 먼저 실행하세요. 서버 없이 파일을 직접 열어도 차트는 표시되며, 실시간 가격만 폴백 데이터로 표시됩니다.'),
+         'start.bat 로 API 서버를 먼저 실행하세요. 서버 없이 파일을 직접 열어도 차트는 표시되며, 실시간 가격만 폴백 데이터로 표시됩니다.'),
         ('포트 8000이 이미 사용 중이에요',
-         'start.sh 는 자동으로 기존 프로세스를 종료하고 재시작합니다. Windows 에서는 기존 "API Server" 창을 닫고 다시 실행하세요.'),
+         'start.bat 는 자동으로 기존 프로세스를 종료하고 재시작합니다. Windows 에서는 기존 "API Server" 창을 닫고 다시 실행하세요.'),
         ('패키지 설치 중 에러가 나요',
          'python --version 으로 버전 확인 후 3.10 미만이면 업그레이드가 필요합니다. 사내 네트워크 제한 시 IT 담당자에게 pip 프록시 설정을 문의하세요.'),
         ('가격이 계속 폴백으로 나와요',
@@ -402,7 +392,7 @@ def make_story():
         ('예측 박스권이 실제와 많이 달라요',
          '본 예측은 과거 변동성 기반 통계 모델(1σ/2σ)로 익월 박스권을 추정합니다. 급등락·뉴스 이벤트는 반영되지 않으므로 참고 지표로만 활용하세요.'),
         ('Streamlit 에서 pandas 에러가 나요',
-         '가상환경 활성화 후 pip install pandas 를 실행하거나, start.sh / start.bat 으로 환경을 재설치하세요.'),
+         '가상환경 활성화 후 pip install pandas 를 실행하거나, start.bat 으로 환경을 재설치하세요.'),
     ]
     for q, a in faqs:
         add(KeepTogether([
@@ -422,7 +412,7 @@ def make_story():
     code(
         'btc-grid-prediction-beta/\n'
         '├── index.html              대시보드 (브라우저 단일 파일)\n'
-        '├── start.bat / start.sh    실행 스크립트\n'
+        '├── start.bat / start.bat    실행 스크립트\n'
         '├── api_server.py           FastAPI 실시간 API 서버\n'
         '├── main.py                 오케스트레이터 (CLI)\n'
         '├── backtest.py             백테스터\n'
