@@ -23,7 +23,8 @@ try:
     from fastapi.middleware.cors import CORSMiddleware
     import uvicorn
 except ImportError:
-    print("fastapi/uvicorn 미설치. 설치: pip install fastapi uvicorn")
+    print("fastapi/uvicorn 미설치. 설치: pip install -r requirements.txt")
+    print("(또는 start.bat / start.sh 실행 시 자동 설치됩니다)")
     sys.exit(1)
 
 from calendar import monthrange
