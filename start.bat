@@ -45,5 +45,11 @@ echo  Dashboard  : index.html (opened in browser)
 echo.
 echo  Optional Streamlit UI: streamlit run gui/app.py
 echo.
-echo  To stop: close the "API Server" window.
-pause
+echo  To stop: use the shutdown button in the dashboard, or close the "API Server" window.
+echo  (This launcher window will close automatically when the server shuts down.)
+echo.
+:wait_server
+timeout /t 5 /nobreak > nul
+tasklist /FI "WINDOWTITLE eq API Server*" /NH 2>nul | find /i "cmd.exe" > nul
+if not errorlevel 1 goto wait_server
+exit

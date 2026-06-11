@@ -2471,15 +2471,33 @@ window.onload = () => {
 };
 
 async function shutdownServer() {
-  if (!confirm('서버를 종료하시겠습니까?\n(브라우저 탭은 닫히지 않습니다)')) return;
+  if (!confirm('서버를 종료하시겠습니까?\n서버·터미널 창이 모두 닫힙니다.')) return;
   const btn = document.getElementById('btn-shutdown');
   btn.disabled = true;
   btn.textContent = '종료 중…';
   try {
     await fetch(`${API_BASE}/api/shutdown`, { method: 'POST' });
   } catch (_) {}
-  btn.textContent = '서버 종료됨';
+  btn.textContent = '종료됨';
   btn.style.background = '#555';
+  // 브라우저 탭 닫기 시도 (보안 정책에 따라 차단될 수 있음)
+  setTimeout(() => {
+    try { window.close(); } catch (_) {}
+    // 0.5초 후에도 탭이 살아있으면 안내 오버레이 표시
+    setTimeout(() => {
+      if (!document.hidden) {
+        document.body.insertAdjacentHTML('beforeend',
+          `<div style="position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:99999;
+                       display:flex;align-items:center;justify-content:center;">
+             <div style="color:#fff;text-align:center;font-size:18px;line-height:2">
+               ✅ 서버가 종료되었습니다.<br>
+               <span style="font-size:14px;opacity:.7">이 탭을 직접 닫아주세요.</span>
+             </div>
+           </div>`
+        );
+      }
+    }, 500);
+  }, 300);
 }
 
 // ── 자동 업데이트 확인 ──────────────────────────────

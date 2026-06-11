@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.4.5 (2026-06-11)
+### 개선
+- **종료 버튼 강화**: 클릭 시 서버·"API Server" 터미널 창·런처 창 모두 종료
+  - `POST /api/shutdown`: SIGTERM 전에 `taskkill /FI "WINDOWTITLE eq API Server*"` 실행
+  - `start.bat`: 런처 창이 API Server 창 소멸 감지 후 자동 `exit`
+  - 브라우저 탭 `window.close()` 시도 → 차단 시 "탭을 직접 닫아주세요" 오버레이 표시
+
 ## v0.4.4 (2026-06-11)
 ### 추가
 - **자동 업데이트 확인** (`utils/update_check.py`)

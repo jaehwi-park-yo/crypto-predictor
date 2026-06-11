@@ -524,12 +524,20 @@ def update_apply_api():
 @app.post("/api/shutdown")
 def shutdown_server():
     """캐시 플러시 후 서버를 안전하게 종료합니다."""
-    import os, signal, threading
+    import os, signal, threading, subprocess
 
     def _do_shutdown():
         import time
         time.sleep(0.8)  # 응답이 클라이언트에 도달할 시간 확보
         log.info("[shutdown] 서버 종료 신호 전송")
+        # "API Server" 제목의 cmd 창 종료 (start.bat 이 붙인 이름)
+        try:
+            subprocess.run(
+                ["taskkill", "/F", "/FI", "WINDOWTITLE eq API Server*"],
+                capture_output=True, check=False
+            )
+        except Exception:
+            pass
         os.kill(os.getpid(), signal.SIGTERM)
 
     threading.Thread(target=_do_shutdown, daemon=True).start()
