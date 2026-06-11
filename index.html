@@ -2467,6 +2467,28 @@ window.onload = () => {
   pollMinuteStatus();  // 분봉 수집 상태 칩 (수집 중이면 30초 폴링)
   // 차트는 해당 탭이 보일 때 그린다 (숨김 div 렌더 시 너비 0 문제 방지)
 };
+
+async function shutdownServer() {
+  if (!confirm('서버를 종료하시겠습니까?\n(브라우저 탭은 닫히지 않습니다)')) return;
+  const btn = document.getElementById('btn-shutdown');
+  btn.disabled = true;
+  btn.textContent = '종료 중…';
+  try {
+    await fetch('/api/shutdown', { method: 'POST' });
+  } catch (_) {}
+  btn.textContent = '서버 종료됨';
+  btn.style.background = '#555';
+}
 </script>
+
+<button id="btn-shutdown"
+  onclick="shutdownServer()"
+  style="position:fixed;left:16px;bottom:16px;z-index:9999;
+         background:#c0392b;color:#fff;border:none;border-radius:8px;
+         padding:10px 20px;font-size:14px;font-weight:600;cursor:pointer;
+         box-shadow:0 2px 8px rgba(0,0,0,0.4);letter-spacing:0.5px;"
+  title="캐시 저장 후 서버를 안전하게 종료합니다">
+  ⏻ 서버 종료
+</button>
 </body>
 </html>

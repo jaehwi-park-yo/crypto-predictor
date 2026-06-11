@@ -498,5 +498,20 @@ def export_dataset_api():
     return FileResponse(meta["zip_path"], media_type="application/zip", filename=fname)
 
 
+@app.post("/api/shutdown")
+def shutdown_server():
+    """캐시 플러시 후 서버를 안전하게 종료합니다."""
+    import os, signal, threading
+
+    def _do_shutdown():
+        import time
+        time.sleep(0.8)  # 응답이 클라이언트에 도달할 시간 확보
+        log.info("[shutdown] 서버 종료 신호 전송")
+        os.kill(os.getpid(), signal.SIGTERM)
+
+    threading.Thread(target=_do_shutdown, daemon=True).start()
+    return {"status": "ok", "message": "서버를 종료합니다."}
+
+
 if __name__ == "__main__":
     uvicorn.run("api_server:app", host="0.0.0.0", port=8000, reload=False)

@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.4.3 (2026-06-11)
+### 추가
+- 대시보드 왼쪽 하단에 **서버 종료 버튼** 추가 (`⏻ 서버 종료`)
+  - 클릭 → 확인 다이얼로그 → `/api/shutdown` POST → 0.8초 후 SIGTERM으로 안전 종료
+  - 종료 중/완료 피드백 표시 (버튼 비활성화 + 메시지 변경)
+- `api_server.py`: `POST /api/shutdown` 엔드포인트 추가
+
 ## v0.4.2 (2026-06-11)
 ### 변경
 - Windows 전용으로 정리: start.sh / patch.sh 제거, 설치 문서(INSTALL/README/PDF)에서
