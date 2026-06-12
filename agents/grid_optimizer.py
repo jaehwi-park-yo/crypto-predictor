@@ -20,6 +20,7 @@ from config import (
     ASYMMETRIC_GRID, GRID_BUY_INTERVAL_PCT, GRID_SELL_INTERVAL_PCT,
     PROGRESSIVE_SIZING, PROGRESSIVE_ALPHA,
     ASYM_TP_ENABLED, ASYM_TP_MULT,
+    USDT_BOTTOM_ALPHA,
 )
 from typing import Optional
 from models.prediction_result import BoxPrediction, GridConfig
@@ -86,14 +87,22 @@ class GridOptimizerAgent:
         # 왕복 추정용 간격: 비대칭이면 사이클(매수+매도)/2 — 대칭 관례(cycle=2×gi)와 동일 규약
         rt_gi = (buy_gi + sell_gi) / 2 if asymmetric else gi_eff
 
-        # Progressive sizing: boundary bots get more capital → higher fill probability
-        # Weight_i = 1 + α × level, where level = distance from center (0-indexed)
-        if PROGRESSIVE_SIZING and bots > 1:
+        # Progressive sizing: 심볼별 분포 전략 적용
+        is_usdt = getattr(box, "symbol", "").upper() == "USDT"
+        if is_usdt and USDT_BOTTOM_ALPHA > 0 and bots > 1:
+            # 하방 집중 배분: 상단(i=0) → 하단(i=N-1) 선형 증가
+            # weight_i = 1 + α × i / (N-1)  →  하단이 (1+α)배
+            weights = [1.0 + USDT_BOTTOM_ALPHA * i / (bots - 1) for i in range(bots)]
+            w_sum = sum(weights)
+            cap_per_bot = deployed / w_sum   # 상단 기준 단위 자본 (최소값)
+            avg_weight = w_sum / bots
+            est_vol = self._estimate_volume(deployed * avg_weight, rt_gi, daily_sigma, box_range_pct)
+        elif PROGRESSIVE_SIZING and not is_usdt and bots > 1:
+            # BTC: 경계 봇에 가중치 (중심 대칭)
             half = bots / 2.0
             weights = [1.0 + PROGRESSIVE_ALPHA * abs(i - half + 0.5) for i in range(bots)]
             w_sum = sum(weights)
-            cap_per_bot = deployed / w_sum   # center-level unit capital
-            # volume estimation uses effective "average weight" (weighted turnover)
+            cap_per_bot = deployed / w_sum
             avg_weight = w_sum / bots
             est_vol = self._estimate_volume(deployed * avg_weight, rt_gi, daily_sigma, box_range_pct)
         else:

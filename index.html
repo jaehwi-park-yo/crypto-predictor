@@ -647,7 +647,7 @@
 
           <!-- USDT 간격 시뮬레이터 -->
           <div class="usdt-sim">
-            <div class="section-title">🎛️ USDT 그리드 간격 시뮬레이터 (1~5원)</div>
+            <div class="section-title">🎛️ USDT 그리드 간격 시뮬레이터 (1~3원)</div>
             <div class="sim-grid">
               <div class="sim-zone" style="border-color:var(--inner-border)">
                 <div class="sim-zone-head" style="color:var(--inner-border)">1σ 내부존 (보수) — <span id="sim-inner-cap-label">6.7M원</span></div>
@@ -710,6 +710,59 @@
               📐 <b>월 그리드순익 ≈ [매도간격 × C − 수수료] / (매수+매도)</b> · 월거래량 ≈ 18.4억 / (매수+매도)<br>
               ⚠️ 손익분기: <b>매도 ≥ 2원</b> (매도간격이 왕복수수료 ≈1.12원을 넘어야 함 — 매수간격과 무관). 1원/1원은 그리드 손실 — 거래량용.<br>
               💾 시뮬레이터 변경은 아래 존별 상세에 즉시 반영되고, <b>적용 버튼</b>을 누르면 포트폴리오 탭 4전략·P&L 합계에 반영됩니다.
+            </div>
+          </div>
+
+          <!-- 하방 집중 배분 시뮬레이터 -->
+          <div class="usdt-sim" style="margin-top:14px">
+            <div class="section-title">🔽 하방 집중 배분 시뮬레이터</div>
+            <div style="font-size:.8rem;color:var(--muted);margin-bottom:10px">
+              아래로 갈수록 봇당 자본을 점증시켜 <b>하락 시 거래량·수익 집중</b>. α=0은 균등, α=1.5는 하단 봇이 상단의 2.5배.
+            </div>
+
+            <!-- α 슬라이더 -->
+            <div style="display:flex;align-items:center;gap:14px;margin-bottom:12px;flex-wrap:wrap">
+              <span style="font-size:.85rem;font-weight:600;min-width:90px">집중도 α</span>
+              <input type="range" id="bottom-alpha-slider" min="0" max="1.5" step="0.1" value="0.5"
+                style="flex:1;min-width:160px;max-width:300px;accent-color:var(--usdt)"
+                oninput="onBottomAlphaChange(this.value)">
+              <span style="font-size:.9rem;font-weight:700;min-width:100px">
+                α = <span id="bottom-alpha-val">0.5</span>
+                &nbsp;<span id="bottom-alpha-label" style="color:var(--usdt);font-size:.8rem">중간 집중</span>
+              </span>
+            </div>
+
+            <!-- 비교표 -->
+            <div class="zone-table-wrap" style="margin-bottom:10px">
+              <table class="zone-tbl" style="background:var(--card);border-radius:10px;overflow:hidden;border:1px solid var(--border)">
+                <thead>
+                  <tr>
+                    <th>항목</th>
+                    <th>균등 배분 (α=0)</th>
+                    <th id="bh-col-label" style="color:var(--usdt)">하방 집중 (α=0.5)</th>
+                    <th style="color:#e8a838">차이 (집중 − 균등)</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr><td>봇 수</td><td id="bh-unif-bots">─</td><td id="bh-prog-bots">─</td><td>─</td></tr>
+                  <tr><td>상단 봇당 자본</td><td id="bh-unif-top">─</td><td id="bh-prog-top">─</td><td id="bh-d-top">─</td></tr>
+                  <tr><td>하단 봇당 자본</td><td id="bh-unif-bot">─</td><td id="bh-prog-bot">─</td><td id="bh-d-bot">─</td></tr>
+                  <tr><td>월 거래량 (정상)</td><td id="bh-unif-vol">─</td><td id="bh-prog-vol">─</td><td id="bh-d-vol">─</td></tr>
+                  <tr><td>월 거래량 (하방 편중 70%)</td><td id="bh-unif-vol-dn">─</td><td id="bh-prog-vol-dn">─</td><td id="bh-d-vol-dn" style="color:#e8a838">─</td></tr>
+                  <tr><td>월 그리드 순익 (정상)</td><td id="bh-unif-net">─</td><td id="bh-prog-net">─</td><td id="bh-d-net">─</td></tr>
+                  <tr><td>월 그리드 순익 (하방 편중)</td><td id="bh-unif-net-dn">─</td><td id="bh-prog-net-dn">─</td><td id="bh-d-net-dn" style="color:#e8a838">─</td></tr>
+                </tbody>
+              </table>
+            </div>
+
+            <!-- 자본 분포 차트 -->
+            <div id="bh-dist-chart" style="height:220px"></div>
+            <div style="font-size:.75rem;color:var(--muted);margin-top:4px;text-align:center">
+              막대 높이 = 봇당 자본 (내부존 기준) · 왼쪽=상단(고가), 오른쪽=하단(저가)
+            </div>
+            <div class="sim-note" style="margin-top:8px">
+              📌 <b>하방 편중 시나리오</b>: 가격이 하반부에 70% 머무를 때 (하락 장세·박스 하단 지지 구간). 균등 대비 거래량·수익 증가폭이 클수록 하방 집중 배분의 효과가 큽니다.<br>
+              ⚠️ 하방 집중이 클수록 상단 봇 자본이 줄어 상방 가격 구간 수익은 감소합니다 — 트레이드오프를 고려해 α를 설정하세요.
             </div>
           </div>
 
@@ -1518,6 +1571,150 @@ function calcUsdt(z) {
            monthlyPct: totalNet/z.cap*100, annualPct: totalNet/z.cap*100*12,
            gridPositive: (profit-fee) > 0 };
 }
+// ─── 하방 집중 배분 시뮬레이터 ─────────────────────────────────────────────
+let _bhAlpha = 0.5;
+
+/**
+ * α=0: 균등. α>0: 상단(i=0)→하단(i=N-1) 선형 증가 weight_i = 1 + α×i/(N-1)
+ * downBias: 0~1, 가격이 하반부에 머무는 비율 (0.5=균등, 0.7=하방편중)
+ */
+function calcUsdtBH(z, alpha, downBias) {
+  const N = Math.max(1, Math.floor(z.box / z.buy));
+  const cycle = z.buy + z.sell;
+  const rtDayBase = (USDT_DAILY_RANGE / cycle) * USDT_EFF;  // 봇당 동일
+  const sellPct = z.sell / USDT_REF;
+
+  // 자본 배분 weights
+  const weights = Array.from({length: N}, (_, i) =>
+    alpha > 0 && N > 1 ? 1 + alpha * i / (N - 1) : 1
+  );
+  const wSum = weights.reduce((a, b) => a + b, 0);
+  const caps = weights.map(w => w * z.cap / wSum);   // 봇별 자본
+
+  // 가격 분포 편향: 하반부(하위 50%) 봇에 downBias 비중, 상반부에 (1-downBias)
+  // actFactor 합이 항상 N이 되도록 정규화
+  const halfN = Math.max(1, Math.floor(N / 2));
+  const upperN = Math.max(1, N - halfN);
+  const botActivity = Array.from({length: N}, (_, i) => {
+    // i=0이 상단, i=N-1이 하단
+    const isLower = i >= upperN;
+    return isLower
+      ? (downBias * N / halfN)
+      : ((1 - downBias) * N / upperN);
+  });
+
+  let totalProfit = 0, totalFee = 0, totalVol = 0;
+  for (let i = 0; i < N; i++) {
+    const cap = caps[i];
+    const actFactor = botActivity[i];   // sum(actFactor) = N
+    const rt = rtDayBase * USDT_TDAYS * actFactor;
+    totalProfit += rt * sellPct * cap;
+    totalFee    += rt * 2 * USDT_FEE * cap;
+    totalVol    += rt * cap * 2;
+  }
+  const netGrid = (totalProfit - totalFee) * z.active;
+  const vol = totalVol * z.active;
+  const reward = usdtReward(vol);
+  return {
+    N, caps, capTop: caps[0], capBot: caps[N-1],
+    vol, netGrid, reward, totalNet: netGrid + reward,
+    monthlyPct: (netGrid + reward) / z.cap * 100,
+  };
+}
+
+function _bhAlphaLabel(a) {
+  if (a === 0) return '균등 배분';
+  if (a <= 0.3) return '약한 집중';
+  if (a <= 0.7) return '중간 집중';
+  if (a <= 1.1) return '강한 집중';
+  return '최대 집중';
+}
+
+function renderBhChart(uCaps, pCaps) {
+  if (!window.Plotly) return;
+  const N = uCaps.length;
+  const labels = Array.from({length: N}, (_, i) => `L${i+1}`);
+  Plotly.newPlot('bh-dist-chart', [
+    { name: '균등 배분', x: labels, y: uCaps, type: 'bar',
+      marker: { color: 'rgba(79,142,247,0.5)' } },
+    { name: `하방 집중 (α=${_bhAlpha})`, x: labels, y: pCaps, type: 'bar',
+      marker: { color: 'rgba(255,127,14,0.7)' } },
+  ], {
+    barmode: 'group', paper_bgcolor: 'transparent', plot_bgcolor: 'transparent',
+    font: { color: '#ccc', size: 11 },
+    margin: { t: 10, b: 30, l: 55, r: 10 },
+    legend: { orientation: 'h', x: 0, y: 1.15 },
+    xaxis: { title: '← 상단 (고가)    봇 레벨    하단 (저가) →', tickfont: { size: 9 } },
+    yaxis: { title: '봇당 자본 (원)', tickformat: ',.0f' },
+  }, { responsive: true, displayModeBar: false });
+}
+
+function updateBhSim() {
+  const z = usdtSim.inner;  // 내부존 기준
+  const unif = calcUsdtBH(z, 0,        0.5);   // 균등, 정상
+  const unifDn = calcUsdtBH(z, 0,       0.7);   // 균등, 하방편중
+  const prog = calcUsdtBH(z, _bhAlpha,  0.5);   // 집중, 정상
+  const progDn = calcUsdtBH(z, _bhAlpha, 0.7);  // 집중, 하방편중
+
+  const fw = n => fmt(Math.round(n)) + '원';
+  const fok = n => (n/1e8).toFixed(2) + '억';
+  const fm = n => (n >= 0 ? '+' : '') + (n/1e4).toFixed(1) + '만원';
+  const fdiff = (a, b, isM) => {
+    const d = b - a;
+    const s = isM ? fm(d) : fok(d);
+    return `<span style="color:${d > 0 ? '#4ec94e' : d < 0 ? '#d62728' : 'var(--muted)'}">${d > 0 ? '+' : ''}${s}</span>`;
+  };
+
+  const set = (id, v) => { const el = document.getElementById(id); if (el) el.innerHTML = v; };
+  set('bh-unif-bots',    unif.N + '개');
+  set('bh-prog-bots',    prog.N + '개');
+  set('bh-unif-top',     fw(unif.capTop));
+  set('bh-prog-top',     fw(prog.capTop));
+  set('bh-d-top',        fdiff(unif.capTop, prog.capTop, false).replace('억', '원').replace(/[\d.]+억/, v => fw(parseFloat(v)*1e8)));
+  set('bh-unif-bot',     fw(unif.capBot));
+  set('bh-prog-bot',     fw(prog.capBot));
+  set('bh-d-bot',        `<span style="color:#4ec94e">+${fw(prog.capBot - unif.capBot)}</span>`);
+  set('bh-unif-vol',     fok(unif.vol));
+  set('bh-prog-vol',     fok(prog.vol));
+  set('bh-d-vol',        `<span style="color:var(--muted)">동일</span>`);
+  set('bh-unif-vol-dn',  fok(unifDn.vol));
+  set('bh-prog-vol-dn',  fok(progDn.vol));
+  set('bh-d-vol-dn',     `<span style="color:${progDn.vol > unifDn.vol ? '#4ec94e':'#d62728'}">${progDn.vol > unifDn.vol ? '+':''}${fok(progDn.vol - unifDn.vol)}</span>`);
+  set('bh-unif-net',     fm(unif.netGrid + unif.reward));
+  set('bh-prog-net',     fm(prog.netGrid + prog.reward));
+  set('bh-d-net',        `<span style="color:var(--muted)">동일</span>`);
+  set('bh-unif-net-dn',  fm(unifDn.netGrid + unifDn.reward));
+  set('bh-prog-net-dn',  fm(progDn.netGrid + progDn.reward));
+  const netDiff = (progDn.netGrid + progDn.reward) - (unifDn.netGrid + unifDn.reward);
+  set('bh-d-net-dn', `<span style="color:${netDiff > 0 ? '#4ec94e':'#d62728'}">${netDiff >= 0 ? '+':''}${fm(netDiff)}</span>`);
+
+  // 상단/하단 자본 차이는 단순 빼기 표시
+  const topDiff = prog.capTop - unif.capTop;
+  set('bh-d-top', `<span style="color:${topDiff > 0 ? '#4ec94e' : topDiff < 0 ? '#d62728':'var(--muted)'}">${topDiff >= 0 ? '+':''}${fw(topDiff)}</span>`);
+
+  const colLbl = document.getElementById('bh-col-label');
+  if (colLbl) colLbl.textContent = `하방 집중 (α=${_bhAlpha})`;
+
+  // Plotly 차트: 봇이 너무 많으면 샘플링해서 표시
+  const maxBars = 50;
+  let uCaps = unif.caps, pCaps = prog.caps;
+  if (unif.N > maxBars) {
+    const step = Math.ceil(unif.N / maxBars);
+    uCaps = unif.caps.filter((_, i) => i % step === 0);
+    pCaps = prog.caps.filter((_, i) => i % step === 0);
+  }
+  renderBhChart(uCaps, pCaps);
+}
+
+function onBottomAlphaChange(val) {
+  _bhAlpha = parseFloat(val);
+  const el = document.getElementById('bottom-alpha-val');
+  const lbl = document.getElementById('bottom-alpha-label');
+  if (el) el.textContent = _bhAlpha.toFixed(1);
+  if (lbl) lbl.textContent = _bhAlphaLabel(_bhAlpha);
+  updateBhSim();
+}
+
 // ─── 4전략 월간 P&L 연동 계산 ──────────────────────────────────────────────
 let _pnlCaps = { innerBtc: 10_080_000, outerBtc: 6_720_000, investable: 28_000_000 };
 
@@ -1774,11 +1971,12 @@ function renderUsdtSim(zoneKey, outId) {
 }
 function stepUsdt(zoneKey, side, delta) {
   const z = usdtSim[zoneKey];
-  z[side] = Math.max(1, Math.min(5, z[side] + delta));
+  z[side] = Math.max(1, Math.min(3, z[side] + delta));
   const prefix = zoneKey === 'inner' ? 'ui' : 'uo';
   document.getElementById(prefix+'-'+side).textContent = z[side];
   renderUsdtSim(zoneKey, zoneKey === 'inner' ? 'sim-inner' : 'sim-outer');
   syncUsdtDetail(); // 존별 상세는 즉시 연동, 포트폴리오 반영은 💾 적용 버튼으로
+  updateBhSim();   // 하방 집중 배분 비교표 즉시 갱신
 }
 
 // ─── USDT 차트 ──────────────────────────────────────────────────────────────
@@ -1787,6 +1985,7 @@ function buildUSDTChart() {
   if (!USDT.loaded) updateUsdtModel(USDT_REF, false); // 실시간 미수신 시 참고값으로 초기화
   updateUsdtRevisionNotice();
   renderUsdtSim('inner', 'sim-inner');
+  updateBhSim();  // 하방 집중 배분 초기 렌더
   renderUsdtSim('outer', 'sim-outer');
   const {dates, prices} = generateUSDTPriceSeries();
   const U = USDT;

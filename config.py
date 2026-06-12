@@ -151,6 +151,16 @@ CASH_DEPLOY_SIGMA_LEVEL = 2.0       # 회복 박스 σ 레벨 (넓게)
 PROGRESSIVE_SIZING = True
 PROGRESSIVE_ALPHA  = 0.15  # 레벨당 15% 가중 (중심+3레벨 = 1.45×기본)
 
+# ──────────────────────────────────────────────────────────
+# USDT 하방 집중 배분 (Bottom-Heavy Progressive Sizing)
+# 봇 인덱스 0(상단) → N-1(하단)으로 선형 증가:
+#   weight_i = 1 + USDT_BOTTOM_ALPHA × i / (N-1)
+#   → 하단 봇이 상단 봇보다 (1+α)배 더 큰 자본 보유
+#   → 하락 시 더 큰 매수/매도 → 거래량·수익 집중
+# α=0: 균등 배분 / α=0.5: 하단 1.5× / α=1.0: 하단 2× / α=1.5: 하단 2.5×
+# ──────────────────────────────────────────────────────────
+USDT_BOTTOM_ALPHA = 0.5   # 기본 중간 집중 (하단 봇 1.5× 자본)
+
 # 비대칭 TP (Asymmetric Take-Profit)
 # 매도 목표가 = 매수가 × (1 + ASYM_TP_MULT × 간격) — 홀드 더 길게
 ASYM_TP_ENABLED = True
