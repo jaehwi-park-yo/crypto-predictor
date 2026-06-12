@@ -146,10 +146,15 @@ CASH_DEPLOY_SIGMA_LEVEL = 2.0       # 회복 박스 σ 레벨 (넓게)
 
 # ──────────────────────────────────────────────────────────
 # 누진 포지션 크기 (Progressive Sizing)
-# 박스 중심에서 멀어질수록 주문 크기 × (1 + α×레벨)
 # ──────────────────────────────────────────────────────────
-PROGRESSIVE_SIZING = True
-PROGRESSIVE_ALPHA  = 0.15  # 레벨당 15% 가중 (중심+3레벨 = 1.45×기본)
+# walk-forward 백테스트(105개월, BTC 일봉) 결과:
+#   대칭 progressive (α=0.15): 누적 +2,291만
+#   균등 (α=0.0):              누적 +2,771만  (+479만, +21%)
+# → BTC는 상방 편중(하반부 체류 44.9%)으로 중심부 체결 빈도가 높음.
+#   대칭 progressive는 중심부 자본을 경계부로 빼내 오히려 손해.
+#   균등 배분이 최적 — PROGRESSIVE_SIZING=False 로 비활성화.
+PROGRESSIVE_SIZING = False
+PROGRESSIVE_ALPHA  = 0.0   # 균등 배분 (대칭 progressive 비활성)
 
 # ──────────────────────────────────────────────────────────
 # USDT 하방 집중 배분 (Bottom-Heavy Progressive Sizing)

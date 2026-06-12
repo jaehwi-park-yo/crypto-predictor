@@ -1,5 +1,19 @@
 # Changelog
 
+## v0.4.7 (2026-06-12)
+### 변경
+- **BTC 봇 자본 배분: 대칭 progressive → 균등 배분으로 변경**
+  - walk-forward 백테스트 105개월 결과: 균등이 대칭 progressive 대비 +479만(+21%) 우월
+  - 원인: BTC는 상방 편중(하반부 체류 44.9%)으로 박스 중심부 체결이 잦음.
+    대칭 progressive는 경계부에 자본을 집중시켜 중심부 체결 효율이 저하됨.
+  - `config.py`: `PROGRESSIVE_SIZING=False`, `PROGRESSIVE_ALPHA=0.0`
+- BTC에 하방 집중 배분(bottom-heavy)은 불필요 — 적용하지 않음
+  (상방 편중 특성상 하방 집중 배분 시 더 불리)
+
+### 추가
+- `reports/btc_alpha_sweep.py`: BTC α 최적화 백테스트 스크립트 (105개월)
+- `reports/alpha_sweep.py`: USDT α 최적화 백테스트 스크립트 (23개월)
+
 ## v0.4.6 (2026-06-12)
 ### 추가
 - **하방 집중 배분 시뮬레이터** (USDT 탭 내 새 섹션)
