@@ -758,7 +758,7 @@
             <!-- 자본 분포 차트 -->
             <div id="bh-dist-chart" style="height:220px"></div>
             <div style="font-size:.75rem;color:var(--muted);margin-top:4px;text-align:center">
-              막대 높이 = 봇당 자본 (내부존 기준) · 왼쪽=상단(고가), 오른쪽=하단(저가)
+              막대 높이 = 봇당 자본 (내부존 기준) · x축 = 실제 주문가격 (왼쪽=상단 고가, 오른쪽=하단 저가)
             </div>
             <div class="sim-note" style="margin-top:8px">
               📌 <b>하방 편중 시나리오</b>: 가격이 하반부에 70% 머무를 때 (하락 장세·박스 하단 지지 구간). 균등 대비 거래량·수익 증가폭이 클수록 하방 집중 배분의 효과가 큽니다.<br>
@@ -1630,21 +1630,23 @@ function _bhAlphaLabel(a) {
   return '최대 집중';
 }
 
-function renderBhChart(uCaps, pCaps) {
+function renderBhChart(uCaps, pCaps, prices) {
   if (!window.Plotly) return;
-  const N = uCaps.length;
-  const labels = Array.from({length: N}, (_, i) => `L${i+1}`);
+  // x축 = 실제 주문가격 (왼쪽 = 상단 고가 → 오른쪽 = 하단 저가)
+  const labels = prices.map(p => p.toLocaleString('ko-KR', {maximumFractionDigits: 0}) + '원');
   Plotly.newPlot('bh-dist-chart', [
     { name: '균등 배분', x: labels, y: uCaps, type: 'bar',
-      marker: { color: 'rgba(79,142,247,0.5)' } },
+      marker: { color: 'rgba(79,142,247,0.5)' },
+      hovertemplate: '주문가 %{x}<br>봇당 자본 %{y:,.0f}원<extra>균등</extra>' },
     { name: `하방 집중 (α=${_bhAlpha})`, x: labels, y: pCaps, type: 'bar',
-      marker: { color: 'rgba(255,127,14,0.7)' } },
+      marker: { color: 'rgba(255,127,14,0.7)' },
+      hovertemplate: '주문가 %{x}<br>봇당 자본 %{y:,.0f}원<extra>α=' + _bhAlpha + '</extra>' },
   ], {
     barmode: 'group', paper_bgcolor: 'transparent', plot_bgcolor: 'transparent',
     font: { color: '#ccc', size: 11 },
-    margin: { t: 10, b: 30, l: 55, r: 10 },
+    margin: { t: 10, b: 55, l: 55, r: 10 },
     legend: { orientation: 'h', x: 0, y: 1.15 },
-    xaxis: { title: '← 상단 (고가)    봇 레벨    하단 (저가) →', tickfont: { size: 9 } },
+    xaxis: { title: '주문가격 — ← 상단 (고가) · 하단 (저가) →', tickfont: { size: 9 }, tickangle: -45 },
     yaxis: { title: '봇당 자본 (원)', tickformat: ',.0f' },
   }, { responsive: true, displayModeBar: false });
 }
@@ -1695,15 +1697,20 @@ function updateBhSim() {
   const colLbl = document.getElementById('bh-col-label');
   if (colLbl) colLbl.textContent = `하방 집중 (α=${_bhAlpha})`;
 
+  // 봇 i=0 = 박스 상단(고가) → i=N-1 = 하단(저가). 주문가격 = 상단 − i × 매수간격
+  const boxTop = (USDT.loaded && USDT.u1 > 0) ? USDT.u1 : USDT_REF + z.box / 2;
+  const allPrices = Array.from({length: unif.N}, (_, i) => boxTop - i * z.buy);
+
   // Plotly 차트: 봇이 너무 많으면 샘플링해서 표시
   const maxBars = 50;
-  let uCaps = unif.caps, pCaps = prog.caps;
+  let uCaps = unif.caps, pCaps = prog.caps, prices = allPrices;
   if (unif.N > maxBars) {
     const step = Math.ceil(unif.N / maxBars);
-    uCaps = unif.caps.filter((_, i) => i % step === 0);
-    pCaps = prog.caps.filter((_, i) => i % step === 0);
+    uCaps  = unif.caps.filter((_, i) => i % step === 0);
+    pCaps  = prog.caps.filter((_, i) => i % step === 0);
+    prices = allPrices.filter((_, i) => i % step === 0);
   }
-  renderBhChart(uCaps, pCaps);
+  renderBhChart(uCaps, pCaps, prices);
 }
 
 function onBottomAlphaChange(val) {
