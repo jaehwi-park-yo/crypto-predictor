@@ -416,7 +416,7 @@
               <div class="strat-card outer" id="card-btc-outer">
                 <div class="sc-head">
                   <div class="sc-title">₿ BTC 2σ 공격</div>
-                  <div class="sc-badge">외부존 · 거래량 파밍</div>
+                  <div class="sc-badge">1σ포함 전체 · 거래량 파밍</div>
                 </div>
                 <table class="sc-tbl">
                   <tr><td>투입 자본</td><td id="si-btco-cap">6.7M원</td></tr>
@@ -675,7 +675,7 @@
               </div>
 
               <div class="sim-zone" style="border-color:var(--outer-border)">
-                <div class="sim-zone-head" style="color:var(--outer-border)">1σ~2σ 외부존 (공격) — <span id="sim-outer-cap-label">4.5M원</span> · 활성 27%</div>
+                <div class="sim-zone-head" style="color:var(--outer-border)">2σ 전체범위 (1σ포함) — <span id="sim-outer-cap-label">4.5M원</span> · 가중활성 ~64%</div>
                 <div class="stepper-row">
                   <div class="stepper">
                     <span class="stp-label">매수 간격</span>
@@ -834,7 +834,7 @@
                 <tr><td>가격 변동성</td><td>매우 낮음 (≈±3.3% 2σ)</td></tr>
                 <tr><td>주 수익원</td><td>리워드 (거래량)</td></tr>
                 <tr><td>내부존 봇 활성률</td><td>~95%</td></tr>
-                <tr><td>외부존 봇 활성률</td><td>~27%</td></tr>
+                <tr><td>2σ봇 가중 활성률</td><td>USDT ~64% / BTC ~71%</td></tr>
                 <tr><td>리워드 티어 목표</td><td>10억/월 이상 → 차월 0.015%</td></tr>
               </table>
             </div>
@@ -1368,7 +1368,9 @@ function updateMetrics() {
   const outerUsdt = usdtCap * (1 - innerRatio);
 
   const btcInnerBots = Math.max(1, Math.round(D.snap.range_pct / 0.5)); // 매수간격 0.5% 기준
-  const btcOuterBots = Math.max(1, Math.round(24.6 / 0.3));             // 외부존 폭 ~24.6%, 매수 0.3%
+  // 2σ 봇: 1σ 포함 전체 2σ 범위 동작. 외부전용(24.6%) + 내부(range_pct) 합산 봇 수
+  const btcOuterRange = 24.6;  // 외부존 폭 ~24.6%
+  const btcOuterBots = Math.max(1, Math.round((D.snap.range_pct + btcOuterRange) / 0.3));
 
   function setEl(id, val) { const el = document.getElementById(id); if (el) el.textContent = val; }
 
@@ -1843,15 +1845,30 @@ function onBottomAlphaChange(val) {
 // ─── 4전략 월간 P&L 연동 계산 ──────────────────────────────────────────────
 let _pnlCaps = { innerBtc: 10_080_000, outerBtc: 6_720_000, investable: 28_000_000 };
 
-// BTC 존별 자본당 계수 (기본값 캘리브레이션: 내부 10.08M→거래량 5.6억/그리드 +67.2만, 외부 6.72M→1.8억/+19.6만)
+// BTC 존별 자본당 계수 (기본값 캘리브레이션: 내부 10.08M→거래량 5.6억/그리드 +67.2만, 외부 6.72M→1.8억/+19.6만 @ 27% active)
 const BTC_COEF = {
   inner: { volPerCap: 5.6e8 / 10.08e6, gridPerCap: 67.2e4 / 10.08e6 },
   outer: { volPerCap: 1.8e8 / 6.72e6,  gridPerCap: 19.6e4 / 6.72e6  },
 };
 const BTC_FEE = 0.0008; // 양방향 0.04% × 2
 
-function calcBtcStrat(cap, zone) {
-  const c = BTC_COEF[zone];
+// BTC 2σ 중복 동작 모델: σ 배수로 inner/outer 박스 비중 유도
+// 1σ폭 = (1.1+1.2)=2.3σ, 2σ외부폭 = (0.7+0.8)=1.5σ → inner비중 2.3/3.8=60.5%
+const BTC_INNER_FRAC = 2.3 / (2.3 + 1.5);          // ≈ 0.6053
+const BTC_OUTER_ACTIVE_W = BTC_INNER_FRAC + (1 - BTC_INNER_FRAC) * 0.27; // ≈ 0.7119
+const BTC_OUTER_SCALE   = BTC_OUTER_ACTIVE_W / 0.27; // ≈ 2.637 — 기존 계수 보정 배수
+
+// 2σ 봇이 전체 범위(1σ 포함) 동작 시 계수 (OLD 외부전용 × scale)
+const BTC_COEF_COMBINED = {
+  inner: BTC_COEF.inner,
+  outer: {
+    volPerCap:  BTC_COEF.outer.volPerCap  * BTC_OUTER_SCALE,
+    gridPerCap: BTC_COEF.outer.gridPerCap * BTC_OUTER_SCALE,
+  },
+};
+
+function calcBtcStrat(cap, zone, combined = false) {
+  const c = (combined && zone === 'outer') ? BTC_COEF_COMBINED.outer : BTC_COEF[zone];
   const vol = cap * c.volPerCap;
   const grid = cap * c.gridPerCap;
   const fee = vol * BTC_FEE;
@@ -1861,18 +1878,29 @@ function calcBtcStrat(cap, zone) {
 
 function updatePnlTable() {
   const { innerBtc, outerBtc, investable } = _pnlCaps;
+  // BTC: 2σ 봇이 1σ 구간 내에서도 동작 (BTC_COEF_COMBINED 사용)
   const rows = {
     bi: calcBtcStrat(innerBtc, 'inner'),
-    bo: calcBtcStrat(outerBtc, 'outer'),
+    bo: calcBtcStrat(outerBtc, 'outer', true),  // true = combined(전체범위) 모드
   };
-  // USDT: 💾 적용(save)된 간격 기준 — 시뮬레이터 실험값은 적용 전까지 반영 안 함
+  // USDT: 💾 적용(save)된 간격 기준. outer는 전체 2σ 범위 모델(중복 동작) 사용.
   const usdtCalc = {};
   for (const [key, zone] of [['ui','inner'],['uo','outer']]) {
-    const z = { ...usdtSim[zone], buy: usdtApplied[zone].buy, sell: usdtApplied[zone].sell };
+    let z;
+    if (zone === 'outer') {
+      // 2σ 봇: 1σ 구간 포함 전체 박스에서 가중 활동률로 동작
+      const inn = usdtSim.inner, out = usdtSim.outer;
+      const totalBox2 = inn.box + out.box;
+      const activeW2 = (inn.box * 1.0 + out.box * out.active) / totalBox2;
+      z = { ...out, buy: usdtApplied.outer.buy, sell: usdtApplied.outer.sell,
+            box: totalBox2, active: activeW2 };
+    } else {
+      z = { ...usdtSim[zone], buy: usdtApplied[zone].buy, sell: usdtApplied[zone].sell };
+    }
     const r = calcUsdt(z);
     usdtCalc[key] = r;
-    rows[key] = { cap: z.cap, vol: r.vol,
-                  grid: r.netGrid + r.vol * USDT_FEE,  // 수수료 차감 전 그리드 P&L
+    rows[key] = { cap: usdtSim[zone].cap, vol: r.vol,
+                  grid: r.netGrid + r.vol * USDT_FEE,
                   fee: r.vol * USDT_FEE, reward: r.reward, net: r.totalNet };
   }
 
@@ -1909,9 +1937,11 @@ function updatePnlTable() {
   // 4전략 카드 거래량·순익 동기화
   const setT = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
   setT('si-btci-vol', '~' + eok(rows.bi.vol));
-  setT('si-btco-vol', '~' + eok(rows.bo.vol) + ' (활성 ~27%)');
+  setT('si-btco-vol', '~' + eok(rows.bo.vol) + ` (1σ포함 활성 ~${(BTC_OUTER_ACTIVE_W*100).toFixed(0)}%)`);
   setT('si-usdti-vol', '~' + eok(rows.ui.vol));
-  setT('si-usdto-vol', '~' + eok(rows.uo.vol) + ' (활성 27%)');
+  // USDT outer: activeW2 계산 (updatePnlTable과 동일 로직)
+  const _usdtAW2 = (usdtSim.inner.box + usdtSim.outer.box * usdtSim.outer.active) / (usdtSim.inner.box + usdtSim.outer.box);
+  setT('si-usdto-vol', '~' + eok(rows.uo.vol) + ` (1σ포함 활성 ~${(_usdtAW2*100).toFixed(0)}%)`);
   for (const [key, id] of [['bi','si-btci-net'],['bo','si-btco-net'],['ui','si-usdti-net'],['uo','si-usdto-net']]) {
     const el = document.getElementById(id);
     if (el) { el.textContent = man(rows[key].net) + '원'; el.className = rows[key].net >= 0 ? 'pos' : 'neg'; }
@@ -1968,7 +1998,15 @@ function updatePnlTable() {
 function syncUsdtDetail() {
   const set = (id, v, cls) => { const el = document.getElementById(id); if (el) { el.textContent = v; if (cls !== undefined) el.className = cls; } };
   for (const [zone, p] of [['inner','usdt-inner'],['outer','usdt-outer']]) {
-    const z = usdtSim[zone];
+    let z;
+    if (zone === 'outer') {
+      const inn = usdtSim.inner, out = usdtSim.outer;
+      const totalBox2 = inn.box + out.box;
+      const activeW2 = (inn.box * 1.0 + out.box * out.active) / totalBox2;
+      z = { ...out, box: totalBox2, active: activeW2 };
+    } else {
+      z = usdtSim[zone];
+    }
     const r = calcUsdt(z);
     set(`${p}-int`,  `${z.buy}원 / ${z.sell}원`);
     set(`${p}-cap`,  fmtM(z.cap));
