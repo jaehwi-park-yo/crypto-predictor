@@ -524,7 +524,7 @@
               <div class="eval-item">
                 <h4 style="color:#d4b44a">⚠️ 유의점</h4>
                 <ul>
-                  <li>외부존 자본은 정상 범위에서 약 73% 시간 동안 유휴 상태로 대기</li>
+                  <li>2σ 봇은 1σ 구간 내에서도 동작하나, 외부 구간(1σ~2σ) 거래는 정상 범위에서 비중이 낮음</li>
                   <li>2σ 돌파 지속 시 외부존 봇 재설정 및 손절 기준 점검 필요</li>
                 </ul>
               </div>
@@ -532,10 +532,10 @@
             <div class="eval-annualized">
               <h4>📊 예상 연환산 수익률 (추정치)</h4>
               <div class="annual-grid">
-                <div class="annual-chip">BTC 보수 <span>~31%</span>/년</div>
-                <div class="annual-chip">BTC 공격 <span>~12%</span>/년 (활성시)</div>
-                <div class="annual-chip">USDT 보수 <span>~43%</span>/년</div>
-                <div class="annual-chip">USDT 공격 <span>~10%</span>/년</div>
+                <div class="annual-chip">BTC 보수 <span id="ann-bi">~31%</span>/년</div>
+                <div class="annual-chip">BTC 공격 <span id="ann-bo">~12%</span>/년 (1σ포함)</div>
+                <div class="annual-chip">USDT 보수 <span id="ann-ui">~43%</span>/년</div>
+                <div class="annual-chip">USDT 공격 <span id="ann-uo">~10%</span>/년 (1σ포함)</div>
               </div>
             </div>
           </div>
@@ -578,23 +578,23 @@
                 <tbody>
                   <tr class="inner-row">
                     <td><span style="color:var(--inner-border);font-weight:700">1σ 내부 (보수)</span></td>
-                    <td>269M ~ 364M원</td>
+                    <td id="btc-inner-range2">269M ~ 364M원</td>
                     <td title="매도간격이 수익 결정, 매수간격이 거래량 결정">매수 0.5% / 매도 1.0%</td>
                     <td id="btc-inner-cap">10.1M</td>
                     <td id="btc-inner-bots">71개</td>
                     <td id="btc-inner-pbot">142,000원</td>
-                    <td>~5.6억</td>
-                    <td class="pos">+25.9만원 <span style="color:var(--muted);font-weight:400">월 순익(추정)</span></td>
+                    <td id="btc-inner-vol">~5.6억</td>
+                    <td class="pos"><span id="btc-inner-net">+25.9만원</span> <span style="color:var(--muted);font-weight:400">월 순익(추정)</span></td>
                   </tr>
                   <tr class="outer-row">
-                    <td><span style="color:var(--outer-border);font-weight:700">1σ~2σ 외부 (공격)</span></td>
-                    <td>231M~269M / 364M~424M</td>
+                    <td><span style="color:var(--outer-border);font-weight:700">2σ 전체 (1σ포함 공격)</span></td>
+                    <td id="btc-outer-range2">231M~424M (1σ 중첩)</td>
                     <td title="매도간격이 수익 결정, 매수간격이 거래량 결정">매수 0.3% / 매도 0.5%</td>
                     <td id="btc-outer-cap">6.7M</td>
                     <td id="btc-outer-bots">82개</td>
                     <td id="btc-outer-pbot">82,000원</td>
-                    <td>~1.8억</td>
-                    <td class="pos">+6.7만원 <span style="color:var(--muted);font-weight:400">월 순익(추정)</span></td>
+                    <td id="btc-outer-vol">~1.8억</td>
+                    <td class="pos"><span id="btc-outer-net">+6.7만원</span> <span style="color:var(--muted);font-weight:400">월 순익(추정)</span></td>
                   </tr>
                 </tbody>
               </table>
@@ -834,7 +834,7 @@
                 <tr><td>가격 변동성</td><td>매우 낮음 (≈±3.3% 2σ)</td></tr>
                 <tr><td>주 수익원</td><td>리워드 (거래량)</td></tr>
                 <tr><td>내부존 봇 활성률</td><td>~95%</td></tr>
-                <tr><td>2σ봇 가중 활성률</td><td>USDT ~64% / BTC ~71%</td></tr>
+                <tr><td>2σ봇 가중 활성률</td><td id="btc-2s-active">USDT ~64% / BTC ~71%</td></tr>
                 <tr><td>리워드 티어 목표</td><td>10억/월 이상 → 차월 0.015%</td></tr>
               </table>
             </div>
@@ -1946,6 +1946,28 @@ function updatePnlTable() {
     const el = document.getElementById(id);
     if (el) { el.textContent = man(rows[key].net) + '원'; el.className = rows[key].net >= 0 ? 'pos' : 'neg'; }
   }
+
+  // BTC 존별 그리드 상세 테이블 — 월거래량·순익 연동 (combined 모델 반영)
+  setT('btc-inner-vol', '~' + eok(rows.bi.vol));
+  setT('btc-outer-vol', '~' + eok(rows.bo.vol));
+  for (const [key, id] of [['bi','btc-inner-net'],['bo','btc-outer-net']]) {
+    const el = document.getElementById(id);
+    if (el) { el.textContent = man(rows[key].net) + '원'; el.className = rows[key].net >= 0 ? 'pos' : 'neg'; }
+  }
+
+  // 연환산 수익률 칩 (전략별 net/cap×12)
+  const annPct = (key) => {
+    const c = rows[key].cap;
+    return c > 0 ? '~' + (rows[key].net / c * 12 * 100).toFixed(0) + '%' : '─';
+  };
+  setT('ann-bi', annPct('bi'));
+  setT('ann-bo', annPct('bo'));
+  setT('ann-ui', annPct('ui'));
+  setT('ann-uo', annPct('uo'));
+
+  // 2σ봇 가중 활성률 (USDT는 박스폭 연동, BTC는 σ배수 상수)
+  const usdtAW = (usdtSim.inner.box + usdtSim.outer.box * usdtSim.outer.active) / (usdtSim.inner.box + usdtSim.outer.box);
+  setT('btc-2s-active', `USDT ~${(usdtAW*100).toFixed(0)}% / BTC ~${(BTC_OUTER_ACTIVE_W*100).toFixed(0)}%`);
   // USDT 카드 간격·봇수·봇당자본 (적용 간격 기준)
   setT('si-usdti-int', `${usdtApplied.inner.buy}원/${usdtApplied.inner.sell}원`);
   setT('si-usdto-int', `${usdtApplied.outer.buy}원/${usdtApplied.outer.sell}원 (외부존)`);
@@ -1975,7 +1997,8 @@ function updatePnlTable() {
   if (Math.round(usdtCalc.ui.capPerBot) < MIN_BOT_CAP) warnings.push('USDT 내부존 봇당자본 부족');
   if (Math.round(usdtCalc.uo.capPerBot) < MIN_BOT_CAP) warnings.push('USDT 외부존 봇당자본 부족');
   const btciBotCap = rows.bi.cap / Math.max(1, Math.round(D.snap.range_pct / 0.5));
-  const btcoBotCap = rows.bo.cap / Math.max(1, Math.round(D.snap.range_pct / 0.3));
+  // 2σ 봇: 1σ 포함 전체범위 봇수 (updateMetrics btcOuterBots와 동일 식)
+  const btcoBotCap = rows.bo.cap / Math.max(1, Math.round((D.snap.range_pct + 24.6) / 0.3));
   if (btciBotCap < MIN_BOT_CAP) warnings.push('BTC 내부존 봇당자본 부족');
   if (btcoBotCap < MIN_BOT_CAP) warnings.push('BTC 외부존 봇당자본 부족');
   let warnEl = document.getElementById('bot-cap-warning');
@@ -2439,6 +2462,10 @@ function updateMonitorPanel() {
   set('btc-u2', u2a ? fmt(u2a) + '원' : '─');
   set('btc-l2', l2a ? fmt(l2a) + '원' : '─');
   set('btc-monthly-sigma', s.monthly_sigma ? s.monthly_sigma + '%' : '─');
+  // 존별 그리드 상세 테이블 범위 (백만원 단위) — 2σ는 1σ 중첩 전체범위
+  const Mn = n => n ? Math.round(n / 1e6) + 'M' : '─';
+  set('btc-inner-range2', (u1a && l1a) ? `${Mn(l1a)} ~ ${Mn(u1a)}원` : '─');
+  set('btc-outer-range2', (u2a && l2a) ? `${Mn(l2a)}~${Mn(u2a)} (1σ 중첩)` : '─');
   // σ 배수 배지
   const sigmaBadge = document.getElementById('btc-sigma-badge');
   if (sigmaBadge && s.sigma_up) sigmaBadge.textContent = `σ↑${s.sigma_up} / σ↓${s.sigma_dn}`;
