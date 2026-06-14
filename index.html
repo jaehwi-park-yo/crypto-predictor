@@ -755,14 +755,27 @@
               </table>
             </div>
 
-            <!-- 자본 분포 차트 -->
-            <div id="bh-dist-chart" style="height:220px"></div>
+            <!-- 자본 분포 표 (주문가 사다리) -->
+            <div class="zone-table-wrap" style="max-height:340px;overflow-y:auto;border:1px solid var(--border);border-radius:10px">
+              <table class="zone-tbl" id="bh-ladder" style="background:var(--card);width:100%;border-collapse:collapse">
+                <thead style="position:sticky;top:0;z-index:2">
+                  <tr style="background:var(--card)">
+                    <th style="text-align:right">주문가</th>
+                    <th style="text-align:center">존</th>
+                    <th style="text-align:right">균등 배분</th>
+                    <th style="text-align:right" id="bh-ladder-prog-head">하방집중 (α=0.5)</th>
+                  </tr>
+                </thead>
+                <tbody id="bh-ladder-body"></tbody>
+              </table>
+            </div>
             <div style="font-size:.75rem;color:var(--muted);margin-top:4px;text-align:center">
-              막대 높이 = 봇당 자본 (내부존 기준) · x축 = 실제 주문가격 (왼쪽=상단 고가, 오른쪽=하단 저가)
+              위(고가) → 아래(저가) 순서 · 봇당 자본은 천원 단위 · 2σ 외부존까지 전체 주문가 표시
             </div>
             <div class="sim-note" style="margin-top:8px">
-              📌 <b>하방 편중 시나리오</b>: 가격이 하반부에 70% 머무를 때 (하락 장세·박스 하단 지지 구간). 균등 대비 거래량·수익 증가폭이 클수록 하방 집중 배분의 효과가 큽니다.<br>
-              ⚠️ 하방 집중이 클수록 상단 봇 자본이 줄어 상방 가격 구간 수익은 감소합니다 — 트레이드오프를 고려해 α를 설정하세요.
+              📌 표는 <b>1σ 내부존</b>과 <b>2σ 외부존</b>을 각각 독립 예산으로 배분합니다(구분선 기준). 외부존은 봇 수가 적어 봇당 자본이 상대적으로 큽니다.<br>
+              📌 <b>하방 편중 시나리오</b>: 가격이 하반부에 70% 머무를 때 (하락 장세·박스 하단 지지). 균등 대비 거래량·수익 증가폭이 클수록 하방 집중 효과가 큽니다.<br>
+              ⚠️ 하방 집중이 클수록 상단 봇 자본이 줄어 상방 구간 수익은 감소 — 트레이드오프를 고려해 α를 설정하세요.
             </div>
           </div>
 
@@ -1630,25 +1643,87 @@ function _bhAlphaLabel(a) {
   return '최대 집중';
 }
 
-function renderBhChart(uCaps, pCaps, prices) {
-  if (!window.Plotly) return;
-  // x축 = 실제 주문가격 (왼쪽 = 상단 고가 → 오른쪽 = 하단 저가)
-  const labels = prices.map(p => p.toLocaleString('ko-KR', {maximumFractionDigits: 0}) + '원');
-  Plotly.newPlot('bh-dist-chart', [
-    { name: '균등 배분', x: labels, y: uCaps, type: 'bar',
-      marker: { color: 'rgba(79,142,247,0.5)' },
-      hovertemplate: '주문가 %{x}<br>봇당 자본 %{y:,.0f}원<extra>균등</extra>' },
-    { name: `하방 집중 (α=${_bhAlpha})`, x: labels, y: pCaps, type: 'bar',
-      marker: { color: 'rgba(255,127,14,0.7)' },
-      hovertemplate: '주문가 %{x}<br>봇당 자본 %{y:,.0f}원<extra>α=' + _bhAlpha + '</extra>' },
-  ], {
-    barmode: 'group', paper_bgcolor: 'transparent', plot_bgcolor: 'transparent',
-    font: { color: '#ccc', size: 11 },
-    margin: { t: 10, b: 55, l: 55, r: 10 },
-    legend: { orientation: 'h', x: 0, y: 1.15 },
-    xaxis: { title: '주문가격 — ← 상단 (고가) · 하단 (저가) →', tickfont: { size: 9 }, tickangle: -45 },
-    yaxis: { title: '봇당 자본 (원)', tickformat: ',.0f' },
-  }, { responsive: true, displayModeBar: false });
+// 봇당 자본 천원 단위 반올림
+function roundK(n) { return Math.round(n / 1000) * 1000; }
+
+/**
+ * 2σ 전체 박스의 주문가 사다리 생성.
+ * 위(2σ 상단 고가) → 아래(2σ 하단 저가) 순서. 존별 자본 풀을 보존하면서
+ * α(하방집중)에 따라 아래 봇일수록 큰 자본을 배정한다.
+ * @returns [{price, zone:'inner'|'outer', capUnif, capProg}]
+ */
+function buildGridLadder(alpha) {
+  const inner = usdtSim.inner, outer = usdtSim.outer;
+  // 박스 경계 — 실시간 미수신 시 참고가 기준 근사
+  let u2, u1, l1, l2;
+  if (USDT.loaded && USDT.u1 > 0) {
+    u2 = USDT.u2; u1 = USDT.u1; l1 = USDT.l1; l2 = USDT.l2;
+  } else {
+    u1 = USDT_REF + inner.box / 2;  l1 = USDT_REF - inner.box / 2;
+    u2 = u1 + outer.box / 2;        l2 = l1 - outer.box / 2;
+  }
+  const eps = 1e-6;
+  const rows = [];
+  // 외부존 상단: u2 → u1 직전
+  for (let p = u2; p > u1 + eps; p -= outer.buy) rows.push({ price: p, zone: 'outer' });
+  // 내부존: u1 → l1 (양끝 포함)
+  for (let p = u1; p >= l1 - eps; p -= inner.buy) rows.push({ price: p, zone: 'inner' });
+  // 외부존 하단: l1 직전 → l2
+  for (let p = l1 - outer.buy; p >= l2 - eps; p -= outer.buy) rows.push({ price: p, zone: 'outer' });
+
+  const N = rows.length;
+  // 균등 weight=1, 하방집중 weight = 1 + α×(위에서의 순위)/(N-1) → 아래일수록 큼
+  rows.forEach((r, i) => {
+    r.wUnif = 1;
+    r.wProg = N > 1 ? (1 + alpha * i / (N - 1)) : 1;
+  });
+  // 존별 자본 풀 정규화 (각 존 예산 보존)
+  for (const zoneKey of ['inner', 'outer']) {
+    const zr = rows.filter(r => r.zone === zoneKey);
+    if (!zr.length) continue;
+    const pool = (zoneKey === 'inner' ? inner : outer).cap;
+    const sumUnif = zr.reduce((a, r) => a + r.wUnif, 0);
+    const sumProg = zr.reduce((a, r) => a + r.wProg, 0);
+    zr.forEach(r => {
+      r.capUnif = roundK(r.wUnif * pool / sumUnif);
+      r.capProg = roundK(r.wProg * pool / sumProg);
+    });
+  }
+  return rows;
+}
+
+function renderBhLadder(alpha) {
+  const body = document.getElementById('bh-ladder-body');
+  if (!body) return;
+  const rows = buildGridLadder(alpha);
+  const head = document.getElementById('bh-ladder-prog-head');
+  if (head) head.textContent = `하방집중 (α=${alpha})`;
+
+  const maxCap = Math.max(1, ...rows.map(r => Math.max(r.capUnif, r.capProg)));
+  const fwon = n => n.toLocaleString('ko-KR');
+  const f1 = p => p.toLocaleString('ko-KR', { maximumFractionDigits: 1 });
+
+  body.innerHTML = rows.map((r, i) => {
+    const isInner = r.zone === 'inner';
+    const zoneBadge = isInner
+      ? `<span style="color:var(--inner-border);font-weight:600">1σ</span>`
+      : `<span style="color:var(--outer-border);font-weight:600">2σ</span>`;
+    // 하방집중 셀에 막대 배경(자본 비율 시각화)
+    const barW = (r.capProg / maxCap * 100).toFixed(0);
+    const dim = isInner ? '' : 'opacity:.78;';
+    // 존 전환 지점에 구분선
+    const zoneChange = i > 0 && rows[i - 1].zone !== r.zone;
+    const topBorder = zoneChange ? 'border-top:2px solid rgba(255,255,255,0.18);' : '';
+    return `<tr style="${dim}${topBorder}border-bottom:1px solid rgba(255,255,255,0.04)">
+      <td style="text-align:right;font-variant-numeric:tabular-nums">${f1(r.price)}원</td>
+      <td style="text-align:center">${zoneBadge}</td>
+      <td style="text-align:right;color:var(--muted);font-variant-numeric:tabular-nums">${fwon(r.capUnif)}</td>
+      <td style="text-align:right;font-variant-numeric:tabular-nums;position:relative">
+        <span style="position:absolute;left:0;top:0;bottom:0;width:${barW}%;background:rgba(255,127,14,0.16);pointer-events:none"></span>
+        <span style="position:relative;font-weight:600">${fwon(r.capProg)}</span>
+      </td>
+    </tr>`;
+  }).join('');
 }
 
 function updateBhSim() {
@@ -1658,7 +1733,7 @@ function updateBhSim() {
   const prog = calcUsdtBH(z, _bhAlpha,  0.5);   // 집중, 정상
   const progDn = calcUsdtBH(z, _bhAlpha, 0.7);  // 집중, 하방편중
 
-  const fw = n => fmt(Math.round(n)) + '원';
+  const fw = n => fmt(roundK(n)) + '원';   // 천원 단위
   const fok = n => (n/1e8).toFixed(2) + '억';
   const fm = n => (n >= 0 ? '+' : '') + (n/1e4).toFixed(1) + '만원';
   const fdiff = (a, b, isM) => {
@@ -1697,20 +1772,8 @@ function updateBhSim() {
   const colLbl = document.getElementById('bh-col-label');
   if (colLbl) colLbl.textContent = `하방 집중 (α=${_bhAlpha})`;
 
-  // 봇 i=0 = 박스 상단(고가) → i=N-1 = 하단(저가). 주문가격 = 상단 − i × 매수간격
-  const boxTop = (USDT.loaded && USDT.u1 > 0) ? USDT.u1 : USDT_REF + z.box / 2;
-  const allPrices = Array.from({length: unif.N}, (_, i) => boxTop - i * z.buy);
-
-  // Plotly 차트: 봇이 너무 많으면 샘플링해서 표시
-  const maxBars = 50;
-  let uCaps = unif.caps, pCaps = prog.caps, prices = allPrices;
-  if (unif.N > maxBars) {
-    const step = Math.ceil(unif.N / maxBars);
-    uCaps  = unif.caps.filter((_, i) => i % step === 0);
-    pCaps  = prog.caps.filter((_, i) => i % step === 0);
-    prices = allPrices.filter((_, i) => i % step === 0);
-  }
-  renderBhChart(uCaps, pCaps, prices);
+  // 2σ 전체 박스 주문가 사다리 표 (천원 단위 봇당 자본)
+  renderBhLadder(_bhAlpha);
 }
 
 function onBottomAlphaChange(val) {
