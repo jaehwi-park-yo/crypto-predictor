@@ -760,17 +760,17 @@
               <table class="zone-tbl" id="bh-ladder" style="background:var(--card);width:100%;border-collapse:collapse">
                 <thead style="position:sticky;top:0;z-index:2">
                   <tr style="background:var(--card)">
-                    <th style="text-align:right">주문가</th>
-                    <th style="text-align:center">존</th>
-                    <th style="text-align:right">균등 배분</th>
-                    <th style="text-align:right" id="bh-ladder-prog-head">하방집중 (α=0.5)</th>
+                    <th style="text-align:right;color:var(--outer-border)">2σ 주문가</th>
+                    <th style="text-align:right;color:var(--outer-border)" id="bh-ladder-prog-head">2σ 봇자본(α=0.5)</th>
+                    <th style="text-align:right;color:var(--inner-border)">1σ 주문가</th>
+                    <th style="text-align:right;color:var(--inner-border)">1σ 봇자본</th>
                   </tr>
                 </thead>
                 <tbody id="bh-ladder-body"></tbody>
               </table>
             </div>
             <div style="font-size:.75rem;color:var(--muted);margin-top:4px;text-align:center">
-              위(고가) → 아래(저가) 순서 · 봇당 자본은 천원 단위 · 2σ 외부존까지 전체 주문가 표시
+              위(고가) → 아래(저가) · 봇당 자본 천원 단위 · <span style="color:var(--inner-border)">■</span> 1σ 구간 = 2σ·1σ 동시 동작 (거래량 폭발)
             </div>
             <div class="sim-note" style="margin-top:8px">
               📌 표는 <b>1σ 내부존</b>과 <b>2σ 외부존</b>을 각각 독립 예산으로 배분합니다(구분선 기준). 외부존은 봇 수가 적어 봇당 자본이 상대적으로 큽니다.<br>
@@ -1647,14 +1647,14 @@ function _bhAlphaLabel(a) {
 function roundK(n) { return Math.round(n / 1000) * 1000; }
 
 /**
- * 2σ 전체 박스의 주문가 사다리 생성.
- * 위(2σ 상단 고가) → 아래(2σ 하단 저가) 순서. 존별 자본 풀을 보존하면서
- * α(하방집중)에 따라 아래 봇일수록 큰 자본을 배정한다.
- * @returns [{price, zone:'inner'|'outer', capUnif, capProg}]
+ * 2σ/1σ 이중 그리드 주문가 사다리 생성 (중복 동작 모델).
+ * - 2σ 봇: u2→l2 전체 범위, outer.buy 간격 (1σ 구간 포함 항상 동작)
+ * - 1σ 봇: u1→l1 범위, inner.buy 간격
+ * - 1σ 구간: 두 봇 세트가 동시 동작 → 거래량 폭발
+ * @returns [{price, s2:{capUnif,capProg}|null, s1:{capUnif,capProg}|null, inOverlap}]
  */
 function buildGridLadder(alpha) {
   const inner = usdtSim.inner, outer = usdtSim.outer;
-  // 박스 경계 — 실시간 미수신 시 참고가 기준 근사
   let u2, u1, l1, l2;
   if (USDT.loaded && USDT.u1 > 0) {
     u2 = USDT.u2; u1 = USDT.u1; l1 = USDT.l1; l2 = USDT.l2;
@@ -1663,33 +1663,41 @@ function buildGridLadder(alpha) {
     u2 = u1 + outer.box / 2;        l2 = l1 - outer.box / 2;
   }
   const eps = 1e-6;
-  const rows = [];
-  // 외부존 상단: u2 → u1 직전
-  for (let p = u2; p > u1 + eps; p -= outer.buy) rows.push({ price: p, zone: 'outer' });
-  // 내부존: u1 → l1 (양끝 포함)
-  for (let p = u1; p >= l1 - eps; p -= inner.buy) rows.push({ price: p, zone: 'inner' });
-  // 외부존 하단: l1 직전 → l2
-  for (let p = l1 - outer.buy; p >= l2 - eps; p -= outer.buy) rows.push({ price: p, zone: 'outer' });
+  const rnd = p => Math.round(p * 10) / 10;
 
-  const N = rows.length;
-  // 균등 weight=1, 하방집중 weight = 1 + α×(위에서의 순위)/(N-1) → 아래일수록 큼
-  rows.forEach((r, i) => {
-    r.wUnif = 1;
-    r.wProg = N > 1 ? (1 + alpha * i / (N - 1)) : 1;
-  });
-  // 존별 자본 풀 정규화 (각 존 예산 보존)
-  for (const zoneKey of ['inner', 'outer']) {
-    const zr = rows.filter(r => r.zone === zoneKey);
-    if (!zr.length) continue;
-    const pool = (zoneKey === 'inner' ? inner : outer).cap;
-    const sumUnif = zr.reduce((a, r) => a + r.wUnif, 0);
-    const sumProg = zr.reduce((a, r) => a + r.wProg, 0);
-    zr.forEach(r => {
-      r.capUnif = roundK(r.wUnif * pool / sumUnif);
-      r.capProg = roundK(r.wProg * pool / sumProg);
-    });
-  }
-  return rows;
+  // 2σ 시리즈: u2→l2, outer.buy 간격
+  const arr2 = [];
+  for (let p = u2; p >= l2 - eps; p -= outer.buy) arr2.push(rnd(p));
+  // 1σ 시리즈: u1→l1, inner.buy 간격
+  const arr1 = [];
+  for (let p = u1; p >= l1 - eps; p -= inner.buy) arr1.push(rnd(p));
+
+  // 각 시리즈별 α weight (아래 봇일수록 큼: i=0이 최상단)
+  const mkCaps = (arr, pool) => {
+    const N = arr.length;
+    const ws = arr.map((_, i) => alpha > 0 && N > 1 ? 1 + alpha * i / (N - 1) : 1);
+    const wSum = ws.reduce((a, b) => a + b, 0);
+    return arr.map((p, i) => ({
+      p,
+      capUnif: roundK(pool / N),
+      capProg: roundK(ws[i] * pool / wSum),
+    }));
+  };
+  const caps2 = mkCaps(arr2, outer.cap);
+  const caps1 = mkCaps(arr1, inner.cap);
+
+  const map2 = Object.fromEntries(caps2.map(c => [c.p, c]));
+  const map1 = Object.fromEntries(caps1.map(c => [c.p, c]));
+
+  // 가격 합집합 (내림차순)
+  const allPrices = [...new Set([...arr2, ...arr1])].sort((a, b) => b - a);
+
+  return allPrices.map(price => ({
+    price,
+    s2: map2[price] ? { capUnif: map2[price].capUnif, capProg: map2[price].capProg } : null,
+    s1: map1[price] ? { capUnif: map1[price].capUnif, capProg: map1[price].capProg } : null,
+    inOverlap: price <= u1 + eps && price >= l1 - eps,
+  }));
 }
 
 function renderBhLadder(alpha) {
@@ -1697,43 +1705,83 @@ function renderBhLadder(alpha) {
   if (!body) return;
   const rows = buildGridLadder(alpha);
   const head = document.getElementById('bh-ladder-prog-head');
-  if (head) head.textContent = `하방집중 (α=${alpha})`;
+  if (head) head.textContent = `α=${alpha}`;
 
-  const maxCap = Math.max(1, ...rows.map(r => Math.max(r.capUnif, r.capProg)));
-  const fwon = n => n.toLocaleString('ko-KR');
+  const max2 = Math.max(1, ...rows.filter(r => r.s2).map(r => r.s2.capProg));
+  const max1 = Math.max(1, ...rows.filter(r => r.s1).map(r => r.s1.capProg));
   const f1 = p => p.toLocaleString('ko-KR', { maximumFractionDigits: 1 });
+  const fw = n => n.toLocaleString('ko-KR');
 
   body.innerHTML = rows.map((r, i) => {
-    const isInner = r.zone === 'inner';
-    const zoneBadge = isInner
-      ? `<span style="color:var(--inner-border);font-weight:600">1σ</span>`
-      : `<span style="color:var(--outer-border);font-weight:600">2σ</span>`;
-    // 하방집중 셀에 막대 배경(자본 비율 시각화)
-    const barW = (r.capProg / maxCap * 100).toFixed(0);
-    const dim = isInner ? '' : 'opacity:.78;';
-    // 존 전환 지점에 구분선
-    const zoneChange = i > 0 && rows[i - 1].zone !== r.zone;
-    const topBorder = zoneChange ? 'border-top:2px solid rgba(255,255,255,0.18);' : '';
-    return `<tr style="${dim}${topBorder}border-bottom:1px solid rgba(255,255,255,0.04)">
-      <td style="text-align:right;font-variant-numeric:tabular-nums">${f1(r.price)}원</td>
-      <td style="text-align:center">${zoneBadge}</td>
-      <td style="text-align:right;color:var(--muted);font-variant-numeric:tabular-nums">${fwon(r.capUnif)}</td>
-      <td style="text-align:right;font-variant-numeric:tabular-nums;position:relative">
-        <span style="position:absolute;left:0;top:0;bottom:0;width:${barW}%;background:rgba(255,127,14,0.16);pointer-events:none"></span>
-        <span style="position:relative;font-weight:600">${fwon(r.capProg)}</span>
-      </td>
+    const prevInOverlap = i > 0 && rows[i-1].inOverlap !== r.inOverlap;
+    const topBorder = prevInOverlap ? 'border-top:2px solid rgba(255,255,255,0.22);' : '';
+
+    // 2σ 셀
+    let td2price = `<td style="text-align:right;color:var(--muted);font-size:.8rem"></td>`;
+    let td2cap   = `<td></td>`;
+    if (r.s2) {
+      const barW = (r.s2.capProg / max2 * 100).toFixed(0);
+      td2price = `<td style="text-align:right;font-variant-numeric:tabular-nums;color:var(--outer-border);font-size:.82rem">${f1(r.price)}원</td>`;
+      td2cap   = `<td style="text-align:right;font-variant-numeric:tabular-nums;position:relative">
+        <span style="position:absolute;left:0;top:0;bottom:0;width:${barW}%;background:rgba(255,127,14,0.13);pointer-events:none"></span>
+        <span style="position:relative;font-weight:600;color:var(--orange)">${fw(r.s2.capProg)}</span>
+      </td>`;
+    }
+
+    // 1σ 셀
+    let td1price = `<td style="text-align:right;color:var(--muted);font-size:.8rem"></td>`;
+    let td1cap   = `<td></td>`;
+    if (r.s1) {
+      const barW = (r.s1.capProg / max1 * 100).toFixed(0);
+      td1price = `<td style="text-align:right;font-variant-numeric:tabular-nums;color:var(--inner-border);font-size:.82rem">${f1(r.price)}원</td>`;
+      td1cap   = `<td style="text-align:right;font-variant-numeric:tabular-nums;position:relative">
+        <span style="position:absolute;left:0;top:0;bottom:0;width:${barW}%;background:rgba(79,142,247,0.13);pointer-events:none"></span>
+        <span style="position:relative;font-weight:600;color:var(--accent)">${fw(r.s1.capProg)}</span>
+      </td>`;
+    }
+
+    const overlapBg = r.inOverlap ? 'background:rgba(79,142,247,0.04);' : '';
+    return `<tr style="${overlapBg}${topBorder}border-bottom:1px solid rgba(255,255,255,0.04)">
+      ${td2price}${td2cap}${td1price}${td1cap}
     </tr>`;
   }).join('');
 }
 
-function updateBhSim() {
-  const z = usdtSim.inner;  // 내부존 기준
-  const unif = calcUsdtBH(z, 0,        0.5);   // 균등, 정상
-  const unifDn = calcUsdtBH(z, 0,       0.7);   // 균등, 하방편중
-  const prog = calcUsdtBH(z, _bhAlpha,  0.5);   // 집중, 정상
-  const progDn = calcUsdtBH(z, _bhAlpha, 0.7);  // 집중, 하방편중
+/**
+ * 1σ+2σ 결합 P&L 계산. 2σ 봇은 전체 u2→l2 범위 동작.
+ * 1σ 구간(active=1.0)에서는 양쪽 봇 모두 동작.
+ * 2σ 외부 구간(active=outer.active)에서는 2σ 봇만 동작.
+ */
+function calcCombined(alpha, downBias) {
+  const inner = usdtSim.inner, outer = usdtSim.outer;
+  // 1σ 봇 기여
+  const r1 = calcUsdtBH(inner, alpha, downBias);
+  // 2σ 봇 기여: 전체 2σ 박스 범위 (active=1.0이나 가격이 외부존일 때 outer.active)
+  // 2σ 봇의 박스 = inner.box + 2×outer.box ≈ outer.box*2 + inner.box
+  // 간략 모델: 2σ 봇은 active=1.0으로 항상 동작 (1σ 포함), 단 outer.box 범위 기준
+  const zOuter = Object.assign({}, outer, {
+    box: inner.box + outer.box * 2,  // 전체 2σ 박스 폭
+    active: 1.0,                      // 1σ 구간 포함 항상 동작
+  });
+  const r2 = calcUsdtBH(zOuter, alpha, downBias);
+  const vol = r1.vol + r2.vol;
+  const netGrid = r1.netGrid + r2.netGrid;
+  const reward = usdtReward(vol);
+  const n1 = r1.N, n2 = r2.N;
+  return {
+    n1, n2, vol, netGrid, reward, totalNet: netGrid + reward,
+    capTop1: r1.capTop, capBot1: r1.capBot,
+    capTop2: r2.capTop, capBot2: r2.capBot,
+  };
+}
 
-  const fw = n => fmt(roundK(n)) + '원';   // 천원 단위
+function updateBhSim() {
+  const unif   = calcCombined(0,        0.5);
+  const unifDn = calcCombined(0,        0.7);
+  const prog   = calcCombined(_bhAlpha, 0.5);
+  const progDn = calcCombined(_bhAlpha, 0.7);
+
+  const fw = n => fmt(roundK(n)) + '원';
   const fok = n => (n/1e8).toFixed(2) + '억';
   const fm = n => (n >= 0 ? '+' : '') + (n/1e4).toFixed(1) + '만원';
   const fdiff = (a, b, isM) => {
@@ -1743,31 +1791,29 @@ function updateBhSim() {
   };
 
   const set = (id, v) => { const el = document.getElementById(id); if (el) el.innerHTML = v; };
-  set('bh-unif-bots',    unif.N + '개');
-  set('bh-prog-bots',    prog.N + '개');
-  set('bh-unif-top',     fw(unif.capTop));
-  set('bh-prog-top',     fw(prog.capTop));
-  set('bh-d-top',        fdiff(unif.capTop, prog.capTop, false).replace('억', '원').replace(/[\d.]+억/, v => fw(parseFloat(v)*1e8)));
-  set('bh-unif-bot',     fw(unif.capBot));
-  set('bh-prog-bot',     fw(prog.capBot));
-  set('bh-d-bot',        `<span style="color:#4ec94e">+${fw(prog.capBot - unif.capBot)}</span>`);
+  set('bh-unif-bots',    `1σ ${unif.n1}개 + 2σ ${unif.n2}개`);
+  set('bh-prog-bots',    `1σ ${prog.n1}개 + 2σ ${prog.n2}개`);
+  set('bh-unif-top',     fw(unif.capTop1) + ' / ' + fw(unif.capTop2));
+  set('bh-prog-top',     fw(prog.capTop1) + ' / ' + fw(prog.capTop2));
+  set('bh-d-top',        `<span style="color:var(--muted)">1σ/2σ</span>`);
+  set('bh-unif-bot',     fw(unif.capBot1) + ' / ' + fw(unif.capBot2));
+  set('bh-prog-bot',     fw(prog.capBot1) + ' / ' + fw(prog.capBot2));
+  set('bh-d-bot',        `<span style="color:var(--muted)">1σ/2σ</span>`);
   set('bh-unif-vol',     fok(unif.vol));
   set('bh-prog-vol',     fok(prog.vol));
   set('bh-d-vol',        `<span style="color:var(--muted)">동일</span>`);
   set('bh-unif-vol-dn',  fok(unifDn.vol));
   set('bh-prog-vol-dn',  fok(progDn.vol));
   set('bh-d-vol-dn',     `<span style="color:${progDn.vol > unifDn.vol ? '#4ec94e':'#d62728'}">${progDn.vol > unifDn.vol ? '+':''}${fok(progDn.vol - unifDn.vol)}</span>`);
-  set('bh-unif-net',     fm(unif.netGrid + unif.reward));
-  set('bh-prog-net',     fm(prog.netGrid + prog.reward));
+  set('bh-unif-net',     fm(unif.totalNet));
+  set('bh-prog-net',     fm(prog.totalNet));
   set('bh-d-net',        `<span style="color:var(--muted)">동일</span>`);
-  set('bh-unif-net-dn',  fm(unifDn.netGrid + unifDn.reward));
-  set('bh-prog-net-dn',  fm(progDn.netGrid + progDn.reward));
-  const netDiff = (progDn.netGrid + progDn.reward) - (unifDn.netGrid + unifDn.reward);
+  set('bh-unif-net-dn',  fm(unifDn.totalNet));
+  set('bh-prog-net-dn',  fm(progDn.totalNet));
+  const netDiff = progDn.totalNet - unifDn.totalNet;
   set('bh-d-net-dn', `<span style="color:${netDiff > 0 ? '#4ec94e':'#d62728'}">${netDiff >= 0 ? '+':''}${fm(netDiff)}</span>`);
 
-  // 상단/하단 자본 차이는 단순 빼기 표시
-  const topDiff = prog.capTop - unif.capTop;
-  set('bh-d-top', `<span style="color:${topDiff > 0 ? '#4ec94e' : topDiff < 0 ? '#d62728':'var(--muted)'}">${topDiff >= 0 ? '+':''}${fw(topDiff)}</span>`);
+  // 표 헤더 α 레이블 갱신
 
   const colLbl = document.getElementById('bh-col-label');
   if (colLbl) colLbl.textContent = `하방 집중 (α=${_bhAlpha})`;
