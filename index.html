@@ -303,6 +303,11 @@
           <span title="직전 달 빗썸 계정 전체 거래량 기준으로 당월 리워드율이 결정됩니다. 신규계정 첫 달은 0.003%." style="cursor:help;color:#8b929e;font-size:.8em;margin-left:3px">(?)</span>
         </label>
         <input type="number" id="prevVol" value="0" step="100000000" min="0" onchange="onPrevVolChange()">
+        <div style="display:flex;gap:4px;margin-top:4px;flex-wrap:wrap">
+          <button type="button" onclick="bumpPrevVol(1e9)" style="flex:1;min-width:48px;padding:3px 6px;font-size:.68rem;background:rgba(79,142,247,0.15);color:#4f8ef7;border:1px solid rgba(79,142,247,0.4);border-radius:5px;cursor:pointer">+10억</button>
+          <button type="button" onclick="bumpPrevVol(1e10)" style="flex:1;min-width:48px;padding:3px 6px;font-size:.68rem;background:rgba(79,142,247,0.15);color:#4f8ef7;border:1px solid rgba(79,142,247,0.4);border-radius:5px;cursor:pointer">+100억</button>
+          <button type="button" onclick="bumpPrevVol(0, true)" style="padding:3px 8px;font-size:.68rem;background:rgba(214,39,40,0.12);color:#d62728;border:1px solid rgba(214,39,40,0.35);border-radius:5px;cursor:pointer">초기화</button>
+        </div>
         <div id="rewardRateLabel" style="font-size:.68rem;color:var(--muted);margin-top:3px">적용 리워드율: 0.003% (1,000만원 미만)</div>
         <div style="font-size:.62rem;color:#666;margin-top:2px">※ 직전월 거래량 기준 → 당월 전체 적용 (신규계정 첫달: 0.003%)</div>
         <div id="rewardNextTier" style="font-size:.62rem;color:#8b929e;margin-top:1px"></div>
@@ -1546,6 +1551,13 @@ function updateCapitalDisplay(val) {
   const n = +val || 0;
   const el = document.getElementById('capitalDisplay');
   if (el) el.textContent = n >= 1e8 ? (n/1e8).toFixed(1) + '억원' : Math.round(n/1e4) + '만원';
+}
+function bumpPrevVol(delta, reset) {
+  const el = document.getElementById('prevVol');
+  if (!el) return;
+  const cur = +el.value || 0;
+  el.value = reset ? 0 : Math.max(0, cur + delta);
+  onPrevVolChange();
 }
 function onPrevVolChange() {
   const prev = +(document.getElementById('prevVol')?.value) || 0;
