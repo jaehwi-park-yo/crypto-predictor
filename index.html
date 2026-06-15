@@ -725,8 +725,8 @@
               아래로 갈수록 봇당 자본을 점증시켜 <b>하락 시 거래량·수익 집중</b>. α=0은 균등, α=1.5는 하단 봇이 상단의 2.5배.
             </div>
 
-            <!-- α 슬라이더 -->
-            <div style="display:flex;align-items:center;gap:14px;margin-bottom:12px;flex-wrap:wrap">
+            <!-- α 슬라이더 + 봇자본 조정 단위 버튼 -->
+            <div style="display:flex;align-items:center;gap:14px;margin-bottom:8px;flex-wrap:wrap">
               <span style="font-size:.85rem;font-weight:600;min-width:90px">집중도 α</span>
               <input type="range" id="bottom-alpha-slider" min="0" max="1.5" step="0.1" value="0.5"
                 style="flex:1;min-width:160px;max-width:300px;accent-color:var(--usdt)"
@@ -735,6 +735,27 @@
                 α = <span id="bottom-alpha-val">0.5</span>
                 &nbsp;<span id="bottom-alpha-label" style="color:var(--usdt);font-size:.8rem">중간 집중</span>
               </span>
+            </div>
+            <!-- 봇자본 조정 단위 버튼 -->
+            <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;flex-wrap:wrap">
+              <span style="font-size:.8rem;color:var(--muted);min-width:90px">봇자본 조정단위</span>
+              <div style="display:flex;gap:6px;flex-wrap:wrap">
+                <button id="bh-unit-btn-1000"  onclick="setBhCapUnit(1000)"   style="padding:4px 10px;font-size:.78rem;border-radius:6px;border:1px solid var(--border);background:var(--usdt);color:#fff;cursor:pointer;font-weight:700">±1,000원</button>
+                <button id="bh-unit-btn-5000"  onclick="setBhCapUnit(5000)"   style="padding:4px 10px;font-size:.78rem;border-radius:6px;border:1px solid var(--border);background:var(--card2);color:var(--text);cursor:pointer">±5,000원</button>
+                <button id="bh-unit-btn-10000" onclick="setBhCapUnit(10000)"  style="padding:4px 10px;font-size:.78rem;border-radius:6px;border:1px solid var(--border);background:var(--card2);color:var(--text);cursor:pointer">±1만원</button>
+                <button id="bh-unit-btn-50000" onclick="setBhCapUnit(50000)"  style="padding:4px 10px;font-size:.78rem;border-radius:6px;border:1px solid var(--border);background:var(--card2);color:var(--text);cursor:pointer">±5만원</button>
+                <button id="bh-unit-btn-100000" onclick="setBhCapUnit(100000)" style="padding:4px 10px;font-size:.78rem;border-radius:6px;border:1px solid var(--border);background:var(--card2);color:var(--text);cursor:pointer">±10만원</button>
+              </div>
+              <div style="display:flex;align-items:center;gap:6px">
+                <span style="font-size:.78rem;color:var(--muted)">1σ자본</span>
+                <button onclick="adjustBhCap('inner',-1)" style="padding:2px 10px;font-size:.9rem;border-radius:5px;border:1px solid var(--inner-border);background:transparent;color:var(--inner-border);cursor:pointer;font-weight:700">−</button>
+                <span id="bh-inner-cap-val" style="font-size:.82rem;font-weight:700;color:var(--accent);min-width:70px;text-align:center">─</span>
+                <button onclick="adjustBhCap('inner',+1)" style="padding:2px 10px;font-size:.9rem;border-radius:5px;border:1px solid var(--inner-border);background:transparent;color:var(--inner-border);cursor:pointer;font-weight:700">+</button>
+                <span style="font-size:.78rem;color:var(--muted);margin-left:8px">2σ자본</span>
+                <button onclick="adjustBhCap('outer',-1)" style="padding:2px 10px;font-size:.9rem;border-radius:5px;border:1px solid var(--outer-border);background:transparent;color:var(--outer-border);cursor:pointer;font-weight:700">−</button>
+                <span id="bh-outer-cap-val" style="font-size:.82rem;font-weight:700;color:var(--orange);min-width:70px;text-align:center">─</span>
+                <button onclick="adjustBhCap('outer',+1)" style="padding:2px 10px;font-size:.9rem;border-radius:5px;border:1px solid var(--outer-border);background:transparent;color:var(--outer-border);cursor:pointer;font-weight:700">+</button>
+              </div>
             </div>
 
             <!-- 비교표 -->
@@ -1416,6 +1437,7 @@ function updateMetrics() {
   setEl('sim-inner-cap-label', fmtM(innerUsdt)+'원');
   setEl('sim-outer-cap-label', fmtM(outerUsdt)+'원');
   syncUsdtDetail();
+  if (typeof syncBhCapDisplay === 'function') syncBhCapDisplay();
   if (window._chartUSDT) {
     renderUsdtSim('inner','sim-inner');
     renderUsdtSim('outer','sim-outer');
@@ -1914,6 +1936,9 @@ function updateBhSim() {
 
   // 2σ 전체 박스 주문가 사다리 표 (천원 단위 봇당 자본)
   renderBhLadder(_bhAlpha);
+
+  // 봇자본 조정 버튼 현재값 표시
+  syncBhCapDisplay();
 }
 
 function onBottomAlphaChange(val) {
@@ -1923,6 +1948,51 @@ function onBottomAlphaChange(val) {
   if (el) el.textContent = _bhAlpha.toFixed(1);
   if (lbl) lbl.textContent = _bhAlphaLabel(_bhAlpha);
   updateBhSim();
+}
+
+// ─── 봇자본 조정 단위 버튼 ────────────────────────────────────────────────
+let _bhCapUnit = 1000;  // 기본 단위: 1,000원
+
+// 자본 표시 포맷: 100만 미만 → 만원, 이상 → M 단위
+function fmtBhCap(n) {
+  if (n >= 1e6) return (n / 1e6).toFixed(2) + 'M';
+  return Math.round(n / 1e4).toFixed(1) + '만';
+}
+
+// 단위 버튼 선택 시 활성 스타일 갱신
+function setBhCapUnit(unit) {
+  _bhCapUnit = unit;
+  const ids = [1000, 5000, 10000, 50000, 100000];
+  ids.forEach(u => {
+    const btn = document.getElementById('bh-unit-btn-' + u);
+    if (!btn) return;
+    const active = u === unit;
+    btn.style.background = active ? 'var(--usdt)' : 'var(--card2)';
+    btn.style.color = active ? '#fff' : 'var(--text)';
+    btn.style.fontWeight = active ? '700' : '400';
+  });
+}
+
+// 봇자본 +/- 조정 후 연동 갱신
+function adjustBhCap(zone, dir) {
+  const delta = dir * _bhCapUnit;
+  usdtSim[zone].cap = Math.max(1000, roundK(usdtSim[zone].cap + delta));
+  syncBhCapDisplay();
+  syncUsdtDetail();   // USDT 존별 상세 테이블 갱신
+  updateBhSim();      // 비교표 + 사다리 갱신
+}
+
+// 조정 버튼 옆 현재 자본 표시 갱신
+function syncBhCapDisplay() {
+  const el1 = document.getElementById('bh-inner-cap-val');
+  const el2 = document.getElementById('bh-outer-cap-val');
+  if (el1) el1.textContent = fmt(usdtSim.inner.cap) + '원';
+  if (el2) el2.textContent = fmt(usdtSim.outer.cap) + '원';
+  // 시뮬레이터 헤더 레이블도 갱신
+  const el3 = document.getElementById('sim-inner-cap-label');
+  const el4 = document.getElementById('sim-outer-cap-label');
+  if (el3) el3.textContent = fmtM(usdtSim.inner.cap) + '원';
+  if (el4) el4.textContent = fmtM(usdtSim.outer.cap) + '원';
 }
 
 // ─── 4전략 월간 P&L 연동 계산 ──────────────────────────────────────────────
