@@ -1735,15 +1735,16 @@ function renderBhLadder(alpha) {
   const GROUP = 10;
 
   // 연속 그룹 묶기: 동일 자본이면 하나의 행으로 압축
-  const makeGroups = (arr, capKey) => {
+  // seriesKey: 's1' 또는 's2' — 어느 시리즈의 자본을 읽을지 명시
+  const makeGroups = (arr, seriesKey, capKey) => {
     const groups = [];
     let i = 0;
     while (i < arr.length) {
       // 같은 자본값인 연속 행을 하나로 묶음
-      const baseCap = arr[i].s2 ? arr[i].s2[capKey] : (arr[i].s1 ? arr[i].s1[capKey] : null);
+      const baseCap = arr[i][seriesKey] ? arr[i][seriesKey][capKey] : null;
       let j = i + 1;
       while (j < arr.length) {
-        const nextCap = arr[j].s2 ? arr[j].s2[capKey] : (arr[j].s1 ? arr[j].s1[capKey] : null);
+        const nextCap = arr[j][seriesKey] ? arr[j][seriesKey][capKey] : null;
         if (nextCap !== baseCap) break;
         j++;
       }
@@ -1765,8 +1766,8 @@ function renderBhLadder(alpha) {
     return groups;
   };
 
-  const groups2 = makeGroups(rows2, 'capProg');
-  const groups1 = makeGroups(rows1, 'capProg');
+  const groups2 = makeGroups(rows2, 's2', 'capProg');
+  const groups1 = makeGroups(rows1, 's1', 'capProg');
 
   // 두 그룹 배열을 가격 내림차순으로 병합하여 행 렌더링
   // 각 그룹의 대표가 topPrice이므로 topPrice 기준으로 병합
