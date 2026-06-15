@@ -782,6 +782,15 @@
             </div>
 
             <!-- 자본 분포 표 (주문가 사다리) -->
+            <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;flex-wrap:wrap">
+              <span style="font-size:.8rem;color:var(--muted)">봇자본 표시단위</span>
+              <div style="display:flex;gap:5px">
+                <button id="lr-unit-btn-1000"  onclick="setLadderRoundUnit(1000)"  style="padding:3px 10px;font-size:.76rem;border-radius:5px;border:1px solid var(--border);background:var(--usdt);color:#fff;cursor:pointer;font-weight:700">1,000원</button>
+                <button id="lr-unit-btn-5000"  onclick="setLadderRoundUnit(5000)"  style="padding:3px 10px;font-size:.76rem;border-radius:5px;border:1px solid var(--border);background:var(--card2);color:var(--text);cursor:pointer">5,000원</button>
+                <button id="lr-unit-btn-10000" onclick="setLadderRoundUnit(10000)" style="padding:3px 10px;font-size:.76rem;border-radius:5px;border:1px solid var(--border);background:var(--card2);color:var(--text);cursor:pointer">10,000원</button>
+              </div>
+              <span id="lr-unit-note" style="font-size:.74rem;color:var(--muted)">단위가 클수록 동일자본 구간이 묶여 사다리가 단순화됩니다</span>
+            </div>
             <div class="zone-table-wrap" style="max-height:340px;overflow-y:auto;border:1px solid var(--border);border-radius:10px">
               <table class="zone-tbl" id="bh-ladder" style="background:var(--card);width:100%;border-collapse:collapse">
                 <thead style="position:sticky;top:0;z-index:2">
@@ -1689,8 +1698,29 @@ function _bhAlphaLabel(a) {
   return '최대 집중';
 }
 
-// 봇당 자본 천원 단위 반올림
-function roundK(n) { return Math.round(n / 1000) * 1000; }
+// 봇당 자본 표시 단위 (사다리 표시 전용 — adjustBhCap 조정 단위와 별개)
+let _ladderRoundUnit = 1000;
+
+function roundK(n) { return Math.round(n / _ladderRoundUnit) * _ladderRoundUnit; }
+
+function setLadderRoundUnit(unit) {
+  _ladderRoundUnit = unit;
+  const units = [1000, 5000, 10000];
+  units.forEach(u => {
+    const btn = document.getElementById('lr-unit-btn-' + u);
+    if (!btn) return;
+    const active = u === unit;
+    btn.style.background = active ? 'var(--usdt)' : 'var(--card2)';
+    btn.style.color = active ? '#fff' : 'var(--text)';
+    btn.style.fontWeight = active ? '700' : '400';
+  });
+  const note = document.getElementById('lr-unit-note');
+  if (note) {
+    const rows = { 1000: '전체 상세 표시', 5000: '5천원 단위로 묶음', 10000: '1만원 단위로 묶음 — 최대 단순화' };
+    note.textContent = rows[unit] || '';
+  }
+  renderBhLadder(_bhAlpha);
+}
 
 /**
  * 2σ/1σ 이중 그리드 주문가 사다리 생성 (중복 동작 모델).
