@@ -1725,38 +1725,98 @@ function renderBhLadder(alpha) {
 
   const max2 = Math.max(1, ...rows.filter(r => r.s2).map(r => r.s2.capProg));
   const max1 = Math.max(1, ...rows.filter(r => r.s1).map(r => r.s1.capProg));
-  const f1 = p => Math.round(p).toLocaleString('ko-KR');  // 1원 틱
+  const fp = p => Math.round(p).toLocaleString('ko-KR');
   const fw = n => n.toLocaleString('ko-KR');
 
-  body.innerHTML = rows.map((r, i) => {
-    const prevInOverlap = i > 0 && rows[i-1].inOverlap !== r.inOverlap;
-    const topBorder = prevInOverlap ? 'border-top:2px solid rgba(255,255,255,0.22);' : '';
+  // 2σ / 1σ 시리즈를 분리하여 각각 그룹화
+  const rows2 = rows.filter(r => r.s2);
+  const rows1 = rows.filter(r => r.s1);
 
-    // 2σ 셀
+  const GROUP = 10;
+
+  // 연속 그룹 묶기: 동일 자본이면 하나의 행으로 압축
+  const makeGroups = (arr, capKey) => {
+    const groups = [];
+    let i = 0;
+    while (i < arr.length) {
+      // 같은 자본값인 연속 행을 하나로 묶음
+      const baseCap = arr[i].s2 ? arr[i].s2[capKey] : (arr[i].s1 ? arr[i].s1[capKey] : null);
+      let j = i + 1;
+      while (j < arr.length) {
+        const nextCap = arr[j].s2 ? arr[j].s2[capKey] : (arr[j].s1 ? arr[j].s1[capKey] : null);
+        if (nextCap !== baseCap) break;
+        j++;
+      }
+      // 같은 자본 그룹 내에서 GROUP 단위로 끊어서 표시
+      const sameCapSlice = arr.slice(i, j);
+      for (let k = 0; k < sameCapSlice.length; k += GROUP) {
+        const chunk = sameCapSlice.slice(k, k + GROUP);
+        const topPrice = chunk[0].price;
+        const botPrice = chunk[chunk.length - 1].price;
+        const anyOverlap = chunk.some(r => r.inOverlap);
+        const boundaryOverlap = chunk.some((r, ci) => {
+          const prev = ci === 0 && i + k > 0 ? arr[i + k - 1] : null;
+          return prev && prev.inOverlap !== r.inOverlap;
+        });
+        groups.push({ topPrice, botPrice, cap: baseCap, anyOverlap, boundaryOverlap, count: chunk.length });
+      }
+      i = j;
+    }
+    return groups;
+  };
+
+  const groups2 = makeGroups(rows2, 'capProg');
+  const groups1 = makeGroups(rows1, 'capProg');
+
+  // 두 그룹 배열을 가격 내림차순으로 병합하여 행 렌더링
+  // 각 그룹의 대표가 topPrice이므로 topPrice 기준으로 병합
+  const allTops = new Set([...groups2.map(g => g.topPrice), ...groups1.map(g => g.topPrice)]);
+  const sortedTops = [...allTops].sort((a, b) => b - a);
+
+  const map2g = {};
+  groups2.forEach(g => { map2g[g.topPrice] = g; });
+  const map1g = {};
+  groups1.forEach(g => { map1g[g.topPrice] = g; });
+
+  const priceLabel = (g) => g.topPrice === g.botPrice
+    ? `${fp(g.topPrice)}원`
+    : `${fp(g.topPrice)}~${fp(g.botPrice)}원`;
+
+  body.innerHTML = sortedTops.map((top, idx) => {
+    const g2 = map2g[top];
+    const g1 = map1g[top];
+    const prevTop = sortedTops[idx - 1];
+    const prevG2 = prevTop ? map2g[prevTop] : null;
+    const prevG1 = prevTop ? map1g[prevTop] : null;
+    const overlapTransition = (g2 && g2.boundaryOverlap) || (g1 && g1.boundaryOverlap) ||
+      (prevG2 && g2 && prevG2.anyOverlap !== g2.anyOverlap) ||
+      (prevG1 && g1 && prevG1.anyOverlap !== g1.anyOverlap);
+    const topBorder = overlapTransition ? 'border-top:2px solid rgba(255,255,255,0.22);' : '';
+
     let td2price = `<td style="text-align:right;color:var(--muted);font-size:.8rem"></td>`;
     let td2cap   = `<td></td>`;
-    if (r.s2) {
-      const barW = (r.s2.capProg / max2 * 100).toFixed(0);
-      td2price = `<td style="text-align:right;font-variant-numeric:tabular-nums;color:var(--outer-border);font-size:.82rem">${f1(r.price)}원</td>`;
+    if (g2) {
+      const barW = (g2.cap / max2 * 100).toFixed(0);
+      td2price = `<td style="text-align:right;font-variant-numeric:tabular-nums;color:var(--outer-border);font-size:.82rem">${priceLabel(g2)}</td>`;
       td2cap   = `<td style="text-align:right;font-variant-numeric:tabular-nums;position:relative">
         <span style="position:absolute;left:0;top:0;bottom:0;width:${barW}%;background:rgba(255,127,14,0.13);pointer-events:none"></span>
-        <span style="position:relative;font-weight:600;color:var(--orange)">${fw(r.s2.capProg)}</span>
+        <span style="position:relative;font-weight:600;color:var(--orange)">${fw(g2.cap)}</span>
       </td>`;
     }
 
-    // 1σ 셀
     let td1price = `<td style="text-align:right;color:var(--muted);font-size:.8rem"></td>`;
     let td1cap   = `<td></td>`;
-    if (r.s1) {
-      const barW = (r.s1.capProg / max1 * 100).toFixed(0);
-      td1price = `<td style="text-align:right;font-variant-numeric:tabular-nums;color:var(--inner-border);font-size:.82rem">${f1(r.price)}원</td>`;
+    if (g1) {
+      const barW = (g1.cap / max1 * 100).toFixed(0);
+      td1price = `<td style="text-align:right;font-variant-numeric:tabular-nums;color:var(--inner-border);font-size:.82rem">${priceLabel(g1)}</td>`;
       td1cap   = `<td style="text-align:right;font-variant-numeric:tabular-nums;position:relative">
         <span style="position:absolute;left:0;top:0;bottom:0;width:${barW}%;background:rgba(79,142,247,0.13);pointer-events:none"></span>
-        <span style="position:relative;font-weight:600;color:var(--accent)">${fw(r.s1.capProg)}</span>
+        <span style="position:relative;font-weight:600;color:var(--accent)">${fw(g1.cap)}</span>
       </td>`;
     }
 
-    const overlapBg = r.inOverlap ? 'background:rgba(79,142,247,0.04);' : '';
+    const anyOverlap = (g2 && g2.anyOverlap) || (g1 && g1.anyOverlap);
+    const overlapBg = anyOverlap ? 'background:rgba(79,142,247,0.04);' : '';
     return `<tr style="${overlapBg}${topBorder}border-bottom:1px solid rgba(255,255,255,0.04)">
       ${td2price}${td2cap}${td1price}${td1cap}
     </tr>`;
