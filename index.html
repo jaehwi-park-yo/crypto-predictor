@@ -1345,7 +1345,7 @@ function drawDonut(segments) {
   text.setAttribute('fill', '#e8eaf0');
   text.setAttribute('font-size', '13');
   text.setAttribute('font-weight', '700');
-  text.textContent = '40M';
+  text.textContent = fmtM(total);
   svg.appendChild(text);
 
   const sub = document.createElementNS('http://www.w3.org/2000/svg', 'text');
@@ -1358,6 +1358,16 @@ function drawDonut(segments) {
 }
 
 // ─── 메트릭 갱신 ────────────────────────────────────────────────────────────
+// 2σ 외부존 폭(%) — 실제 σ밴드에서 동적 산출. range_pct와 동일 기준(l1 분모)으로 일관.
+// 폴백: 밴드 미로딩 시 24.6%
+function btcOuterRangePct() {
+  const s = D.snap;
+  const u1a = s.u1a || s.u1, l1a = s.l1a || s.l1;
+  const u2a = s.u2a || s.u2, l2a = s.l2a || s.l2;
+  if (u1a && l1a && u2a && l2a)
+    return ((u2a - u1a) + (l1a - l2a)) / l1a * 100;
+  return 24.6;
+}
 function updateMetrics() {
   const totalCap = +document.getElementById('capital').value || 40000000;
   const btcRatio = +document.getElementById('btcRatio').value / 100;
@@ -1373,9 +1383,8 @@ function updateMetrics() {
   const outerUsdt = usdtCap * (1 - innerRatio);
 
   const btcInnerBots = Math.max(1, Math.round(D.snap.range_pct / 0.5)); // 매수간격 0.5% 기준
-  // 2σ 봇: 1σ 포함 전체 2σ 범위 동작. 외부전용(24.6%) + 내부(range_pct) 합산 봇 수
-  const btcOuterRange = 24.6;  // 외부존 폭 ~24.6%
-  const btcOuterBots = Math.max(1, Math.round((D.snap.range_pct + btcOuterRange) / 0.3));
+  // 2σ 봇: 1σ 포함 전체 2σ 범위 동작. 외부존 폭(동적) + 내부(range_pct) 합산 봇 수
+  const btcOuterBots = Math.max(1, Math.round((D.snap.range_pct + btcOuterRangePct()) / 0.3));
 
   function setEl(id, val) { const el = document.getElementById(id); if (el) el.textContent = val; }
 
@@ -1422,6 +1431,7 @@ function updateMetrics() {
   setEl('leg-btc-outer',  `BTC 외부존 (2σ) — ${fmtM(outerBtc)} (${pct(outerBtc)}%)`);
   setEl('leg-usdt-inner', `USDT 내부존 (1σ) — ${fmtM(innerUsdt)} (${pct(innerUsdt)}%)`);
   setEl('leg-usdt-outer', `USDT 외부존 (2σ) — ${fmtM(outerUsdt)} (${pct(outerUsdt)}%)`);
+  setEl('leg-krw', `KRW 예비금 — ${fmtM(totalCap * krwHold)} (총자본 ${Math.round(krwHold*100)}%)`);
 
   // Redraw donut
   drawDonut([
@@ -2071,7 +2081,7 @@ function updatePnlTable() {
   if (Math.round(usdtCalc.uo.capPerBot) < MIN_BOT_CAP) warnings.push('USDT 외부존 봇당자본 부족');
   const btciBotCap = rows.bi.cap / Math.max(1, Math.round(D.snap.range_pct / 0.5));
   // 2σ 봇: 1σ 포함 전체범위 봇수 (updateMetrics btcOuterBots와 동일 식)
-  const btcoBotCap = rows.bo.cap / Math.max(1, Math.round((D.snap.range_pct + 24.6) / 0.3));
+  const btcoBotCap = rows.bo.cap / Math.max(1, Math.round((D.snap.range_pct + btcOuterRangePct()) / 0.3));
   if (btciBotCap < MIN_BOT_CAP) warnings.push('BTC 내부존 봇당자본 부족');
   if (btcoBotCap < MIN_BOT_CAP) warnings.push('BTC 외부존 봇당자본 부족');
   let warnEl = document.getElementById('bot-cap-warning');
