@@ -783,11 +783,14 @@
 
             <!-- 자본 분포 표 (주문가 사다리) -->
             <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;flex-wrap:wrap">
-              <span style="font-size:.8rem;color:var(--muted)">봇자본 표시단위</span>
-              <div style="display:flex;gap:5px">
-                <button id="lr-unit-btn-1000"  onclick="setLadderRoundUnit(1000)"  style="padding:3px 10px;font-size:.76rem;border-radius:5px;border:1px solid var(--border);background:var(--usdt);color:#fff;cursor:pointer;font-weight:700">1,000원</button>
-                <button id="lr-unit-btn-5000"  onclick="setLadderRoundUnit(5000)"  style="padding:3px 10px;font-size:.76rem;border-radius:5px;border:1px solid var(--border);background:var(--card2);color:var(--text);cursor:pointer">5,000원</button>
-                <button id="lr-unit-btn-10000" onclick="setLadderRoundUnit(10000)" style="padding:3px 10px;font-size:.76rem;border-radius:5px;border:1px solid var(--border);background:var(--card2);color:var(--text);cursor:pointer">10,000원</button>
+              <span style="font-size:.8rem;color:var(--muted)">봇자본 표시단위 (천원 단위)</span>
+              <div style="display:flex;align-items:center;gap:6px">
+                <button onclick="stepLadderRoundUnit(-1)" style="padding:2px 11px;font-size:.95rem;border-radius:5px;border:1px solid var(--usdt);background:transparent;color:var(--usdt);cursor:pointer;font-weight:700">−</button>
+                <input type="number" id="lr-unit-input" value="1000" min="1000" step="1000"
+                  onchange="onLadderRoundUnitInput(this.value)"
+                  style="width:88px;text-align:right;padding:4px 7px;font-size:.82rem;font-weight:700;border-radius:5px;border:1px solid var(--border);background:var(--card2);color:var(--text)">
+                <span style="font-size:.8rem;color:var(--muted)">원</span>
+                <button onclick="stepLadderRoundUnit(1)" style="padding:2px 11px;font-size:.95rem;border-radius:5px;border:1px solid var(--usdt);background:transparent;color:var(--usdt);cursor:pointer;font-weight:700">+</button>
               </div>
               <span id="lr-unit-note" style="font-size:.74rem;color:var(--muted)">단위가 클수록 동일자본 구간이 묶여 사다리가 단순화됩니다</span>
             </div>
@@ -1703,23 +1706,26 @@ let _ladderRoundUnit = 1000;
 
 function roundK(n) { return Math.round(n / _ladderRoundUnit) * _ladderRoundUnit; }
 
+// 표시단위 설정 (천원 배수로 정규화, 최소 1,000원). 입력칸·렌더 동기화.
 function setLadderRoundUnit(unit) {
-  _ladderRoundUnit = unit;
-  const units = [1000, 5000, 10000];
-  units.forEach(u => {
-    const btn = document.getElementById('lr-unit-btn-' + u);
-    if (!btn) return;
-    const active = u === unit;
-    btn.style.background = active ? 'var(--usdt)' : 'var(--card2)';
-    btn.style.color = active ? '#fff' : 'var(--text)';
-    btn.style.fontWeight = active ? '700' : '400';
-  });
+  _ladderRoundUnit = Math.max(1000, Math.round((+unit || 1000) / 1000) * 1000);
+  const inp = document.getElementById('lr-unit-input');
+  if (inp) inp.value = _ladderRoundUnit;
   const note = document.getElementById('lr-unit-note');
   if (note) {
-    const rows = { 1000: '전체 상세 표시', 5000: '5천원 단위로 묶음', 10000: '1만원 단위로 묶음 — 최대 단순화' };
-    note.textContent = rows[unit] || '';
+    note.textContent = _ladderRoundUnit <= 1000
+      ? '전체 상세 표시 (천원 단위)'
+      : `${_ladderRoundUnit.toLocaleString('ko-KR')}원 단위로 묶음 — 동일자본 구간 단순화`;
   }
   renderBhLadder(_bhAlpha);
+}
+// +/− 버튼: 천원씩 증감
+function stepLadderRoundUnit(dir) {
+  setLadderRoundUnit(_ladderRoundUnit + dir * 1000);
+}
+// 직접 입력
+function onLadderRoundUnitInput(val) {
+  setLadderRoundUnit(val);
 }
 
 /**
@@ -2004,9 +2010,10 @@ function setBhCapUnit(unit) {
 }
 
 // 봇자본 +/- 조정 후 연동 갱신
+// 실제 자본은 항상 1,000원 단위로 스냅(표시단위 _ladderRoundUnit와 독립)
 function adjustBhCap(zone, dir) {
   const delta = dir * _bhCapUnit;
-  usdtSim[zone].cap = Math.max(1000, roundK(usdtSim[zone].cap + delta));
+  usdtSim[zone].cap = Math.max(1000, Math.round((usdtSim[zone].cap + delta) / 1000) * 1000);
   syncBhCapDisplay();
   syncUsdtDetail();   // USDT 존별 상세 테이블 갱신
   updateBhSim();      // 비교표 + 사다리 갱신
