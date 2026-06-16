@@ -1401,6 +1401,26 @@ function btcOuterRangePct() {
     return ((u2a - u1a) + (l1a - l2a)) / l1a * 100;
   return 24.6;
 }
+// 기하(geometric) 그리드 봇수: N = ceil(ln(u/l) / ln(1+gi%))
+// 백엔드 count_grid_crossings()의 기하 그리드 라인 모델과 동일 — 매수간격이 가격에 곱연산(%)으로 적용되므로
+// 선형근사(range_pct/gi)는 범위가 클수록 봇수를 과대평가함 (예: 29.5%/0.5%=59 vs 정확히는 52)
+function geoGridBots(u, l, giPct) {
+  if (!u || !l || u <= l || giPct <= 0) return 1;
+  return Math.max(1, Math.ceil(Math.log(u / l) / Math.log(1 + giPct / 100)));
+}
+// BTC 1σ/2σ 존별 봇수 — 실가격 로딩 시 정확한 기하모델, 미로딩 시 range_pct 기반 폴백
+function btcZoneBots(zone) {
+  const s = D.snap;
+  const u1a = s.u1a || s.u1, l1a = s.l1a || s.l1;
+  const u2a = s.u2a || s.u2, l2a = s.l2a || s.l2;
+  if (zone === 'inner') {
+    if (u1a && l1a) return geoGridBots(u1a, l1a, 0.5);
+    return geoGridBots(1 + (s.range_pct || 0) / 100, 1, 0.5);
+  } else {
+    if (u2a && l2a) return geoGridBots(u2a, l2a, 0.3);
+    return geoGridBots(1 + ((s.range_pct || 0) + btcOuterRangePct()) / 100, 1, 0.3);
+  }
+}
 function updateMetrics() {
   const totalCap = +document.getElementById('capital').value || 40000000;
   const btcRatio = +document.getElementById('btcRatio').value / 100;
@@ -1415,9 +1435,8 @@ function updateMetrics() {
   const innerUsdt = usdtCap * innerRatio;
   const outerUsdt = usdtCap * (1 - innerRatio);
 
-  const btcInnerBots = Math.max(1, Math.round(D.snap.range_pct / 0.5)); // 매수간격 0.5% 기준
-  // 2σ 봇: 1σ 포함 전체 2σ 범위 동작. 외부존 폭(동적) + 내부(range_pct) 합산 봇 수
-  const btcOuterBots = Math.max(1, Math.round((D.snap.range_pct + btcOuterRangePct()) / 0.3));
+  const btcInnerBots = btcZoneBots('inner');
+  const btcOuterBots = btcZoneBots('outer');
 
   function setEl(id, val) { const el = document.getElementById(id); if (el) el.textContent = val; }
 
@@ -2186,9 +2205,9 @@ function updatePnlTable() {
   const warnings = [];
   if (Math.round(usdtCalc.ui.capPerBot) < MIN_BOT_CAP) warnings.push('USDT 내부존 봇당자본 부족');
   if (Math.round(usdtCalc.uo.capPerBot) < MIN_BOT_CAP) warnings.push('USDT 외부존 봇당자본 부족');
-  const btciBotCap = rows.bi.cap / Math.max(1, Math.round(D.snap.range_pct / 0.5));
-  // 2σ 봇: 1σ 포함 전체범위 봇수 (updateMetrics btcOuterBots와 동일 식)
-  const btcoBotCap = rows.bo.cap / Math.max(1, Math.round((D.snap.range_pct + btcOuterRangePct()) / 0.3));
+  const btciBotCap = rows.bi.cap / btcZoneBots('inner');
+  // 2σ 봇: 1σ 포함 전체범위 봇수 (updateMetrics btcOuterBots와 동일 기하모델)
+  const btcoBotCap = rows.bo.cap / btcZoneBots('outer');
   if (btciBotCap < MIN_BOT_CAP) warnings.push('BTC 내부존 봇당자본 부족');
   if (btcoBotCap < MIN_BOT_CAP) warnings.push('BTC 외부존 봇당자본 부족');
   let warnEl = document.getElementById('bot-cap-warning');
