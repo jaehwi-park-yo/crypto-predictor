@@ -332,7 +332,7 @@
             ⚡ 거래량 부스터 OFF
           </button>
           <div id="btc-booster-note" style="font-size:.65rem;color:var(--muted);margin-top:3px;line-height:1.4">
-            OFF: 기본 (1σ 매수0.5%/매도1.0%·2σ 매수0.3%/매도0.5%)<br>ON: 부스터 (매수0.2%/매도0.3% 통일)
+            OFF: 기본 (1σ 매수0.5%/매도1.0% · 2σ 매수0.3%/매도0.5%)<br>ON: 부스터 (매수0.2%/매도0.3% 통일) — 거래량↑ 순익↓
           </div>
         </div>
       </div>
@@ -2103,10 +2103,15 @@ function calcBtcCoefScaled(zone, combined = false) {
   const base = (combined && zone === 'outer') ? BTC_COEF_COMBINED.outer : BTC_COEF[zone];
   if (!_btcBooster) return base;
   const bb = BTC_BASE[zone], bn = BTC_BOOSTER_INT[zone];
-  const baseCycle = bb.buy + bb.sell, newCycle = bn.buy + bn.sell;
+  const volRatio = (bb.buy + bb.sell) / (bn.buy + bn.sell);
+  const newVolPerCap = base.volPerCap * volRatio;
+  // 순수익 스케일: net/vol ∝ (sell/2 - fee_rate) — 수수료를 반영해 마진 비율로 계산
+  // 그렇지 않으면 거래량 3배 시 수수료 3배 > 그리드수익 증가분 → 순손실 발생
+  const netSellRatio = (bn.sell / 2 - BTC_FEE) / (bb.sell / 2 - BTC_FEE);
+  const baseNetPerCap = base.gridPerCap - base.volPerCap * BTC_FEE;
   return {
-    volPerCap:  base.volPerCap  * baseCycle / newCycle,
-    gridPerCap: base.gridPerCap * (bn.sell / newCycle) / (bb.sell / baseCycle),
+    volPerCap:  newVolPerCap,
+    gridPerCap: newVolPerCap * BTC_FEE + baseNetPerCap * volRatio * netSellRatio,
   };
 }
 
@@ -2129,7 +2134,7 @@ function toggleBtcBooster() {
   }
   if (note) {
     note.textContent = _btcBooster
-      ? 'ON: 매수0.2%/매도0.3% 통일 — 거래량 약 3× 증가, 그리드 수익 소폭 감소'
+      ? 'ON: 매수0.2%/매도0.3% 통일 — 거래량 2~3× 증가, 그리드 순익은 수수료 비중 증가로 감소'
       : 'OFF: 기본 (1σ 매수0.5%/매도1.0%·2σ 매수0.3%/매도0.5%)';
   }
   updateMetrics();
