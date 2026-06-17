@@ -9,7 +9,7 @@
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
   :root {
-    --bg: #0e1117; --panel: #1a1d23; --card: #23262f;
+    --bg: #0e1117; --panel: #1a1d23; --card: #23262f; --card2: #2b2f3a;
     --border: #2e3240; --accent: #4f8ef7; --green: #2ca02c;
     --orange: #ff7f0e; --red: #d62728; --yellow: #f5c518;
     --text: #e8eaf0; --muted: #8b929e; --font: 'Noto Sans KR', system-ui, sans-serif;
@@ -367,8 +367,7 @@
       리워드 최대 <b style="color:#8cf">0.02%</b><br>
       → 실수익원: 그리드 스프레드<br><br>
       <b style="color:#adf">BTC 비대칭 간격:</b><br>
-      보수: 매수0.5%/매도1.0%<br>
-      공격: 매수0.3%/매도0.5%<br>
+      <span id="sb-int-note">보수: 매수0.5%/매도1.0%<br>공격: 매수0.3%/매도0.5%</span><br>
       <span style="color:#8b929e">(매도간격→수익, 매수간격→거래량)</span>
     </div>
   </aside>
@@ -747,7 +746,7 @@
             </div>
             <!-- 봇자본 조정 단위 버튼 -->
             <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;flex-wrap:wrap">
-              <span style="font-size:.8rem;color:var(--muted);min-width:90px">봇자본 조정단위</span>
+              <span style="font-size:.8rem;color:var(--muted);min-width:90px" title="아래 1σ/2σ 자본의 +/- 버튼이 한 번에 증감하는 금액(스텝)을 정합니다. 실제 투입 자본을 바꿉니다.">봇자본 증감폭 <span style="cursor:help;color:#8b929e">(?)</span></span>
               <div style="display:flex;gap:6px;flex-wrap:wrap">
                 <button id="bh-unit-btn-1000"  onclick="setBhCapUnit(1000)"   style="padding:4px 10px;font-size:.78rem;border-radius:6px;border:1px solid var(--border);background:var(--usdt);color:#fff;cursor:pointer;font-weight:700">±1,000원</button>
                 <button id="bh-unit-btn-5000"  onclick="setBhCapUnit(5000)"   style="padding:4px 10px;font-size:.78rem;border-radius:6px;border:1px solid var(--border);background:var(--card2);color:var(--text);cursor:pointer">±5,000원</button>
@@ -792,7 +791,7 @@
 
             <!-- 자본 분포 표 (주문가 사다리) -->
             <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;flex-wrap:wrap">
-              <span style="font-size:.8rem;color:var(--muted)">봇자본 표시단위 (천원 단위)</span>
+              <span style="font-size:.8rem;color:var(--muted)" title="아래 사다리 표에 보이는 숫자를 반올림하는 단위입니다. 표시만 바꾸며 실제 투입 자본은 변하지 않습니다.">사다리 표시 반올림 단위 <span style="cursor:help;color:#8b929e">(?)</span></span>
               <div style="display:flex;align-items:center;gap:6px">
                 <button onclick="stepLadderRoundUnit(-1)" style="padding:2px 11px;font-size:.95rem;border-radius:5px;border:1px solid var(--usdt);background:transparent;color:var(--usdt);cursor:pointer;font-weight:700">−</button>
                 <input type="number" id="lr-unit-input" value="1000" min="1000" step="1000"
@@ -817,7 +816,7 @@
               </table>
             </div>
             <div style="font-size:.75rem;color:var(--muted);margin-top:4px;text-align:center">
-              위(고가) → 아래(저가) · 봇당 자본 천원 단위 · <span style="color:var(--inner-border)">■</span> 1σ 구간 = 2σ·1σ 동시 동작 (거래량 폭발)
+              위(고가) → 아래(저가) · 봇당 자본 <span id="bh-ladder-unit-note">천원</span> 단위 · <span style="color:var(--inner-border)">■</span> 1σ 구간 = 2σ·1σ 동시 동작 (거래량 폭발)
             </div>
             <div class="sim-note" style="margin-top:8px">
               📌 표는 <b>1σ 내부존</b>과 <b>2σ 외부존</b>을 각각 독립 예산으로 배분합니다(구분선 기준). 외부존은 봇 수가 적어 봇당 자본이 상대적으로 큽니다.<br>
@@ -1573,7 +1572,7 @@ function buildBTCChart() {
     ...D.glines.slice(0,60).map((gl,i)=>({
       type:'scatter', x:D.fut, y:D.fut.map(()=>gl), mode:'lines',
       line:{color:'rgba(79,142,247,0.15)',width:0.5},
-      showlegend:i===0, name:i===0?'그리드 라인 (매수 0.5% 간격)':null, hoverinfo:'skip',
+      showlegend:i===0, name:i===0?`그리드 라인 (매수 ${btcInterval('inner').buy}% 간격, 참고용)`:null, hoverinfo:'skip',
     })),
   ];
 
@@ -1663,7 +1662,7 @@ function onPrevVolChange() {
 }
 function calcUsdt(z) {
   const cycle = z.buy + z.sell;
-  const bots = Math.floor(z.box / z.buy);
+  const bots = Math.max(1, Math.floor(z.box / z.buy));  // 0봇 방지 (box<buy → Infinity/NaN)
   const capPerBot = z.cap / bots;
   const rtDay = (USDT_DAILY_RANGE / cycle) * USDT_EFF;
   const totalRt = rtDay * USDT_TDAYS * bots;
@@ -1753,6 +1752,9 @@ function setLadderRoundUnit(unit) {
       ? '전체 상세 표시 (천원 단위)'
       : `${_ladderRoundUnit.toLocaleString('ko-KR')}원 단위로 묶음 — 동일자본 구간 단순화`;
   }
+  const footNote = document.getElementById('bh-ladder-unit-note');
+  if (footNote) footNote.textContent = _ladderRoundUnit <= 1000
+    ? '천원' : `${_ladderRoundUnit.toLocaleString('ko-KR')}원`;
   renderBhLadder(_bhAlpha);
 }
 // +/− 버튼: 천원씩 증감
@@ -2120,13 +2122,14 @@ function toggleBtcBooster() {
   const btn = document.getElementById('btc-booster-btn');
   const note = document.getElementById('btc-booster-note');
   if (btn) {
+    btn.setAttribute('aria-pressed', _btcBooster ? 'true' : 'false');
     if (_btcBooster) {
-      btn.textContent = '⚡ 거래량 부스터 ON';
+      btn.textContent = '⚡ 거래량 부스터  ✓ ON';
       btn.style.borderColor = '#f0a500';
-      btn.style.color = '#f0a500';
-      btn.style.background = 'rgba(240,165,0,.08)';
+      btn.style.color = '#1a1d23';
+      btn.style.background = '#f0a500';
     } else {
-      btn.textContent = '⚡ 거래량 부스터 OFF';
+      btn.textContent = '⚡ 거래량 부스터  OFF';
       btn.style.borderColor = 'var(--muted)';
       btn.style.color = 'var(--muted)';
       btn.style.background = 'transparent';
@@ -2137,8 +2140,24 @@ function toggleBtcBooster() {
       ? 'ON: 매수0.2%/매도0.3% 통일 — 거래량 2~3× 증가, 그리드 순익은 수수료 비중 증가로 감소'
       : 'OFF: 기본 (1σ 매수0.5%/매도1.0%·2σ 매수0.3%/매도0.5%)';
   }
+  // 사이드바 간격 안내 텍스트도 동기화 (부스터 ON 시 보수/공격 구분 없음)
+  const sbNote = document.getElementById('sb-int-note');
+  if (sbNote) {
+    sbNote.innerHTML = _btcBooster
+      ? '<span style="color:#f0a500">부스터: 매수0.2%/매도0.3% (통일)</span>'
+      : '보수: 매수0.5%/매도1.0%<br>공격: 매수0.3%/매도0.5%';
+  }
   updateMetrics();
   updatePnlTable();
+  // BTC 차트 그리드 라벨 갱신 (간격 변경 반영) — BTC 탭 활성 시에만 재빌드
+  window._chartBTC = false;
+  if (document.getElementById('tab-btc')?.classList.contains('active')
+      && typeof buildBTCChart === 'function' && D.snap) {
+    try { buildBTCChart(); } catch (e) {}
+  }
+  // 거래량 목표 추천이 활성화돼 있으면 새 간격 기준으로 재추천
+  const vt = +(document.getElementById('volTarget')?.value || 0);
+  if (vt > 0 && typeof onVolTargetChange === 'function') onVolTargetChange(vt);
 }
 
 function calcBtcStrat(cap, zone, combined = false) {
@@ -2196,6 +2215,12 @@ function updatePnlTable() {
     set(`pnl-${key}-rwd`, man(r.reward), r.reward > 0 ? 'pos' : '');
     set(`pnl-${key}-net`, man(r.net), r.net >= 0 ? 'pos' : 'neg');
     for (const f of ['cap','vol','grid','fee','reward','net']) tot[f] += r[f];
+  }
+  // 리워드 캡은 계좌 단위(월 300만원) — 전략별 합산 후 초과분 차감
+  const REWARD_CAP = 3_000_000;
+  if (tot.reward > REWARD_CAP) {
+    tot.net -= (tot.reward - REWARD_CAP);
+    tot.reward = REWARD_CAP;
   }
   set('pnl-tot-cap', fmtM(tot.cap));
   set('pnl-tot-vol', eok(tot.vol));
@@ -2342,7 +2367,7 @@ function estimatePortfolio(totalCap, btcRatio, innerRatio, krwHold) {
   const investable = totalCap * (1 - krwHold);
   const btcCap = investable * btcRatio, usdtCap = investable * (1 - btcRatio);
   const bi = calcBtcStrat(btcCap * innerRatio, 'inner');
-  const bo = calcBtcStrat(btcCap * (1 - innerRatio), 'outer');
+  const bo = calcBtcStrat(btcCap * (1 - innerRatio), 'outer', true);  // combined: P&L표와 동일 모델
   let vol = bi.vol + bo.vol, net = bi.net + bo.net;
   for (const zone of ['inner', 'outer']) {
     const cap = zone === 'inner' ? usdtCap * innerRatio : usdtCap * (1 - innerRatio);
