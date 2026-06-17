@@ -2912,11 +2912,12 @@ function applyBtcRevisedBox() {
   // range_pct 재계산
   if (s.rl > 0) s.range_pct = (s.ru - s.rl) / s.rl * 100;
 
-  // BTC 탭·포트폴리오 재계산 및 차트 재빌드
+  // BTC 탭·모니터 패널·포트폴리오 재계산 및 차트 재빌드
   updateMetrics();
   updatePnlTable();
-  window._chartBTC = false;
-  if (document.getElementById('tab-btc')?.classList.contains('active') && D.snap.ref) {
+  updateMonitorPanel();       // 박스 레벨 표시(btc-u1, btc-l1 등) 갱신
+  window._chartBTC = false;  // 다음 탭 전환 시 차트 재빌드 트리거
+  if (D.snap.ref) {
     try { buildBTCChart(); } catch(e) {}
   }
 
@@ -2951,13 +2952,13 @@ function applyUsdtRevisedBox() {
   USDT.orig = newOrig;
   try { localStorage.setItem('usdt_orig_box', JSON.stringify(newOrig)); } catch(e) {}
 
-  // USDT 탭·포트폴리오 재계산
+  // USDT 탭·모니터 패널·포트폴리오 재계산
   updatePnlTable();
   updateMetrics();
+  updateUsdtMonitorPanel();
   updateUsdtRevisionNotice();
-  if (document.getElementById('tab-usdt')?.classList.contains('active')) {
-    try { buildUSDTChart(); } catch(e) {}
-  }
+  window._chartUSDT = false;
+  try { buildUSDTChart(); } catch(e) {}
 
   const btn = document.getElementById('usdt-apply-rev-btn');
   const note = document.getElementById('usdt-apply-rev-note');
