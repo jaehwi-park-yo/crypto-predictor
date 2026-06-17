@@ -2980,27 +2980,31 @@ function updateRevisionBtnState() {
   const btcNote = document.getElementById('btc-apply-rev-note');
   const m = D.mon;
   const hasRev = m.rev_ru > 0 && m.rev_rl > 0;
-  if (btcBtn && !btcBtn.disabled) {
+  if (btcBtn) {
     btcBtn.disabled = !hasRev;
     btcBtn.style.opacity = hasRev ? '1' : '0.4';
     btcBtn.style.cursor  = hasRev ? 'pointer' : 'not-allowed';
-    if (btcNote && hasRev && btcNote.textContent.includes('활성화')) {
+    if (btcNote && hasRev) {
       const shift = m.box_shift || 0;
       btcNote.textContent = shift
         ? `박스 중심 ${(shift >= 0 ? '+' : '') + shift}% 이동 — 적용 시 BTC·포트폴리오 반영`
         : '수정 박스 준비됨 — 클릭 시 BTC·포트폴리오에 반영';
+    } else if (btcNote && !hasRev) {
+      btcNote.textContent = '수정 예측 로딩 후 활성화됩니다';
     }
   }
   const usdtBtn  = document.getElementById('usdt-apply-rev-btn');
   const usdtNote = document.getElementById('usdt-apply-rev-note');
   const hasUsdt = USDT.loaded && USDT.ref > 0;
-  if (usdtBtn && !usdtBtn.disabled) {
+  if (usdtBtn) {
     usdtBtn.disabled = !hasUsdt;
     usdtBtn.style.opacity = hasUsdt ? '1' : '0.4';
     usdtBtn.style.cursor  = hasUsdt ? 'pointer' : 'not-allowed';
-    if (usdtNote && hasUsdt && usdtNote.textContent.includes('활성화')) {
+    if (usdtNote && hasUsdt) {
       const f1 = n => n.toLocaleString('ko-KR', {maximumFractionDigits:1});
       usdtNote.textContent = `현재 박스: ${f1(USDT.l1)}~${f1(USDT.u1)}원 — 클릭 시 새 기준으로 저장`;
+    } else if (usdtNote && !hasUsdt) {
+      usdtNote.textContent = 'USDT 실시간 가격 수신 후 활성화됩니다';
     }
   }
 }
