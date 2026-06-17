@@ -10,7 +10,9 @@
   D. 리스크 지표  — 이탈 빈도, 최대 이탈폭, 월별 최악 손실 시나리오
 
 방법론:
-  - 롤링 윈도우: lookback 30일로 박스 예측 → 이후 horizon 30일 실제 가격으로 검증
+  - 롤링 윈도우: lookback 30일(EWMA σ는 90일)로 박스 예측 → 이후 horizon 30일 실제 가격으로 검증
+  - σ 추정: EWMA(span=60), 90일 수익률 — prediction_service.predict_as_of()와 동일
+  - 밴드:   비대칭 σ 밴드 (config SIGMA_UP/DN_BTC) — 라이브 모델과 동일
   - 그리드 수익 계산: 실제 일봉 고저를 이용한 경로 재현
     grid_profit = Σ(round_trips_per_day × grid_interval × deployed_capital)
     round_trips = min(일중_범위/그리드_간격, 박스_범위/그리드_간격) × efficiency
@@ -31,14 +33,21 @@ from config import (
     MIN_GRID_INTERVAL_PCT, GRID_FILL_EFFICIENCY, DAILY_RANGE_SIGMA_MULT,
     REWARD_TIERS, MAX_REWARD_KRW,
     GRID_BUY_INTERVAL_PCT, GRID_SELL_INTERVAL_PCT, ASYMMETRIC_GRID,
+    SIGMA_UP_BTC, SIGMA_DN_BTC, SIGMA_UP_2_BTC, SIGMA_DN_2_BTC,
+    SIGMA_UP_USDT, SIGMA_DN_USDT, SIGMA_UP_2_USDT, SIGMA_DN_2_USDT,
 )
 from utils.statistics import (
-    compute_log_returns, daily_volatility, sigma_band,
+    compute_log_returns, ewma_daily_volatility,
+    sigma_band, asymmetric_sigma_band,
     containment_probability,
 )
 
 logger = logging.getLogger("backtester")
 
+# 라이브 모델과 동일한 σ 레벨 자동 선택 임계값
+_AUTO_SIGMA_VOL_THRESHOLD = 0.045
+# EWMA σ 추정에 사용할 최소 일수 (prediction_service와 동일)
+_EWMA_LOOKBACK = 90
 
 # ──────────────────────────────────────────────
 # 결과 데이터 모델
@@ -278,6 +287,12 @@ class BacktestAgent:
         asymmetric: bool = ASYMMETRIC_GRID,
         buy_interval_pct: float = GRID_BUY_INTERVAL_PCT,
         sell_interval_pct: float = GRID_SELL_INTERVAL_PCT,
+        # 비대칭 σ 밴드 배수 — None이면 config BTC 기본값 (prediction_service와 동일)
+        sigma_up: Optional[float] = None,
+        sigma_dn: Optional[float] = None,
+        sigma_up_2: Optional[float] = None,
+        sigma_dn_2: Optional[float] = None,
+        symbol: str = "BTC",
     ) -> BacktestSummary:
 
         gi_pct = max(
@@ -288,11 +303,22 @@ class BacktestAgent:
         _buy_gi  = buy_interval_pct  if asymmetric else None
         _sell_gi = sell_interval_pct if asymmetric else None
 
+        # 비대칭 σ 밴드 배수 — prediction_service.predict_as_of()와 동일하게 맞춤
+        _is_usdt = symbol.upper() == "USDT"
+        _su  = sigma_up   if sigma_up   is not None else (SIGMA_UP_USDT   if _is_usdt else SIGMA_UP_BTC)
+        _sd  = sigma_dn   if sigma_dn   is not None else (SIGMA_DN_USDT   if _is_usdt else SIGMA_DN_BTC)
+        _su2 = sigma_up_2 if sigma_up_2 is not None else (SIGMA_UP_2_USDT if _is_usdt else SIGMA_UP_2_BTC)
+        _sd2 = sigma_dn_2 if sigma_dn_2 is not None else (SIGMA_DN_2_USDT if _is_usdt else SIGMA_DN_2_BTC)
+
         rng = np.random.default_rng(seed)
         asym_label = f"[비대칭 buy={buy_interval_pct}%/sell={sell_interval_pct}%]" if asymmetric else ""
         logger.info(
             "[%s] === 백테스팅 시작: %d일봉 / 자본 %s원 / 간격 %.2f%% / 분해능=%s %s ===",
             self.name, len(history), f"{capital_krw:,.0f}", gi_pct, granularity, asym_label,
+        )
+        logger.info(
+            "[%s] σ 밴드: 1σ(상 %.1f/하 %.1f), 2σ(상 %.1f/하 %.1f) | EWMA lookback=%d일",
+            self.name, _su, _sd, _su2, _sd2, _EWMA_LOOKBACK,
         )
 
         results: List[MonthlyBacktestResult] = []
@@ -312,18 +338,22 @@ class BacktestAgent:
                 i += horizon
                 continue
 
-            returns = compute_log_returns(lb_closes)
-            dsig = daily_volatility(returns)
+            # ── σ 추정: EWMA(span=60), 90일 창 — prediction_service와 동일 ──
+            ewma_start = max(0, i - _EWMA_LOOKBACK)
+            ewma_closes = [c["close"] for c in history[ewma_start: i]]
+            returns_ewma = compute_log_returns(ewma_closes)
+            dsig = ewma_daily_volatility(returns_ewma, span=60)
             ref = lb_closes[-1]
 
-            # σ 수준 결정 (기본: 1σ, 변동성 높으면 2σ)
+            # σ 수준 결정 (라이브 모델과 동일 임계값)
             if use_sigma is not None:
                 sigma = use_sigma
             else:
-                sigma = 2.0 if dsig >= 0.045 else 1.0
+                sigma = 2.0 if dsig >= _AUTO_SIGMA_VOL_THRESHOLD else 1.0
 
-            u1, l1 = sigma_band(ref, dsig, horizon, 1.0)
-            u2, l2 = sigma_band(ref, dsig, horizon, 2.0)
+            # ── 비대칭 밴드 — prediction_service와 동일 ──
+            u1, l1 = asymmetric_sigma_band(ref, dsig, horizon, _su,  _sd,  0.0)
+            u2, l2 = asymmetric_sigma_band(ref, dsig, horizon, _su2, _sd2, 0.0)
 
             if sigma == 1.0:
                 rec_u, rec_l = u1, l1

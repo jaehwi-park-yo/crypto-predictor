@@ -1,11 +1,13 @@
 """
 utils/ml_sigma.py — ML 기반 월간 σ 보정 (Ridge 회귀)
 ======================================================
-103개월 walk-forward 백테스트 결과 (2017-12 ~ 2026-06):
-  - 통계(EWMA σ):  박스 적중 45/63 (71%), 평균 containment 78.8%
-  - Ridge 보정:    박스 적중 49/63 (78%), 평균 containment 83.1%
-  - 평균 박스폭 ×1.15이지만 상수 확대와 달리 17/63개월은 오히려 좁힘
-    (필요할 때만 넓히는 조건부 보정 — 같은 적중률을 k=1.3 상수로 얻으면 폭 ×1.30)
+Walk-forward OOS 평가 결과 (2017-12 ~ 2026-06):
+  - 통계(EWMA σ):  MAE 기준 기준선
+  - Ridge 보정:    walk_forward_eval() 실행 시 honest OOS 수치 산출
+    (data/ml_sigma_model.json 의 oos_eval 필드에 저장)
+
+  ※ 배포 모델(ml_sigma_model.json)은 전체 데이터로 재학습한 최종 모델.
+     retrain() 내부에서 walk-forward OOS 평가를 먼저 실행하고 결과를 모델에 함께 저장.
 
 구조:
   - 순수 파이썬 closed-form Ridge (sklearn 불필요)
@@ -36,7 +38,7 @@ ROOT = Path(__file__).parent.parent
 MODEL_PATH = ROOT / "data" / "ml_sigma_model.json"
 
 _ALPHA = 1.0           # Ridge 정규화 강도
-_MIN_TRAIN = 40        # 최소 학습 샘플 (월)
+_MIN_TRAIN = 40        # 최소 학습 샘플 (월) — walk-forward 훈련 시작점
 _SIGMA_FLOOR = 2.0     # 예측 σ 하한 (%)
 _SIGMA_CAP = 60.0      # 예측 σ 상한 (%)
 
@@ -154,10 +156,112 @@ def _ridge_predict(model: Dict, x: List[float]) -> float:
 
 
 # ──────────────────────────────────────────────────────────────
+# Walk-forward OOS 평가 (honest — 미래 데이터 사용 금지)
+# ──────────────────────────────────────────────────────────────
+def walk_forward_eval(
+    labels: List[Dict],
+    history: List[Dict],
+    min_train: int = _MIN_TRAIN,
+    alpha: float = _ALPHA,
+) -> Dict:
+    """
+    Expanding-window walk-forward OOS 평가.
+
+    각 시점 i(i >= min_train)에서:
+      - 훈련: 라벨 0 ~ i-1 (i-1개월까지의 과거 데이터만)
+      - 예측: 라벨 i (미래 1개월)
+    → 캐시된 단일 모델을 과거 전체에 적용하는 in-sample 평가와 다름.
+
+    반환:
+      n_oos            OOS 예측 개수
+      mae_ml / mae_stat  ML vs 통계 모델 MAE (실현 σ 대비)
+      rmse_ml / rmse_stat
+      mae_improvement_pct  MAE 개선율 (양수=ML이 더 좋음)
+      bias_ml          OOS 예측 평균 편향 (ML 예측 − 실현값 평균)
+    """
+    # 모든 라벨에 대해 특징 벡터 사전 계산 (각 as_of 이전 데이터만 사용)
+    all_feats: List[Optional[List[float]]] = []
+    all_targets: List[float] = []
+    all_stat_sigma: List[float] = []
+    for r in labels:
+        x = build_features(history, r["as_of"],
+                           float(r["daily_sigma"]), float(r["monthly_sigma_pct"]),
+                           float(r["ret_prev_31d"]))
+        all_feats.append(x)
+        all_targets.append(float(r["realized_sigma_pct"]))
+        all_stat_sigma.append(float(r["monthly_sigma_pct"]))
+
+    # 특징 추출에 성공한 행의 인덱스
+    valid_idx = [i for i, x in enumerate(all_feats) if x is not None]
+    if len(valid_idx) < min_train + 5:
+        return {"status": "insufficient_data", "n_valid": len(valid_idx), "n_total": len(labels)}
+
+    oos_preds: List[float] = []
+    oos_targets: List[float] = []
+    oos_stat: List[float] = []
+
+    for rank, idx in enumerate(valid_idx):
+        if rank < min_train:
+            continue  # 훈련 집합이 min_train 미만이면 건너뜀
+
+        # 이 시점 이전 유효 라벨들만 훈련에 사용
+        train_idx = valid_idx[:rank]
+        X_tr = np.array([all_feats[j] for j in train_idx])
+        y_tr = np.array([all_targets[j] for j in train_idx])
+        m = _ridge_fit(X_tr, y_tr, alpha)
+
+        pred = _ridge_predict(m, all_feats[idx])
+        pred = max(_SIGMA_FLOOR, min(pred, _SIGMA_CAP))
+        oos_preds.append(pred)
+        oos_targets.append(all_targets[idx])
+        oos_stat.append(all_stat_sigma[idx])
+
+    if not oos_preds:
+        return {"status": "no_oos_predictions"}
+
+    preds = np.array(oos_preds)
+    targets = np.array(oos_targets)
+    stats = np.array(oos_stat)
+
+    mae_ml   = float(np.mean(np.abs(preds - targets)))
+    mae_stat = float(np.mean(np.abs(stats - targets)))
+    rmse_ml  = float(np.sqrt(np.mean((preds - targets) ** 2)))
+    rmse_stat = float(np.sqrt(np.mean((stats - targets) ** 2)))
+    bias_ml  = float(np.mean(preds - targets))
+
+    result = {
+        "status": "ok",
+        "n_oos": len(oos_preds),
+        "n_train_min": min_train,
+        "mae_ml":   round(mae_ml,   3),
+        "mae_stat": round(mae_stat, 3),
+        "mae_improvement_pct": round((1 - mae_ml / mae_stat) * 100, 1) if mae_stat > 0 else 0.0,
+        "rmse_ml":   round(rmse_ml,   3),
+        "rmse_stat": round(rmse_stat, 3),
+        "bias_ml":   round(bias_ml,   3),
+        "evaluated_at": datetime.now().isoformat(timespec="seconds"),
+    }
+    logger.info(
+        "[ml_sigma] walk-forward OOS(%d개월): ML MAE=%.3f%% / 통계 MAE=%.3f%% / 개선=%.1f%%",
+        result["n_oos"], mae_ml, mae_stat, result["mae_improvement_pct"],
+    )
+    return result
+
+
+# ──────────────────────────────────────────────────────────────
 # 학습 / 예측
 # ──────────────────────────────────────────────────────────────
-def retrain() -> Optional[Dict]:
-    """월별 라벨셋으로 재학습 후 모델 저장. 샘플 부족 시 None."""
+def retrain(skip_oos_eval: bool = False) -> Optional[Dict]:
+    """
+    월별 라벨셋으로 재학습 후 모델 저장.
+
+    순서:
+      1. Walk-forward OOS 평가 (honest 성능 측정) — skip_oos_eval=True 시 생략
+      2. 전체 데이터로 최종 모델 학습 (배포용)
+      3. OOS 평가 결과를 모델 JSON에 함께 저장
+
+    샘플 부족 시 None 반환.
+    """
     from utils.dataset_export import build_monthly_labels
     from utils.data_cache import get_history
 
@@ -181,7 +285,24 @@ def retrain() -> Optional[Dict]:
         logger.warning("[ml_sigma] 특징 생성 후 샘플 부족 (%d) — 모델 미생성", len(X_rows))
         return None
 
+    # 1. Walk-forward OOS 평가 (배포 전 honest 성능 측정)
+    oos_result: Dict = {}
+    if not skip_oos_eval:
+        logger.info("[ml_sigma] walk-forward OOS 평가 시작 (샘플=%d)...", len(labels))
+        oos_result = walk_forward_eval(labels, history)
+        if oos_result.get("status") == "ok":
+            imp = oos_result["mae_improvement_pct"]
+            logger.info(
+                "[ml_sigma] OOS 평가 완료: ML이 통계 대비 MAE %.1f%% %s",
+                abs(imp), "개선" if imp > 0 else "악화",
+            )
+        else:
+            logger.warning("[ml_sigma] OOS 평가 실패: %s", oos_result)
+
+    # 2. 전체 데이터로 최종 모델 학습 (배포용)
     model = _ridge_fit(np.array(X_rows), np.array(y_rows))
+    model["oos_eval"] = oos_result  # OOS 성능 지표 함께 저장
+
     MODEL_PATH.parent.mkdir(parents=True, exist_ok=True)
     MODEL_PATH.write_text(json.dumps(model), encoding="utf-8")
     global _model_cache
@@ -204,10 +325,23 @@ def _load_model() -> Optional[Dict]:
         return None
 
 
+def get_oos_eval() -> Optional[Dict]:
+    """캐시된 모델의 walk-forward OOS 평가 결과 반환. 없으면 None."""
+    model = _load_model()
+    if model is None:
+        return None
+    return model.get("oos_eval") or None
+
+
 def predict_monthly_sigma_pct(history: List[Dict], as_of: str,
                               daily_sigma: float, monthly_sigma_pct: float,
                               ret_prev_31d: float) -> Optional[float]:
-    """학습된 모델로 보정된 월간 σ(%) 반환. 모델/특징 없으면 None."""
+    """
+    학습된 모델로 보정된 월간 σ(%) 반환. 모델/특징 없으면 None.
+
+    배포 모델은 전체 데이터로 학습됐으므로 in-sample 예측임.
+    OOS 성능은 model["oos_eval"] (walk_forward_eval 결과) 참조.
+    """
     model = _load_model()
     if model is None:
         return None
@@ -219,6 +353,24 @@ def predict_monthly_sigma_pct(history: List[Dict], as_of: str,
 
 
 if __name__ == "__main__":
+    import argparse
     logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(name)s] %(message)s")
-    m = retrain()
-    print(json.dumps(m, indent=2) if m else "학습 실패 (데이터 부족)")
+    ap = argparse.ArgumentParser(description="ML σ 모델 재학습 및 OOS 평가")
+    ap.add_argument("--skip-oos", action="store_true", help="walk-forward OOS 평가 생략 (빠른 재학습)")
+    ap.add_argument("--oos-only", action="store_true", help="OOS 평가만 실행 (모델 저장 안 함)")
+    args = ap.parse_args()
+
+    if args.oos_only:
+        from utils.dataset_export import build_monthly_labels
+        from utils.data_cache import get_history
+        labels = build_monthly_labels()
+        history = get_history()
+        result = walk_forward_eval(labels, history)
+        print(json.dumps(result, indent=2, ensure_ascii=False))
+    else:
+        m = retrain(skip_oos_eval=args.skip_oos)
+        if m:
+            out = {k: v for k, v in m.items() if k != "w"}  # 가중치 제외 출력
+            print(json.dumps(out, indent=2, ensure_ascii=False))
+        else:
+            print("학습 실패 (데이터 부족)")

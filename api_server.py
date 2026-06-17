@@ -351,6 +351,48 @@ def health():
     return {"status": "ok", "date": date.today().isoformat()}
 
 
+@app.get("/api/ml/status")
+def ml_status():
+    """ML σ 모델 상태 및 walk-forward OOS 평가 결과 반환."""
+    from utils.ml_sigma import _load_model, MODEL_PATH
+    model = _load_model()
+    if model is None:
+        return {"model_exists": False, "message": "모델 미학습 — retrain() 필요"}
+    oos = model.get("oos_eval") or {}
+    return {
+        "model_exists": True,
+        "n_train": model.get("n_train"),
+        "trained_at": model.get("trained_at"),
+        "oos_eval": oos,
+        "note": (
+            "oos_eval은 expanding-window walk-forward 결과 (honest OOS). "
+            "mae_improvement_pct > 0이면 ML이 통계 모델보다 정확."
+        ),
+    }
+
+
+@app.post("/api/ml/retrain")
+def ml_retrain(skip_oos: bool = False):
+    """ML σ 모델 재학습 (OOS 평가 포함). skip_oos=true 시 OOS 평가 생략."""
+    import threading
+    result: dict = {}
+
+    def _do():
+        from utils.ml_sigma import retrain, _model_cache
+        import utils.ml_sigma as _ms
+        _ms._model_cache = None  # 캐시 초기화
+        m = retrain(skip_oos_eval=skip_oos)
+        result["ok"] = m is not None
+        if m:
+            result["n_train"] = m.get("n_train")
+            result["oos_eval"] = m.get("oos_eval", {})
+
+    t = threading.Thread(target=_do, daemon=True)
+    t.start()
+    t.join(timeout=120)
+    return result if result else {"ok": False, "message": "타임아웃 (120초) — 백그라운드 실행 중"}
+
+
 @app.get("/api/global")
 def global_market():
     """글로벌 시장 컨텍스트: 원/달러 환율 · 달러 BTC · 김치프리미엄 (캐시 기반)."""
