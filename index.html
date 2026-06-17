@@ -1017,6 +1017,19 @@
               <div id="mon-revision-note" style="font-size:.8rem;color:var(--muted);line-height:1.7">
                 로딩 중…
               </div>
+              <!-- 수정 박스 적용 버튼 -->
+              <div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border)">
+                <button id="btc-apply-rev-btn" onclick="applyBtcRevisedBox()" disabled
+                        style="width:100%;padding:9px 0;font-size:.85rem;font-weight:700;border-radius:7px;
+                               border:2px solid var(--orange);background:transparent;color:var(--orange);
+                               cursor:pointer;transition:all .2s;opacity:0.4"
+                        title="수정 예측 박스를 BTC 탭·포트폴리오 탭에 즉시 반영합니다. 원본은 원본비교 표에 계속 표시됩니다.">
+                  🔄 수정 박스 BTC·포트폴리오에 적용
+                </button>
+                <div id="btc-apply-rev-note" style="font-size:.68rem;color:var(--muted);margin-top:4px;text-align:center">
+                  수정 예측 로딩 후 활성화됩니다
+                </div>
+              </div>
             </div>
           </div>
 
@@ -1086,6 +1099,19 @@
             <div class="info-card">
               <h3>🛡️ 리스크 대응 가이드 (비대칭 전략)</h3>
               <div id="umon-guidance" style="font-size:.8rem;color:var(--muted);line-height:1.7">로딩 중…</div>
+              <!-- 수정 박스 적용 버튼 -->
+              <div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border)">
+                <button id="usdt-apply-rev-btn" onclick="applyUsdtRevisedBox()" disabled
+                        style="width:100%;padding:9px 0;font-size:.85rem;font-weight:700;border-radius:7px;
+                               border:2px solid var(--usdt);background:transparent;color:var(--usdt);
+                               cursor:pointer;transition:all .2s;opacity:0.4"
+                        title="현재 실시간 USDT 박스를 새 기준으로 저장하고 USDT 탭·포트폴리오 탭에 반영합니다.">
+                  🔄 수정 박스 USDT·포트폴리오에 적용
+                </button>
+                <div id="usdt-apply-rev-note" style="font-size:.68rem;color:var(--muted);margin-top:4px;text-align:center">
+                  USDT 실시간 가격 수신 후 활성화됩니다
+                </div>
+              </div>
             </div>
           </div><!-- /monitor-usdt-panel -->
 
@@ -1258,6 +1284,7 @@ function updateUsdtModel(livePrice, isLive = true) {
   // 모니터 탭 USDT 패널 + 차트 위 수정 공지 갱신
   updateUsdtMonitorPanel();
   updateUsdtRevisionNotice();
+  updateRevisionBtnState();
   // USDT 차트가 이미 그려져 있으면 새 기준가로 재빌드
   if (window._chartUSDT) {
     window._chartUSDT = false;
@@ -2865,6 +2892,119 @@ function updateUsdtMonitorPanel() {
   }
 }
 
+// ─── 수정 박스 적용 ───────────────────────────────────────────────────────────
+// BTC: D.mon.rev_* → D.snap 덮어쓰기 → BTC탭·포트폴리오 재계산
+function applyBtcRevisedBox() {
+  const m = D.mon, s = D.snap;
+  if (!m.rev_ru || !m.rev_rl) {
+    alert('수정 예측 데이터가 아직 없습니다. 월중 3일 경과 후 모니터 탭에서 확인하세요.');
+    return;
+  }
+  // 수정 박스값을 snap에 반영 (원본은 mon 안에 남음 — 비교표 계속 표시)
+  s.ru = m.rev_ru;
+  s.rl = m.rev_rl;
+  s.u1a = m.rev_ru;   // 비대칭 1σ 상단
+  s.l1a = m.rev_rl;   // 비대칭 1σ 하단
+  if (m.rev_u2) { s.u2a = m.rev_u2; s.u2 = m.rev_u2; }
+  if (m.rev_l2) { s.l2a = m.rev_l2; s.l2 = m.rev_l2; }
+  s.u1 = m.rev_ru;
+  s.l1 = m.rev_rl;
+  // range_pct 재계산
+  if (s.rl > 0) s.range_pct = (s.ru - s.rl) / s.rl * 100;
+
+  // BTC 탭·포트폴리오 재계산 및 차트 재빌드
+  updateMetrics();
+  updatePnlTable();
+  window._chartBTC = false;
+  if (document.getElementById('tab-btc')?.classList.contains('active') && D.snap.ref) {
+    try { buildBTCChart(); } catch(e) {}
+  }
+
+  // 버튼 상태 → "적용됨" 표시
+  const btn = document.getElementById('btc-apply-rev-btn');
+  const note = document.getElementById('btc-apply-rev-note');
+  if (btn) {
+    btn.style.background = 'rgba(255,127,14,.15)';
+    btn.style.color = 'var(--orange)';
+    btn.textContent = '✔ 수정 박스 적용됨';
+    btn.disabled = true;
+  }
+  if (note) {
+    const ru = m.rev_ru, rl = m.rev_rl;
+    note.innerHTML = `적용: ${fmt(rl)}~${fmt(ru)}원 (1σ) ` +
+      (m.rev_l2 && m.rev_u2 ? `/ ${fmt(m.rev_l2)}~${fmt(m.rev_u2)}원 (2σ)` : '') +
+      `<br><span style="color:#d4b44a">⚠️ 이번 달에만 유효 — 다음 달 예측 로드 시 자동 초기화</span>`;
+  }
+
+  // BTC 탭의 revision-notice도 업데이트
+  updateBtcRevisionNotice();
+}
+
+// USDT: 현재 실시간 박스를 새 기준으로 저장 → USDT탭·포트폴리오 재계산
+function applyUsdtRevisedBox() {
+  if (!USDT.loaded || !USDT.ref || USDT.u1 <= 0) {
+    alert('USDT 실시간 가격이 아직 수신되지 않았습니다. 잠시 후 다시 시도하세요.');
+    return;
+  }
+  // 현재 박스를 새 원본(orig)으로 저장 — 이후 비교 기준이 됨
+  const newOrig = { ref: USDT.ref, u1: USDT.u1, l1: USDT.l1, u2: USDT.u2, l2: USDT.l2 };
+  USDT.orig = newOrig;
+  try { localStorage.setItem('usdt_orig_box', JSON.stringify(newOrig)); } catch(e) {}
+
+  // USDT 탭·포트폴리오 재계산
+  updatePnlTable();
+  updateMetrics();
+  updateUsdtRevisionNotice();
+  if (document.getElementById('tab-usdt')?.classList.contains('active')) {
+    try { buildUSDTChart(); } catch(e) {}
+  }
+
+  const btn = document.getElementById('usdt-apply-rev-btn');
+  const note = document.getElementById('usdt-apply-rev-note');
+  if (btn) {
+    btn.style.background = 'rgba(38,161,123,.15)';
+    btn.style.color = 'var(--usdt)';
+    btn.textContent = '✔ 수정 박스 적용됨';
+    btn.disabled = true;
+  }
+  if (note) {
+    const f1 = n => n.toLocaleString('ko-KR', {maximumFractionDigits:1});
+    note.innerHTML = `적용: ${f1(USDT.l1)}~${f1(USDT.u1)}원 (1σ) / ${f1(USDT.l2)}~${f1(USDT.u2)}원 (2σ)` +
+      `<br><span style="color:#d4b44a">⚠️ 페이지 새로고침 시 초기화</span>`;
+  }
+}
+
+// 수정 박스 버튼 활성화 상태 갱신 (데이터 로드 완료 후 호출)
+function updateRevisionBtnState() {
+  const btcBtn  = document.getElementById('btc-apply-rev-btn');
+  const btcNote = document.getElementById('btc-apply-rev-note');
+  const m = D.mon;
+  const hasRev = m.rev_ru > 0 && m.rev_rl > 0;
+  if (btcBtn && !btcBtn.disabled) {
+    btcBtn.disabled = !hasRev;
+    btcBtn.style.opacity = hasRev ? '1' : '0.4';
+    btcBtn.style.cursor  = hasRev ? 'pointer' : 'not-allowed';
+    if (btcNote && hasRev && btcNote.textContent.includes('활성화')) {
+      const shift = m.box_shift || 0;
+      btcNote.textContent = shift
+        ? `박스 중심 ${(shift >= 0 ? '+' : '') + shift}% 이동 — 적용 시 BTC·포트폴리오 반영`
+        : '수정 박스 준비됨 — 클릭 시 BTC·포트폴리오에 반영';
+    }
+  }
+  const usdtBtn  = document.getElementById('usdt-apply-rev-btn');
+  const usdtNote = document.getElementById('usdt-apply-rev-note');
+  const hasUsdt = USDT.loaded && USDT.ref > 0;
+  if (usdtBtn && !usdtBtn.disabled) {
+    usdtBtn.disabled = !hasUsdt;
+    usdtBtn.style.opacity = hasUsdt ? '1' : '0.4';
+    usdtBtn.style.cursor  = hasUsdt ? 'pointer' : 'not-allowed';
+    if (usdtNote && hasUsdt && usdtNote.textContent.includes('활성화')) {
+      const f1 = n => n.toLocaleString('ko-KR', {maximumFractionDigits:1});
+      usdtNote.textContent = `현재 박스: ${f1(USDT.l1)}~${f1(USDT.u1)}원 — 클릭 시 새 기준으로 저장`;
+    }
+  }
+}
+
 // ─── BTC 차트 위 수정권장 밴드 공지 ─────────────────────────────────────────
 function updateBtcRevisionNotice() {
   const el = document.getElementById('revision-notice');
@@ -3035,6 +3175,7 @@ async function fetchDashboard() {
     buildMeasTable();
     updateMonitorPanel();
     updateBtcRevisionNotice();
+    updateRevisionBtnState();
     window._chartBTC = false;
     window._chartM   = false;
     if (document.getElementById('tab-btc')?.classList.contains('active')) {
