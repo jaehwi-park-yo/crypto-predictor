@@ -1632,10 +1632,18 @@ const usdtSim = {
   inner: { buy: 1, sell: 3, cap: 6_720_000, box: 31, active: 1.0 },
   outer: { buy: 1, sell: 3, cap: 4_480_000, box: 30, active: 0.27 },
 };
-// USDT_EFF: 5분봉 실측 캘리브레이션 (inner 1/3원 실측 0.36~0.45억 vs 휴리스틱 3.23억 = 7~9배 과대)
-//   → 0.40에서 0.05로 하향 (구 계수는 미체결·단일인벤토리 제약 무시한 과대추정)
-const USDT_FEE = 0.0004, USDT_DAILY_RANGE = 8.0, USDT_EFF = 0.05,
+// USDT_EFF: 5분봉 실측 캘리브레이션 (inner 1/3원 앵커 실측 0.45억 ↔ 휴리스틱)
+//   → 0.40에서 0.056으로 하향 (구 계수는 미체결·단일인벤토리 제약 무시한 ~7배 과대)
+const USDT_FEE = 0.0004, USDT_DAILY_RANGE = 8.0, USDT_EFF = 0.056,
       USDT_TDAYS = 30;
+// 매도간격 민감도: 실측 거래량 ∝ 1/(매수+매도)^1.19 (단순 1/cycle보다 가파름).
+//   매도를 좁힐수록 거래량이 폭발적으로 증가하는 실측 곡선을 반영 (앵커 cycle=4=매수1+매도3원).
+//   검증(2024-06~, 22개월): 매도 1~15원 구간 평균오차 5% (기존 휴리스틱 tight-sell 41% 오차)
+const USDT_SELL_EXP = 1.19, USDT_CYCLE_REF = 4.0;
+function usdtRtDay(cycle) {
+  // 일 왕복수/봇 = (일변동폭/사이클)×EFF × 멱지수 보정(앵커 대비)
+  return (USDT_DAILY_RANGE / cycle) * USDT_EFF * Math.pow(USDT_CYCLE_REF / cycle, USDT_SELL_EXP - 1);
+}
 let   USDT_REF = 1401.0; // 실시간 가격 수신 시 updateUsdtModel()이 갱신
 
 // 리워드율은 "직전월 계정 전체 거래량" 기준으로 결정되어 당월 모든 거래에 적용됨
@@ -1693,7 +1701,7 @@ function calcUsdt(z) {
   const cycle = z.buy + z.sell;
   const bots = Math.max(1, Math.floor(z.box / z.buy));  // 0봇 방지 (box<buy → Infinity/NaN)
   const capPerBot = z.cap / bots;
-  const rtDay = (USDT_DAILY_RANGE / cycle) * USDT_EFF;
+  const rtDay = usdtRtDay(cycle);
   const totalRt = rtDay * USDT_TDAYS * bots;
   const sellPct = z.sell / USDT_REF;
   const profit = totalRt * sellPct * capPerBot;
@@ -1716,7 +1724,7 @@ let _bhAlpha = 0.5;
 function calcUsdtBH(z, alpha, downBias) {
   const N = Math.max(1, Math.floor(z.box / z.buy));
   const cycle = z.buy + z.sell;
-  const rtDayBase = (USDT_DAILY_RANGE / cycle) * USDT_EFF;  // 봇당 동일
+  const rtDayBase = usdtRtDay(cycle);  // 봇당 동일 (매도 민감도 멱지수 반영)
   const sellPct = z.sell / USDT_REF;
 
   // 자본 배분 weights
