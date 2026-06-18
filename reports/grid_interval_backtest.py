@@ -46,6 +46,7 @@ def load_labels(zf, name):
         for row in csv.DictReader(io.TextIOWrapper(raw, "utf-8")):
             out[row["target_month"]] = {
                 "l1": float(row["box_l1"]), "u1": float(row["box_u1"]),
+                "l2": float(row["box_l2"]), "u2": float(row["box_u2"]),
                 "days": int(row["realized_days"])}
     return out
 
