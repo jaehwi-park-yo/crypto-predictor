@@ -1632,7 +1632,9 @@ const usdtSim = {
   inner: { buy: 1, sell: 3, cap: 6_720_000, box: 31, active: 1.0 },
   outer: { buy: 1, sell: 3, cap: 4_480_000, box: 30, active: 0.27 },
 };
-const USDT_FEE = 0.0004, USDT_DAILY_RANGE = 8.0, USDT_EFF = 0.40,
+// USDT_EFF: 5분봉 실측 캘리브레이션 (inner 1/3원 실측 0.36~0.45억 vs 휴리스틱 3.23억 = 7~9배 과대)
+//   → 0.40에서 0.05로 하향 (구 계수는 미체결·단일인벤토리 제약 무시한 과대추정)
+const USDT_FEE = 0.0004, USDT_DAILY_RANGE = 8.0, USDT_EFF = 0.05,
       USDT_TDAYS = 30;
 let   USDT_REF = 1401.0; // 실시간 가격 수신 시 updateUsdtModel()이 갱신
 
@@ -2100,10 +2102,13 @@ function syncBhCapDisplay() {
 // ─── 4전략 월간 P&L 연동 계산 ──────────────────────────────────────────────
 let _pnlCaps = { innerBtc: 10_080_000, outerBtc: 6_720_000, investable: 28_000_000 };
 
-// BTC 존별 자본당 계수 (기본값 캘리브레이션: 내부 10.08M→거래량 5.6억/그리드 +67.2만, 외부 6.72M→1.8억/+19.6만 @ 27% active)
+// BTC 존별 자본당 계수 — 5분봉 실측 캘리브레이션 (2024-06~2026-05, 단일인벤토리 시뮬)
+//   inner(1σ박스 매수0.5%/매도1.0%): 거래량 0.31억·grid 15.7만 per 10.08M → volPerCap 3.11
+//   outer는 BTC_COEF_COMBINED에서 2σ박스 직접 실측값 사용 (아래). 여기 outer는 그 ÷scale 역산값.
+//   ※ 구 계수(volPerCap 55.6)는 휴리스틱 기반 ~18배 과대였음 → 실거래(앱 예측의 ~1/10)와 정합되도록 보정
 const BTC_COEF = {
-  inner: { volPerCap: 5.6e8 / 10.08e6, gridPerCap: 67.2e4 / 10.08e6 },
-  outer: { volPerCap: 1.8e8 / 6.72e6,  gridPerCap: 19.6e4 / 6.72e6  },
+  inner: { volPerCap: 3.11,  gridPerCap: 0.01558 },
+  outer: { volPerCap: 1.062, gridPerCap: 0.003189 },  // ×BTC_OUTER_SCALE(2.637) → 합성 2.80/0.00841
 };
 const BTC_FEE = 0.0008; // 양방향 0.04% × 2
 
