@@ -45,6 +45,8 @@ class GridOptimizerAgent:
         krw_hold_ratio: float = KRW_HOLD_RATIO,
         buy_interval_pct: Optional[float] = None,
         sell_interval_pct: Optional[float] = None,
+        as_of: Optional[str] = None,   # Tier3: 5m 거래량 보정용 시점
+        market: Optional[str] = None,  # "KRW-BTC" | "KRW-USDT"
     ) -> GridConfig:
         logger.info(
             "[%s] === 그리드 최적화 시작 (자본 %s원 / 공격성 %s) ===",
@@ -108,6 +110,26 @@ class GridOptimizerAgent:
         else:
             cap_per_bot = deployed / bots if bots else 0.0
             est_vol = self._estimate_volume(deployed, rt_gi, daily_sigma, box_range_pct)
+
+        # Tier3: 5분봉 실측 진동으로 월 거래량 재추정 (휴리스틱은 ~10배 과대추정)
+        vol_calibrated = False
+        if as_of and market:
+            try:
+                from config import USE_INTRADAY_VOLUME_CALIB
+                if USE_INTRADAY_VOLUME_CALIB:
+                    from utils.intraday_vol import oscillation_per_day
+                    osc = oscillation_per_day(market, as_of, gi_eff, lower, upper)
+                    if osc and osc > 0:
+                        monthly_osc = osc * 30.0          # 24/7 → 30일
+                        rt = monthly_osc * buy_gi / (buy_gi + sell_gi)
+                        est_vol = rt * 2 * cap_per_bot
+                        vol_calibrated = True
+                        logger.info(
+                            "[%s] 5m 거래량 보정: 일진동 %.0f회 → 월 거래량 %s원 (휴리스틱 대체)",
+                            self.name, osc, f"{est_vol:,.0f}",
+                        )
+            except Exception as e:
+                logger.debug("[%s] 5m 거래량 보정 생략: %s", self.name, e)
 
         gi_krw = ref * gi_eff / 100
 

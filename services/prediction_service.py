@@ -295,7 +295,8 @@ def predict_as_of(
     # 그리드 최적화: Layer A 자본만 투입 (Layer B/C는 DCA 예비)
     optimizer = GridOptimizerAgent()
     grid = optimizer.optimize(box_pred, dsig, layer_a, aggressiveness, 0.0,
-                              buy_interval_pct=buy_interval_pct, sell_interval_pct=sell_interval_pct)
+                              buy_interval_pct=buy_interval_pct, sell_interval_pct=sell_interval_pct,
+                              as_of=as_of, market=_market)
 
     # 리워드 목표
     reward_agent = RewardCalculatorAgent()

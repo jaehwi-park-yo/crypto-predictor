@@ -201,9 +201,10 @@ INTRADAY_RV_WINDOW_DAYS = 30    # EWMA에 쓰는 최근 일수
 # ML σ 보정이 켜진 경우 ML 예측과 5m RV-EWMA σ의 블렌드 가중 (0=ML단독, 1=5m단독)
 #   ML 모델은 일봉 기반 학습이므로, 5m 기반 재학습 전까지 검증된 5m 신호를 블렌드로 반영
 INTRADAY_SIGMA_ML_BLEND = 0.5
-# Tier2: 상승/하락 실현 반변동성 비율로 비대칭 밴드 동적화 (σ_up/σ_dn 미세조정)
-USE_INTRADAY_ASYMMETRY = True
-INTRADAY_ASYM_MAX_TILT = 0.15   # 반변동성 비율의 σ 배수 반영 상한 (±15%)
+# Tier2: 상승/하락 실현 반변동성 비율로 비대칭 밴드 동적화 — 검증 결과 효과 없어 비활성.
+#   (5m 반변동성 비율 평균 1.01·범위 0.90~1.13으로 방향 신호 미약, containment 82.2%→82.0%)
+USE_INTRADAY_ASYMMETRY = False
+INTRADAY_ASYM_MAX_TILT = 0.15
 # Tier3: 5m 실측 진동으로 그리드 월 거래량 추정 보정 (휴리스틱 과대추정 교정)
 USE_INTRADAY_VOLUME_CALIB = True
 
