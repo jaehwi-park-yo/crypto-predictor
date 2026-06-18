@@ -190,6 +190,23 @@ BINANCE_BASE_URL = "https://api.binance.com"           # BTC/USDT 일봉 (무료
 #   σ_blend = (1-w)·σ_usdt + w·σ_fx — USDT/KRW 분봉/일봉 표본 부족 보완
 FX_SIGMA_BLEND_WEIGHT = 0.3
 
+# ──────────────────────────────────────────────────────────
+# 5분봉 일중 변동성 활용 (utils.intraday_vol)
+# ──────────────────────────────────────────────────────────
+# Tier1: 일별 실현변동성(RV)의 EWMA를 기본 일간 σ로 사용 (일봉 close-to-close 대체)
+#   백테스트(2017-12~2026-05, 102개월): 월간 실현 σ 예측 MAE 일봉EWMA 대비 −10.6%
+USE_INTRADAY_SIGMA = True
+INTRADAY_RV_EWMA_SPAN = 20      # 일별 RV 계열 EWMA span
+INTRADAY_RV_WINDOW_DAYS = 30    # EWMA에 쓰는 최근 일수
+# ML σ 보정이 켜진 경우 ML 예측과 5m RV-EWMA σ의 블렌드 가중 (0=ML단독, 1=5m단독)
+#   ML 모델은 일봉 기반 학습이므로, 5m 기반 재학습 전까지 검증된 5m 신호를 블렌드로 반영
+INTRADAY_SIGMA_ML_BLEND = 0.5
+# Tier2: 상승/하락 실현 반변동성 비율로 비대칭 밴드 동적화 (σ_up/σ_dn 미세조정)
+USE_INTRADAY_ASYMMETRY = True
+INTRADAY_ASYM_MAX_TILT = 0.15   # 반변동성 비율의 σ 배수 반영 상한 (±15%)
+# Tier3: 5m 실측 진동으로 그리드 월 거래량 추정 보정 (휴리스틱 과대추정 교정)
+USE_INTRADAY_VOLUME_CALIB = True
+
 # Retry settings
 MAX_RETRIES = 3
 BACKOFF_FACTOR = 2.0

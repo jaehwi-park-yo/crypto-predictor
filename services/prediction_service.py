@@ -166,19 +166,51 @@ def predict_as_of(
     # EWMA σ — 최근 90일 수익률 기반, span=60 지수가중 (realized σ 추정 MAE ~13% 개선)
     ewma_lookback = max(lookback, 90)
     returns_ewma = compute_log_returns(closes[-ewma_lookback:])
-    dsig = ewma_daily_volatility(returns_ewma, span=60)
+    dsig_daily = ewma_daily_volatility(returns_ewma, span=60)
+    dsig = dsig_daily
+
+    # Tier1: 5분봉 일별 실현변동성(RV) EWMA를 기본 σ로 사용 (검증: 월간 실현 σ MAE −10.6%)
+    dsig_intraday: Optional[float] = None
+    try:
+        from config import (USE_INTRADAY_SIGMA, INTRADAY_RV_EWMA_SPAN,
+                            INTRADAY_RV_WINDOW_DAYS, INTRADAY_SIGMA_ML_BLEND)
+    except Exception:
+        USE_INTRADAY_SIGMA = False
+        INTRADAY_SIGMA_ML_BLEND = 0.5
+    _market = "KRW-USDT" if symbol.upper() == "USDT" else "KRW-BTC"
+    if USE_INTRADAY_SIGMA:
+        try:
+            from utils.intraday_vol import rv_ewma_daily_sigma
+            s5 = rv_ewma_daily_sigma(_market, as_of, span=INTRADAY_RV_EWMA_SPAN,
+                                     window_days=INTRADAY_RV_WINDOW_DAYS)
+            if s5 and s5 > 0:
+                dsig_intraday = s5
+                dsig = s5
+                logger.info("[예측서비스] 5m RV-EWMA σ: 일봉 %.4f → 5m %.4f", dsig_daily, s5)
+        except Exception as e:
+            logger.debug("[예측서비스] 5m σ 산출 생략 (일봉 σ 사용): %s", e)
 
     if use_ml_sigma:
         # ML σ 보정: 모델이 있으면 dsig를 보정 σ로 치환
+        # (ML은 일봉 기반 학습 → 학습 일관성 위해 일봉 σ를 특징으로 투입.
+        #  5m σ가 있으면 ML 예측과 INTRADAY_SIGMA_ML_BLEND 비율로 블렌드)
         try:
             from utils.ml_sigma import predict_monthly_sigma_pct
             tail31 = closes[-32:]
             ret31 = (tail31[-1] / tail31[0] - 1) * 100 if len(tail31) >= 2 else 0.0
-            stat_ms = dsig * math.sqrt(horizon_days) * 100
-            ml_ms = predict_monthly_sigma_pct(history, as_of, dsig, stat_ms, ret31)
+            stat_ms = dsig_daily * math.sqrt(horizon_days) * 100
+            ml_ms = predict_monthly_sigma_pct(history, as_of, dsig_daily, stat_ms, ret31)
             if ml_ms is not None and ml_ms > 0:
-                dsig = ml_ms / 100 / math.sqrt(horizon_days)
-                logger.info("[예측서비스] ML σ 보정: %.1f%% → %.1f%%", stat_ms, ml_ms)
+                ml_dsig = ml_ms / 100 / math.sqrt(horizon_days)
+                if dsig_intraday is not None:
+                    w = INTRADAY_SIGMA_ML_BLEND
+                    dsig = (1 - w) * ml_dsig + w * dsig_intraday
+                    logger.info("[예측서비스] σ 블렌드: ML %.1f%% × %.0f%% + 5m %.1f%% × %.0f%%",
+                                ml_ms, (1 - w) * 100,
+                                dsig_intraday * math.sqrt(horizon_days) * 100, w * 100)
+                else:
+                    dsig = ml_dsig
+                    logger.info("[예측서비스] ML σ 보정: %.1f%% → %.1f%%", stat_ms, ml_ms)
         except Exception as e:
             logger.warning("[예측서비스] ML σ 보정 실패 (통계 σ 사용): %s", e)
 
