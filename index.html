@@ -2405,7 +2405,10 @@ function saveUsdtToPortfolio() {
   usdtApplied.inner.sell = usdtSim.inner.sell;
   usdtApplied.outer.buy  = usdtSim.outer.buy;
   usdtApplied.outer.sell = usdtSim.outer.sell;
-  updatePnlTable();
+  // 목표거래량 추천 모드면 새 USDT 간격 기준으로 BTC비중 등 재추천, 아니면 메트릭만 갱신
+  const vt = +(document.getElementById('volTarget')?.value || 0);
+  if (vt > 0 && typeof onVolTargetChange === 'function') onVolTargetChange(vt);
+  else updatePnlTable();
   const st = document.getElementById('usdt-save-status');
   if (st) st.textContent = `적용 중: 내부 ${usdtApplied.inner.buy}원/${usdtApplied.inner.sell}원 · 외부 ${usdtApplied.outer.buy}원/${usdtApplied.outer.sell}원`;
   const btn = document.getElementById('usdt-save-btn');
