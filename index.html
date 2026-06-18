@@ -342,8 +342,10 @@
         </div>
       </div>
       <div class="sb-item">
-        <label>BTC 비중: <span class="val" id="btcRatioVal">60%</span></label>
-        <input type="range" id="btcRatio" min="40" max="70" value="60" step="5"
+        <label>BTC 비중
+          <span title="BTC vs USDT 자본 배분. 기본 간격에선 USDT(촘촘한 1/3원)가 거래량 효율이 높고, BTC는 순익 효율이 높습니다. 거래량 목표가 클수록 USDT 비중을 늘려(BTC비중↓) 목표를 채웁니다." style="cursor:help;color:#8b929e;font-size:.8em;margin-left:3px">(?)</span>
+          : <span class="val" id="btcRatioVal">60%</span></label>
+        <input type="range" id="btcRatio" min="20" max="90" value="60" step="5"
                oninput="document.getElementById('btcRatioVal').textContent=this.value+'%';updateMetrics()">
       </div>
       <div class="sb-item">
@@ -2421,19 +2423,19 @@ function estimatePortfolio(totalCap, btcRatio, innerRatio, krwHold) {
   const btcCap = investable * btcRatio, usdtCap = investable * (1 - btcRatio);
   const bi = calcBtcStrat(btcCap * innerRatio, 'inner');
   const bo = calcBtcStrat(btcCap * (1 - innerRatio), 'outer', true);  // combined: P&L표와 동일 모델
-  let vol = bi.vol + bo.vol, net = bi.net + bo.net;
+  let btcVol = bi.vol + bo.vol, usdtVol = 0, net = bi.net + bo.net;
   for (const zone of ['inner', 'outer']) {
     const cap = zone === 'inner' ? usdtCap * innerRatio : usdtCap * (1 - innerRatio);
     const r = calcUsdt({ ...usdtSim[zone], cap,
                          buy: usdtApplied[zone].buy, sell: usdtApplied[zone].sell });
-    vol += r.vol; net += r.totalNet;
+    usdtVol += r.vol; net += r.totalNet;
   }
-  return { vol, net };
+  return { vol: btcVol + usdtVol, net, btcVol, usdtVol };
 }
 function recommendParams(targetVolKrw) {
   const totalCap = +document.getElementById('capital').value || 40000000;
   let best = null, bestFallback = null;
-  for (let b = 40; b <= 70; b += 5)
+  for (let b = 20; b <= 90; b += 5)
     for (let i = 40; i <= 70; i += 5)
       for (let k = 20; k <= 50; k += 5) {
         const r = estimatePortfolio(totalCap, b/100, i/100, k/100);
@@ -2473,14 +2475,15 @@ function onVolTargetChange(val) {
   setSlider('krwHold', pick.k, 'krwHoldVal');
   updateMetrics();
   if (reached) {
-    status.textContent = `✔ 달성 가능: 예상 ${(pick.vol/1e8).toFixed(1)}억 · 순익 +${(pick.net/1e4).toFixed(0)}만/월`;
+    const bv = (pick.btcVol/1e8).toFixed(1), uv = (pick.usdtVol/1e8).toFixed(1);
+    status.textContent = `✔ BTC비중 ${pick.b}% 추천 · 거래량 ${(pick.vol/1e8).toFixed(1)}억(BTC ${bv}+USDT ${uv}) · 순익 +${(pick.net/1e4).toFixed(0)}만/월`;
     status.style.color = '#4ec94e';
   } else {
     const totalCap = +document.getElementById('capital').value || 40000000;
     const scaleFactor = pick.vol > 0 ? (target * 1e8) / pick.vol : 0;
     const neededCap = scaleFactor > 0 ? Math.ceil(totalCap * scaleFactor / 1e4) * 1e4 : 0;
     const neededStr = neededCap > 0 ? ` (필요 자본 약 ${Math.round(neededCap/1e4)}만원)` : '';
-    status.textContent = `⚠️ 현재 자본 최대 ${(pick.vol/1e8).toFixed(1)}억 — 목표 미달${neededStr}`;
+    status.textContent = `⚠️ BTC비중 ${pick.b}%에서 최대 ${(pick.vol/1e8).toFixed(1)}억 — 목표 미달${neededStr}`;
     status.style.color = '#d4b44a';
   }
 }
