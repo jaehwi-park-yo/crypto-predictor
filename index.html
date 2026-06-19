@@ -1639,9 +1639,13 @@ const usdtSim = {
   inner: { buy: 1, sell: 3, cap: 6_720_000, box: 31, active: 1.0 },
   outer: { buy: 1, sell: 3, cap: 4_480_000, box: 30, active: 0.27 },
 };
-// USDT_EFF: 5분봉 실측 캘리브레이션 (inner 1/3원 앵커 실측 0.45억 ↔ 휴리스틱)
-//   → 0.40에서 0.056으로 하향 (구 계수는 미체결·단일인벤토리 제약 무시한 ~7배 과대)
-const USDT_FEE = 0.0004, USDT_DAILY_RANGE = 8.0, USDT_EFF = 0.056,
+// 5분봉 해상도 과소측정 보정계수 — osc ∝ Δt^-0.60, 1m 대비 5m ≈ 2.7배 과소
+// BTC_COEF / USDT_EFF 양쪽에 적용. 실거래 검증 후 조정 가능.
+const VOL_RES_COEF = 2.7;
+// USDT_EFF: 5분봉 실측 캘리브레이션 × 해상도 보정계수(2.7)
+//   5m 실측: 0.056 → ×2.7 = 0.1512
+//   (구 0.40은 미체결·단일인벤토리 제약 무시. 0.056이 실측, ×2.7이 해상도 보정)
+const USDT_FEE = 0.0004, USDT_DAILY_RANGE = 8.0, USDT_EFF = 0.056 * VOL_RES_COEF,
       USDT_TDAYS = 30;
 // 매도간격 민감도: 실측 거래량 ∝ 1/(매수+매도)^1.19 (단순 1/cycle보다 가파름).
 //   매도를 좁힐수록 거래량이 폭발적으로 증가하는 실측 곡선을 반영 (앵커 cycle=4=매수1+매도3원).
@@ -2125,13 +2129,15 @@ function syncBhCapDisplay() {
 // ─── 4전략 월간 P&L 연동 계산 ──────────────────────────────────────────────
 let _pnlCaps = { innerBtc: 10_080_000, outerBtc: 6_720_000, investable: 28_000_000 };
 
-// BTC 존별 자본당 계수 — 5분봉 실측 캘리브레이션 (2024-06~2026-05, 단일인벤토리 시뮬)
-//   inner(1σ박스 매수0.5%/매도1.0%): 거래량 0.31억·grid 15.7만 per 10.08M → volPerCap 3.11
-//   outer는 BTC_COEF_COMBINED에서 2σ박스 직접 실측값 사용 (아래). 여기 outer는 그 ÷scale 역산값.
-//   ※ 구 계수(volPerCap 55.6)는 휴리스틱 기반 ~18배 과대였음 → 실거래(앱 예측의 ~1/10)와 정합되도록 보정
+// BTC 존별 자본당 계수 — 5분봉 실측 캘리브레이션 × 해상도 보정계수(2.7)
+//   5m 단일인벤토리 시뮬 실측(2024-06~2026-05):
+//     inner raw: volPerCap 3.11, gridPerCap 0.01558
+//   해상도 보정: osc ∝ Δt^-0.60 → 1m 대비 5m는 약 2.7배 과소. ×2.7 적용.
+//     inner 보정: 3.11×2.7=8.40, 0.01558×2.7=0.04207
+//   실거래 검증 후 VOL_RESOLUTION_COEF 재조정 권장.
 const BTC_COEF = {
-  inner: { volPerCap: 3.11,  gridPerCap: 0.01558 },
-  outer: { volPerCap: 1.062, gridPerCap: 0.003189 },  // ×BTC_OUTER_SCALE(2.637) → 합성 2.80/0.00841
+  inner: { volPerCap: 3.11  * VOL_RES_COEF, gridPerCap: 0.01558 * VOL_RES_COEF },
+  outer: { volPerCap: 1.062 * VOL_RES_COEF, gridPerCap: 0.003189 * VOL_RES_COEF },
 };
 const BTC_FEE = 0.0008; // 양방향 0.04% × 2
 
