@@ -222,6 +222,10 @@ INTRADAY_VOLUME_UNIT = 1        # 거래량 진동 산출용 분봉 단위. 권�
 INTRADAY_FALLBACK_UNIT = 5      # 요청 단위 분봉 부족 시 폴백 단위
 # 분봉 단위별 '하루 최소 캔들 수' 게이트 (결손일 제외 기준) — 1440/unit 기반 동적 산출도 가능
 INTRADAY_MIN_CANDLES_PER_DAY = {1: 500, 3: 200, 5: 100, 10: 60, 15: 40}
+# 1m 단일소스: 일봉을 분봉(1m 우선)에서 파생해 일봉 캐시에 병합(겹치면 분봉 우선).
+#   장기 과거는 캐시가 채우고 최근은 1m 소스로 일원화. 분봉 없으면 무동작.
+#   5m도 get_candles가 1m에서 온더플라이 파생하므로 5m 별도 수집 불필요.
+DERIVE_DAILY_FROM_MINUTE = True
 
 # Retry settings
 MAX_RETRIES = 3

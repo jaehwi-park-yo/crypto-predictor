@@ -14,6 +14,33 @@ CACHE_DIR  = Path(__file__).parent.parent / "data"
 CACHE_FILE = CACHE_DIR / "btc_history.json"
 USDT_CACHE_FILE = CACHE_DIR / "usdt_history.json"
 
+def _merge_minute_daily(market: str, cached: Optional[List[Dict]]) -> List[Dict]:
+    """
+    1m 단일소스 재설계: 분봉(1m 우선)에서 파생한 일봉을 캐시 일봉에 병합.
+    겹치는 날짜는 분봉 파생값 우선(최신·동일 소스), 캐시는 분봉이 못 미치는 과거를 채움.
+    config.DERIVE_DAILY_FROM_MINUTE=False거나 분봉이 없으면 캐시 원본 그대로 반환.
+    """
+    try:
+        import config
+        if not getattr(config, "DERIVE_DAILY_FROM_MINUTE", False):
+            return cached or []
+    except Exception:
+        return cached or []
+    try:
+        from utils.minute_data import get_daily_candles
+        derived = get_daily_candles(market)
+    except Exception:
+        derived = []
+    if not derived:
+        return cached or []
+    merged: Dict[str, Dict] = {d["date"]: d for d in (cached or [])}
+    for d in derived:           # 분봉 파생값이 캐시를 덮어씀 (동일 소스 일관성)
+        merged[d["date"]] = d
+    out = [merged[k] for k in sorted(merged)]
+    logger.info("[캐시] %s 일봉: 분봉 파생 %d일 병합 (전체 %d일)", market, len(derived), len(out))
+    return out
+
+
 def _is_fresh(data: List[Dict]) -> bool:
     """마지막 캔들이 오늘 혹은 어제이면 신선(신선 기준: 영업일 기반)."""
     if not data:
@@ -72,6 +99,7 @@ def get_history(start: str = "2017-09-01", force_refresh: bool = False,
     if not force_refresh:
         cached = load_cache()
         if cached and _is_fresh(cached) and validate_against_live(cached, live_price):
+            cached = _merge_minute_daily("KRW-BTC", cached)
             # filter by start date
             return [d for d in cached if d["date"] >= start]
 
@@ -133,6 +161,7 @@ def get_usdt_history(start: str = "2017-09-01", force_refresh: bool = False,
     if not force_refresh:
         cached = _load_usdt_cache()
         if cached and _is_fresh(cached) and validate_against_live(cached, live_price):
+            cached = _merge_minute_daily("KRW-USDT", cached)
             return [d for d in cached if d["date"] >= start]
 
     from utils.historical_data import fetch_usdt_history

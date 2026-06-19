@@ -189,25 +189,108 @@ def sync(market: str, unit: int = 5) -> int:
 
 
 # ──────────────────────────────────────────────────────────────
-# 조회
+# 조회 / 집계 (1m 단일소스 → 해상도별 파생)
 # ──────────────────────────────────────────────────────────────
+def _bucket_ts(ts: str, unit: int) -> str:
+    """ts(YYYY-MM-DDTHH:MM:SS)를 unit분 버킷 시작 시각으로 내림."""
+    # HH:MM 추출 (초는 분봉이라 00)
+    date, _, hm = ts.partition("T")
+    hh = int(hm[0:2]); mm = int(hm[3:5])
+    tot = (hh * 60 + mm) // unit * unit
+    return f"{date}T{tot // 60:02d}:{tot % 60:02d}:00"
+
+
+def aggregate_minute(rows: List[Dict], unit: int) -> List[Dict]:
+    """1분봉(또는 더 잘은 단위) 캔들을 unit분 OHLCV로 집계. ts 오름차순 가정."""
+    if unit <= 1 or not rows:
+        return rows
+    out: List[Dict] = []
+    cur_key: Optional[str] = None
+    o = h = l = c = v = 0.0
+    for r in rows:
+        key = _bucket_ts(r["ts"], unit)
+        if key != cur_key:
+            if cur_key is not None:
+                out.append({"ts": cur_key, "open": o, "high": h, "low": l, "close": c, "volume": v})
+            cur_key = key
+            o = r["open"]; h = r["high"]; l = r["low"]; c = r["close"]; v = r["volume"]
+        else:
+            h = max(h, r["high"]); l = min(l, r["low"]); c = r["close"]; v += r["volume"]
+    if cur_key is not None:
+        out.append({"ts": cur_key, "open": o, "high": h, "low": l, "close": c, "volume": v})
+    return out
+
+
+def aggregate_daily(rows: List[Dict]) -> List[Dict]:
+    """분봉 → 일봉 OHLCV. 반환 키는 일봉 관례(date)."""
+    out: List[Dict] = []
+    cur_day: Optional[str] = None
+    o = h = l = c = v = 0.0
+    for r in rows:
+        day = r["ts"][:10]
+        if day != cur_day:
+            if cur_day is not None:
+                out.append({"date": cur_day, "open": o, "high": h, "low": l, "close": c, "volume": v})
+            cur_day = day
+            o = r["open"]; h = r["high"]; l = r["low"]; c = r["close"]; v = r["volume"]
+        else:
+            h = max(h, r["high"]); l = min(l, r["low"]); c = r["close"]; v += r["volume"]
+    if cur_day is not None:
+        out.append({"date": cur_day, "open": o, "high": h, "low": l, "close": c, "volume": v})
+    return out
+
+
+def _raw_candles(conn, market: str, unit: int,
+                 start: Optional[str], end: Optional[str]) -> List[Dict]:
+    q = "SELECT ts, open, high, low, close, volume FROM minute_candles WHERE market=? AND unit=?"
+    params: list = [market, unit]
+    if start:
+        q += " AND ts >= ?"; params.append(start)
+    if end:
+        q += " AND ts <= ?"; params.append(end)
+    q += " ORDER BY ts"
+    return [
+        {"ts": r[0], "open": r[1], "high": r[2], "low": r[3], "close": r[4], "volume": r[5]}
+        for r in conn.execute(q, params)
+    ]
+
+
 def get_candles(market: str, unit: int = 5,
-                start: Optional[str] = None, end: Optional[str] = None) -> List[Dict]:
+                start: Optional[str] = None, end: Optional[str] = None,
+                derive: bool = True) -> List[Dict]:
+    """
+    market/unit 분봉 조회. 네이티브 unit 데이터가 없고 derive=True면
+    1분봉(단일소스)에서 해당 unit으로 온더플라이 집계해 반환한다.
+    더 미세한 네이티브 단위가 있으면 그걸로 집계(예: unit=5 없고 1m 있으면 1m→5m).
+    """
     conn = _connect()
     try:
-        q = "SELECT ts, open, high, low, close, volume FROM minute_candles WHERE market=? AND unit=?"
-        params: list = [market, unit]
-        if start:
-            q += " AND ts >= ?"
-            params.append(start)
-        if end:
-            q += " AND ts <= ?"
-            params.append(end)
-        q += " ORDER BY ts"
-        return [
-            {"ts": r[0], "open": r[1], "high": r[2], "low": r[3], "close": r[4], "volume": r[5]}
-            for r in conn.execute(q, params)
-        ]
+        rows = _raw_candles(conn, market, unit, start, end)
+        if rows or not derive or unit <= 1:
+            return rows
+        # 파생: unit을 나눌 수 있는 가장 큰 네이티브 단위 탐색 (1 우선)
+        for base in (1, 2, 3, 5, 10, 15):
+            if base >= unit or unit % base != 0:
+                continue
+            base_rows = _raw_candles(conn, market, base, start, end)
+            if base_rows:
+                logger.debug("[minute_data] %s %dm 네이티브 부재 → %dm에서 파생", market, unit, base)
+                return aggregate_minute(base_rows, unit)
+        return rows
+    finally:
+        conn.close()
+
+
+def get_daily_candles(market: str, start: Optional[str] = None,
+                      end: Optional[str] = None) -> List[Dict]:
+    """1분봉(또는 가장 미세한 네이티브 분봉)에서 일봉 OHLCV 파생. 분봉 없으면 []."""
+    conn = _connect()
+    try:
+        for base in (1, 3, 5):
+            rows = _raw_candles(conn, market, base, start, end)
+            if rows:
+                return aggregate_daily(rows)
+        return []
     finally:
         conn.close()
 

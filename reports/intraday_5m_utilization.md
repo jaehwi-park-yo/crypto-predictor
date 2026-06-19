@@ -55,8 +55,32 @@ USE_INTRADAY_VOLUME_CALIB = True   # Tier3
 - **재보정 절차:** 1m 적재 후 `python -m reports.intraday_1m_recalibration` 실행 →
   실측 1m/5m 배율로 `index.html`의 `BTC_COEF`/`USDT_EFF`에 곱할 보정계수 산출.
 
+## 1m 단일소스 + 해상도별 집계 (전체 재설계) 🔧 구조 완료
+- **결정 근거 — 변동성 시그니처 플롯(2026-01~05 BTC):** 해상도별 일평균 RV
+  | 60m | 30m | 15m | 10m | 5m |
+  |---|---|---|---|---|
+  | 1.00x | 1.06x | 1.12x | 1.13x | **1.15x** |
+  해상도가 고와질수록 RV가 단조 증가(마이크로구조 노이즈). 10m→5m 증가폭 +1.7%로
+  평탄화 → **5m가 σ 스윗스폿.** 1m은 노이즈가 더 끼어 σ 과대·박스 과확장 위험.
+  → **σ는 5m로 집계, 거래량 진동은 raw 1m** (용도별 해상도 분리).
+- **구조:** 1m을 유일한 진실 소스로 두고 용도별로 파생.
+  ```
+  1m DB ─┬─ raw 1m            → 거래량 진동 (oscillation_per_day)
+         ├─ 1m→5m 집계 RV     → 박스 σ (rv_ewma_daily_sigma, 노이즈 평탄화)
+         └─ 1m→일봉 집계 close → 장기 히스토리·ML 라벨·모멘텀
+  ```
+  → **5m·일봉을 별도 수집하지 않음.** 1m만 적재하면 전부 코드에서 파생.
+- **구현:**
+  - `minute_data.get_candles(unit, derive=True)`: 네이티브 단위 부재 시 1m에서 온더플라이 집계.
+    `aggregate_minute()`(N분봉)·`aggregate_daily()`·`get_daily_candles()` 신설.
+  - `data_cache`: `DERIVE_DAILY_FROM_MINUTE=True`면 1m 파생 일봉을 일봉 캐시에 병합
+    (겹치면 분봉 우선, 과거는 캐시가 채움). 분봉 없으면 무동작.
+  - 검증: 5m→15m 집계 OHLC 정확 일치, 5m→일봉 종가 캐시와 0.2% 이내(1m이면 더 근접),
+    predict_as_of 정상(박스·σ·거래량 모두 산출).
+
 ## 남은 사안 (후속)
 - **1m 데이터 수집:** 이 원격 환경은 업비트 API 403 차단 → 로컬 부트스트랩 후 zip 업로드 필요.
+  `python -m utils.minute_data --bootstrap --unit 1` (1m만 받으면 5m·일봉 자동 파생).
 - **index.html 클라이언트 P&L**: 화면의 거래량·월순익 표는 `BTC_COEF` 기반 독립 계산이라
   여전히 낙관적. 백엔드(`estimated_monthly_volume_krw`)는 Tier3로 현실화됐으나,
   클라이언트 표시값도 1m 보정계수로 맞추는 작업 필요.
