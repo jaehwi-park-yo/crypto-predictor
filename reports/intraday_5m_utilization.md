@@ -37,9 +37,28 @@ USE_INTRADAY_ASYMMETRY    = False  # Tier2 (무효)
 USE_INTRADAY_VOLUME_CALIB = True   # Tier3
 ```
 
+## 1분봉 통합 재설계 (해상도 분리) 🔧 구조 완료 · 1m 데이터 대기
+- **동기:** 5m `oscillation_per_day`가 5분 캔들 내부의 왕복을 흡수해 거래량을 **과소측정**.
+  해상도 스케일링 실측(2026-04 BTC, gi 0.5%): osc ∝ Δt^-0.60.
+  | 해상도 | 60m | 30m | 15m | 10m | **5m** | **1m(외삽)** |
+  |---|---|---|---|---|---|---|
+  | osc/day | 8.8 | 13.3 | 20.3 | 26.4 | **38.3** | **≈102** |
+  → **1m은 5m 대비 ≈2.7배** 진동 포착. 앞선 과소측정 추론(×2.5)과 정합.
+- **설계:** σ와 거래량 진동을 **서로 다른 해상도**로 산출하는 하이브리드.
+  - σ(박스): `INTRADAY_SIGMA_UNIT=5` — 1m은 bid-ask bounce 등 마이크로구조 노이즈로 RV 과대 위험.
+  - 거래량(진동): `INTRADAY_VOLUME_UNIT=1` — 캔들 내부 왕복 포착.
+  - 폴백 체인: 요청 단위 분봉 부족 → `INTRADAY_FALLBACK_UNIT=5` → 호출측 일봉.
+  - 신설 `analyze_intraday_path()`: 같은 as_of 경로에서 σ·반변동성·진동을 **1회 로드로 동시 산출**
+    (단위 동일 시 분봉 재사용 — 단일 패스).
+- **데이터 파이프라인:** `minute_data --unit 1`, `dataset_seed`/`dataset_export`가 단위별
+  `minute_<market>_<unit>m.csv` 자동 처리(1m·5m 공존). DB는 `PRIMARY KEY(market,unit,ts)`라 충돌 없음.
+- **재보정 절차:** 1m 적재 후 `python -m reports.intraday_1m_recalibration` 실행 →
+  실측 1m/5m 배율로 `index.html`의 `BTC_COEF`/`USDT_EFF`에 곱할 보정계수 산출.
+
 ## 남은 사안 (후속)
+- **1m 데이터 수집:** 이 원격 환경은 업비트 API 403 차단 → 로컬 부트스트랩 후 zip 업로드 필요.
 - **index.html 클라이언트 P&L**: 화면의 거래량·월순익 표는 `BTC_COEF` 기반 독립 계산이라
   여전히 낙관적. 백엔드(`estimated_monthly_volume_krw`)는 Tier3로 현실화됐으나,
-  클라이언트 표시값도 동일 보정 계수로 맞추는 작업 필요.
+  클라이언트 표시값도 1m 보정계수로 맞추는 작업 필요.
 - **ML σ 재학습**: 6월말 데이터 확보 후 5m RV-EWMA를 기본 특징으로 한 재학습 시 블렌드
   비중 재조정 권장.

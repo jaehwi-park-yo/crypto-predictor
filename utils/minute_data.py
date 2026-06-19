@@ -220,7 +220,9 @@ def get_stats() -> Dict:
             "SELECT market, unit, COUNT(*), MIN(ts), MAX(ts) "
             "FROM minute_candles GROUP BY market, unit"
         ):
-            stats[market] = {"unit": unit, "count": cnt, "oldest": oldest, "newest": newest}
+            stats[f"{market}_{unit}m"] = {
+                "market": market, "unit": unit,
+                "count": cnt, "oldest": oldest, "newest": newest}
         return stats
     finally:
         conn.close()

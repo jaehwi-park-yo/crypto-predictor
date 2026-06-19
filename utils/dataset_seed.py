@@ -98,28 +98,36 @@ def _restore_minutes(zf: zipfile.ZipFile) -> Dict[str, int]:
         )
     """)
 
+    # 단위별 CSV 자동 감지: minute_<market>_<unit>m.csv (예: 1m, 5m).
+    # ZIP에 들어있는 어떤 단위든 모두 복원한다(1분봉 통합 재설계).
+    names = set(zf.namelist())
     inserted: Dict[str, int] = {}
-    for market_key, csv_name in [("KRW-BTC", "minute_KRW-BTC_5m.csv"),
-                                  ("KRW-USDT", "minute_KRW-USDT_5m.csv")]:
-        rows = _read_csv_from_zip(zf, csv_name)
-        if not rows:
-            logger.warning("[시드] %s 없음 — 건너뜀", csv_name)
-            continue
-
-        batch = [
-            (market_key, 5, r["ts"],
-             float(r["open"]), float(r["high"]), float(r["low"]),
-             float(r["close"]), float(r["volume"]))
-            for r in rows if r.get("ts")
-        ]
-        cur = conn.executemany(
-            "INSERT OR IGNORE INTO minute_candles"
-            "(market, unit, ts, open, high, low, close, volume) VALUES (?,?,?,?,?,?,?,?)",
-            batch,
-        )
-        conn.commit()
-        inserted[market_key] = cur.rowcount
-        logger.info("[시드] %s: %d행 삽입 (전체 %d행)", market_key, cur.rowcount, len(batch))
+    for market_key in ("KRW-BTC", "KRW-USDT"):
+        found_any = False
+        for unit in (1, 3, 5, 10, 15, 30, 60):
+            csv_name = f"minute_{market_key}_{unit}m.csv"
+            if csv_name not in names:
+                continue
+            rows = _read_csv_from_zip(zf, csv_name)
+            if not rows:
+                continue
+            found_any = True
+            batch = [
+                (market_key, unit, r["ts"],
+                 float(r["open"]), float(r["high"]), float(r["low"]),
+                 float(r["close"]), float(r["volume"]))
+                for r in rows if r.get("ts")
+            ]
+            cur = conn.executemany(
+                "INSERT OR IGNORE INTO minute_candles"
+                "(market, unit, ts, open, high, low, close, volume) VALUES (?,?,?,?,?,?,?,?)",
+                batch,
+            )
+            conn.commit()
+            inserted[f"{market_key}_{unit}m"] = cur.rowcount
+            logger.info("[시드] %s: %d행 삽입 (전체 %d행)", csv_name, cur.rowcount, len(batch))
+        if not found_any:
+            logger.warning("[시드] %s 분봉 CSV 없음 — 건너뜀", market_key)
 
     conn.close()
     return inserted

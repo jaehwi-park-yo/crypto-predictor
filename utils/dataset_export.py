@@ -310,12 +310,14 @@ def export_dataset(out_path: Path | str = DEFAULT_OUT) -> Dict:
             zf.writestr("daily_usdt.csv", daily_usdt)
             meta["files"]["daily_usdt.csv"] = daily_usdt.count(b"\n") - 1
 
+        # 수집된 모든 분봉 단위를 내보낸다(1분봉 통합 재설계 — 1m/5m 공존).
         for market in ("KRW-BTC", "KRW-USDT"):
-            mb = _minute_csv(market)
-            if mb:
-                name = f"minute_{market}_5m.csv"
-                zf.writestr(name, mb)
-                meta["files"][name] = mb.count(b"\n") - 1
+            for unit in (1, 3, 5, 10, 15, 30, 60):
+                mb = _minute_csv(market, unit=unit)
+                if mb:
+                    name = f"minute_{market}_{unit}m.csv"
+                    zf.writestr(name, mb)
+                    meta["files"][name] = mb.count(b"\n") - 1
 
         # 글로벌 시장 데이터 (환율 · 달러 BTC · 김치프리미엄) — 있을 때만
         try:
