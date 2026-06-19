@@ -78,9 +78,23 @@ USE_INTRADAY_VOLUME_CALIB = True   # Tier3
   - 검증: 5m→15m 집계 OHLC 정확 일치, 5m→일봉 종가 캐시와 0.2% 이내(1m이면 더 근접),
     predict_as_of 정상(박스·σ·거래량 모두 산출).
 
-## 남은 사안 (후속)
-- **1m 데이터 수집:** 이 원격 환경은 업비트 API 403 차단 → 로컬 부트스트랩 후 zip 업로드 필요.
-  `python -m utils.minute_data --bootstrap --unit 1` (1m만 받으면 5m·일봉 자동 파생).
+## 5m → 1m 전환 절차 (로컬)
+기동 시 분봉 수집 단위는 `MINUTE_COLLECT_UNIT=1` (1m). 5m·일봉은 코드에서 파생되므로
+1m만 있으면 된다. **구 5m가 남아 있어도 무해**하나(네이티브 5m는 σ에 그대로 쓰임),
+1m으로 일원화하려면 1m 적재를 먼저 확인한 뒤 5m를 정리한다(순서 중요 — 먼저 삭제 금지):
+
+```bash
+# 1) 1m 수집 (로컬 — 원격 환경은 업비트 403 차단)
+python -m utils.minute_data --bootstrap --unit 1
+python -m utils.minute_data --stats          # KRW-*_1m 존재 확인
+# 2) 1m 확인 후 구 5m 정리 (선택)
+python -m utils.minute_data --purge-unit 5
+# 3) 배포용 zip (1m 포함) 내보내기 → dataset_seed.zip 업로드
+python -m utils.dataset_export
+```
+
+> 주의: 1m 적재 전에 5m를 지우면 분봉이 0이 되어 σ가 일봉 폴백, 거래량 보정 비활성.
+> 원격(이 저장소) 환경은 1m 수집 불가(403)라 5m를 유지해야 한다.
 - **index.html 클라이언트 P&L**: 화면의 거래량·월순익 표는 `BTC_COEF` 기반 독립 계산이라
   여전히 낙관적. 백엔드(`estimated_monthly_volume_krw`)는 Tier3로 현실화됐으나,
   클라이언트 표시값도 1m 보정계수로 맞추는 작업 필요.

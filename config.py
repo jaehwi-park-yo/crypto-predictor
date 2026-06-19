@@ -226,6 +226,9 @@ INTRADAY_MIN_CANDLES_PER_DAY = {1: 500, 3: 200, 5: 100, 10: 60, 15: 40}
 #   장기 과거는 캐시가 채우고 최근은 1m 소스로 일원화. 분봉 없으면 무동작.
 #   5m도 get_candles가 1m에서 온더플라이 파생하므로 5m 별도 수집 불필요.
 DERIVE_DAILY_FROM_MINUTE = True
+# 기동 시 백그라운드로 수집할 분봉 단위. 1m 단일소스 — 5m·일봉은 코드에서 파생.
+#   (구 5m 데이터가 남아 있어도 무해하나, 정리하려면 `--purge-unit 5`)
+MINUTE_COLLECT_UNIT = 1
 
 # Retry settings
 MAX_RETRIES = 3

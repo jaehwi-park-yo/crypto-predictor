@@ -426,6 +426,10 @@ def _minute_collector():
     log = logging.getLogger("api_server")
     _minute_status["state"] = "collecting"
     try:
+        from config import MINUTE_COLLECT_UNIT as _unit
+    except Exception:
+        _unit = 1
+    try:
         total = 0
         for market in minute_data.MARKETS:
             _minute_status["market"] = market
@@ -433,14 +437,13 @@ def _minute_collector():
             def _progress(fetched, oldest, m=market):
                 _minute_status["fetched"] = total + fetched
                 _minute_status["oldest"] = oldest
-                log.info("[minutes] %s 수집 중: %d개 (최고 %s)", m, total + fetched, oldest)
+                log.info("[minutes] %s %dm 수집 중: %d개 (최고 %s)", m, _unit, total + fetched, oldest)
 
             # sync는 자동으로 bootstrap으로 폴백 (bootstrap에만 progress_cb 적용)
-            conn_stats = minute_data.get_stats()
-            if market in conn_stats:
-                n = minute_data.sync(market)
+            if minute_data.has_data(market, _unit):
+                n = minute_data.sync(market, unit=_unit)
             else:
-                n = minute_data.bootstrap(market, progress_cb=_progress)
+                n = minute_data.bootstrap(market, unit=_unit, progress_cb=_progress)
             total += n
             _minute_status["fetched"] = total
         stats = minute_data.get_stats()

@@ -295,6 +295,32 @@ def get_daily_candles(market: str, start: Optional[str] = None,
         conn.close()
 
 
+def has_data(market: str, unit: int) -> bool:
+    """해당 market/unit 분봉이 1건이라도 있으면 True."""
+    conn = _connect()
+    try:
+        row = conn.execute(
+            "SELECT 1 FROM minute_candles WHERE market=? AND unit=? LIMIT 1",
+            (market, unit)).fetchone()
+        return row is not None
+    finally:
+        conn.close()
+
+
+def purge_unit(market: str, unit: int) -> int:
+    """특정 market/unit 분봉을 삭제. 1m 단일소스 전환 후 구 5m 정리용. 삭제 행수 반환."""
+    conn = _connect()
+    try:
+        cur = conn.execute(
+            "DELETE FROM minute_candles WHERE market=? AND unit=?", (market, unit))
+        conn.commit()
+        conn.execute("VACUUM")
+        logger.info("[minute_data] purge %s %dm: %d행 삭제", market, unit, cur.rowcount)
+        return cur.rowcount
+    finally:
+        conn.close()
+
+
 def get_stats() -> Dict:
     conn = _connect()
     try:
@@ -322,10 +348,15 @@ if __name__ == "__main__":
     ap.add_argument("--bootstrap", action="store_true")
     ap.add_argument("--sync", action="store_true")
     ap.add_argument("--stats", action="store_true")
-    ap.add_argument("--unit", type=int, default=5)
+    ap.add_argument("--purge-unit", type=int, metavar="UNIT",
+                    help="해당 단위 분봉 전체 삭제 (예: 1m 전환 후 구 5m 정리: --purge-unit 5)")
+    ap.add_argument("--unit", type=int, default=1)
     args = ap.parse_args()
 
-    if args.bootstrap:
+    if args.purge_unit is not None:
+        for m in MARKETS:
+            print(f"{m}: {purge_unit(m, args.purge_unit)}행 삭제 ({args.purge_unit}m)")
+    elif args.bootstrap:
         for m in MARKETS:
             n = bootstrap(m, args.unit,
                           progress_cb=lambda f, o, m=m: print(f"  {m}: {f}개 수집, 최고(最古) {o}"))
