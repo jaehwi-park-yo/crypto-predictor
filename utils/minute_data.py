@@ -351,6 +351,8 @@ if __name__ == "__main__":
     ap.add_argument("--purge-unit", type=int, metavar="UNIT",
                     help="해당 단위 분봉 전체 삭제 (예: 1m 전환 후 구 5m 정리: --purge-unit 5)")
     ap.add_argument("--unit", type=int, default=1)
+    ap.add_argument("--days", type=int, default=3650,
+                    help="부트스트랩 수집 기간(일). 1m은 최근 365~730일 권장")
     args = ap.parse_args()
 
     if args.purge_unit is not None:
@@ -358,7 +360,7 @@ if __name__ == "__main__":
             print(f"{m}: {purge_unit(m, args.purge_unit)}행 삭제 ({args.purge_unit}m)")
     elif args.bootstrap:
         for m in MARKETS:
-            n = bootstrap(m, args.unit,
+            n = bootstrap(m, args.unit, max_days=args.days,
                           progress_cb=lambda f, o, m=m: print(f"  {m}: {f}개 수집, 최고(最古) {o}"))
             print(f"{m}: {n}행 삽입")
     elif args.sync:
