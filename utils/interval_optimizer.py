@@ -47,6 +47,12 @@ logger = logging.getLogger("interval_optimizer")
 FEE = 0.0004          # 빗썸 편도 수수료 0.04%
 MAX_REWARD = 3_000_000
 
+# 단일인벤토리 시뮬 거래량 보정계수 (실측 기반, config에서 로드)
+try:
+    from config import VOLUME_SIM_CALIB as _SIM_CALIB
+except Exception:
+    _SIM_CALIB = 1.6
+
 # 리워드 티어 [최소거래량, 요율]
 _REWARD_TIERS = [
     (1e11, 0.0002),
@@ -58,18 +64,22 @@ _REWARD_TIERS = [
 ]
 
 # 모드별 간격 탐색 범위 정의
-# BTC: 퍼센트(%) 단위
+# BTC: 퍼센트(%) 단위.
+#   부스트(거래량 목적): 실측 운영(매수 2만원≈0.017%, 매도 0.08%)을 반영해
+#     초촘촘 간격까지 탐색. 매도 하한은 왕복수수료(0.08%) 수준.
+#   일반(순익 목적): 넓은 간격으로 스프레드 수익 극대화.
 _BTC_SEARCH = {
-    "boost":  {"buy": (0.10, 0.40, 0.01), "sell_pct": (0.1, 1.0)},   # 좁은 간격
-    "normal": {"buy": (0.30, 1.20, 0.05), "sell_pct": (0.3, 3.0)},   # 넓은 간격
+    "boost":  {"buy": (0.02, 0.30, 0.01), "sell_pct": (0.08, 0.80)},  # 초촘촘
+    "normal": {"buy": (0.30, 1.20, 0.05), "sell_pct": (0.30, 3.0)},   # 넓은 간격
 }
 # USDT: 매수 1원 고정 + 매도 간격만 탐색.
 #   실측 검증(2026-03~06 1m): 매수 1원 고정 시 동일 매도간격 대비 거래량 +27~40%,
 #   봇당 자본 1/2~1/3로 더 촘촘한 수익실현. 순익은 동일하거나 우월.
 #   → 매수는 최소틱(1원)으로 고정하고 매도간격(부스트=좁게/일반=넓게)만 최적화.
+#   부스트는 매도 하한을 1원(≈0.07%, 수수료 수준)까지 허용.
 _USDT_BUY_KRW = 1                       # 매수 간격 고정 (최소틱)
 _USDT_SEARCH = {
-    "boost":  {"sell_krw": (2, 4)},     # 좁은 매도 → 거래량 극대화
+    "boost":  {"sell_krw": (1, 4)},     # 좁은 매도 → 거래량 극대화
     "normal": {"sell_krw": (4, 8)},     # 넓은 매도 → 스프레드 수익 극대화
 }
 _USDT_REF = 1450.0   # 원/달러 환산 기준 (BTC 단위 통일용)
@@ -160,9 +170,16 @@ def _best_interval(
     buy_range: Tuple[float, float, float],   # (min%, max%, step%)
     sell_pct_range: Tuple[float, float],
     prev_vol_monthly: float = 1e9,
+    objective: str = "net",                  # "net"=매매순익 최대 / "volume"=거래량 최대
 ) -> Optional[Dict]:
     """
-    (buy%, sell%) 격자 탐색 → 월MTM 기준 최적 조합 반환.
+    (buy%, sell%) 격자 탐색 → objective 기준 최적 조합 반환.
+
+    objective="net"    : 월 순익(그리드+리워드+MTM) 최대 — 일반 모드(스프레드 수익).
+    objective="volume" : 월 거래량 최대 (단, 매매순익이 깨지지 않는 범위:
+                         grid-fee >= 0) — 부스트 모드(리워드 티어 조기달성).
+                         실측 검증: 부스트는 거래량이 목적이므로 매도≈수수료(0.08%)
+                         초촘촘 간격을 허용해야 실제 운영(2만원 매수/0.08% 매도)과 일치.
     prev_vol_monthly: 전월 거래량 (리워드 티어 판정용).
     """
     rate = _reward_rate(prev_vol_monthly)
@@ -203,6 +220,7 @@ def _best_interval(
                 nets, vols, grids, mtms = [], [], [], []
                 for mo, (seq, K, cpb, lo, br, fp) in prepped.items():
                     tr, mtm = _sim(seq, K, m, lo, br, fp)
+                    tr *= _SIM_CALIB   # 실측 보정 (단일인벤토리 과소측정 교정)
                     sp = sell_pct / 100
                     grid_profit  = tr * sp * cpb
                     fee_cost     = tr * 2 * FEE * cpb
@@ -220,7 +238,19 @@ def _best_interval(
                 avg_mtm  = sum(mtms)  / n
                 avg_rw   = min(avg_vol * rate, MAX_REWARD)
 
-                if best is None or avg_net > best["net"]:
+                # objective 별 선택 기준
+                if objective == "volume":
+                    # 거래량 최대화 — 단 그리드 매매가 수수료를 까먹지 않는 범위(grid>=0)
+                    feasible = avg_grid >= 0
+                    better = best is None or (feasible and avg_vol > best["vol"])
+                    # 적격 후보가 하나도 없을 때를 대비해 net 기준 폴백도 허용
+                    if best is not None and not best.get("_feasible", True) and feasible:
+                        better = True
+                else:
+                    feasible = True
+                    better = best is None or avg_net > best["net"]
+
+                if better:
                     best = {
                         "buy_pct":   b,
                         "sell_pct":  round(sell_pct, 4),
@@ -232,11 +262,14 @@ def _best_interval(
                         "vol":       avg_vol,
                         "n_months":  n,
                         "rate":      rate,
+                        "_feasible": feasible,
                     }
             m += 1
 
         b = round(b + b_step, 4)
 
+    if best is not None:
+        best.pop("_feasible", None)
     return best
 
 
@@ -323,9 +356,11 @@ def optimize_intervals(
         normal_sell_range = tuple(_BTC_SEARCH["normal"]["sell_pct"])
 
     boost  = _best_interval(monthly, box_lower, box_upper, deployed_krw,
-                            boost_buy_range,  boost_sell_range,  prev_vol_monthly)
+                            boost_buy_range,  boost_sell_range,  prev_vol_monthly,
+                            objective="volume")   # 부스트 = 거래량 최대화
     normal = _best_interval(monthly, box_lower, box_upper, deployed_krw,
-                            normal_buy_range, normal_sell_range, prev_vol_monthly)
+                            normal_buy_range, normal_sell_range, prev_vol_monthly,
+                            objective="net")       # 일반 = 매매순익 최대화
 
     # USDT는 원 단위로 역환산해서 표시 필드 추가
     for res in (boost, normal):
