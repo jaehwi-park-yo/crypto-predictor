@@ -57,11 +57,12 @@ def _connect() -> sqlite3.Connection:
 # ──────────────────────────────────────────────────────────────
 def fetch_minutes_upbit(market: str, unit: int = 5,
                         to: Optional[str] = None, count: int = 200) -> List[Dict]:
-    """업비트 분봉 1회 호출. 실패 시 [] (429는 1초 대기 후 1회 재시도)."""
+    """업비트 분봉 1회 호출. 실패 시 [] (429는 지수 백오프로 최대 4회 재시도)."""
     params = {"market": market, "count": count}
     if to:
         params["to"] = to
-    for attempt in range(2):
+    max_attempts = 4
+    for attempt in range(max_attempts):
         try:
             r = requests.get(
                 _UPBIT_MINUTES.format(unit=unit),
@@ -70,11 +71,13 @@ def fetch_minutes_upbit(market: str, unit: int = 5,
                 timeout=_TIMEOUT,
             )
             if r.status_code == 429:
-                if attempt == 0:
-                    logger.warning("[minute_data] 429 rate limit — 1초 대기 후 재시도")
-                    time.sleep(1.0)
+                if attempt < max_attempts - 1:
+                    wait = 0.5 * (2 ** attempt)  # 0.5 → 1 → 2초
+                    logger.warning("[minute_data] 429 rate limit — %.1f초 대기 후 재시도(%d/%d)",
+                                   wait, attempt + 1, max_attempts - 1)
+                    time.sleep(wait)
                     continue
-                logger.warning("[minute_data] 429 재시도 실패: %s", market)
+                logger.warning("[minute_data] 429 재시도 소진: %s", market)
                 return []
             if r.status_code == 403:
                 logger.warning("[minute_data] 403 차단 (네트워크 환경 제한): %s", market)
@@ -93,7 +96,13 @@ def fetch_minutes_upbit(market: str, unit: int = 5,
                 for c in data
             ]
         except Exception as e:
-            logger.warning("[minute_data] 분봉 수집 실패 (%s): %s", market, e)
+            if attempt < max_attempts - 1:
+                wait = 0.5 * (2 ** attempt)
+                logger.warning("[minute_data] 분봉 수집 실패 (%s): %s — %.1f초 후 재시도(%d/%d)",
+                               market, e, wait, attempt + 1, max_attempts - 1)
+                time.sleep(wait)
+                continue
+            logger.warning("[minute_data] 분봉 수집 재시도 소진 (%s): %s", market, e)
             return []
     return []
 
