@@ -307,8 +307,28 @@ def has_data(market: str, unit: int) -> bool:
         conn.close()
 
 
+def purge_before(market: str, unit: int, before_ts: str) -> int:
+    """
+    market/unit 분봉 중 before_ts(YYYY-MM-DDTHH:MM:SS) 이전 행 삭제.
+    롤링 윈도우 유지용 — 오래된 1m 데이터를 주기적으로 정리해 DB 크기를 고정.
+    삭제 행수 반환.
+    """
+    conn = _connect()
+    try:
+        cur = conn.execute(
+            "DELETE FROM minute_candles WHERE market=? AND unit=? AND ts < ?",
+            (market, unit, before_ts))
+        conn.commit()
+        if cur.rowcount:
+            logger.info("[minute_data] purge_before %s %dm <%s: %d행 삭제",
+                        market, unit, before_ts[:10], cur.rowcount)
+        return cur.rowcount
+    finally:
+        conn.close()
+
+
 def purge_unit(market: str, unit: int) -> int:
-    """특정 market/unit 분봉을 삭제. 1m 단일소스 전환 후 구 5m 정리용. 삭제 행수 반환."""
+    """특정 market/unit 분봉을 전체 삭제. 삭제 행수 반환."""
     conn = _connect()
     try:
         cur = conn.execute(

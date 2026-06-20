@@ -219,6 +219,18 @@ VOLUME_RESOLUTION_COEF = 2.7   # 5m 과소측정 보정 — index.html BTC_COEF/
 MINUTE_COLLECT_UNIT = 5
 DERIVE_DAILY_FROM_MINUTE = False
 
+# ──────────────────────────────────────────────────────────
+# 1분봉 롤링 수집 (거래량 추정·간격 최적화용)
+# ──────────────────────────────────────────────────────────
+# 기동 시 별도 스레드로 최근 MINUTE_1M_ROLLING_DAYS일치 1m 분봉을 수집.
+# 5m 수집과 독립 병렬 실행 — 업비트 API 경합 없음 (같은 엔드포인트, 별도 호출).
+# DB 크기 관리: MINUTE_1M_PURGE_OLD=True 면 롤링 윈도우 초과분을 자동 삭제.
+#   90일 × 2마켓 ≈ 26만행 ≈ 16MB — 실용적.
+# 이 환경(원격)은 업비트 403 차단 → 수집 시도 후 조용히 실패 (5m 폴백 유지).
+MINUTE_1M_COLLECT = True           # 1m 수집 on/off
+MINUTE_1M_ROLLING_DAYS = 90        # 보유 기간(일). 오래된 것 자동 삭제.
+MINUTE_1M_PURGE_OLD = True         # 롤링 윈도우 초과 1m 자동 삭제
+
 # Retry settings
 MAX_RETRIES = 3
 BACKOFF_FACTOR = 2.0

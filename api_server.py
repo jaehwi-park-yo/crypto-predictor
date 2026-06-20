@@ -458,6 +458,79 @@ def _minute_collector():
         log.warning("[minutes] 수집 실패: %s", e)
 
 
+_1m_status: Dict[str, object] = {
+    "state": "idle",   # idle | collecting | done | disabled | error
+    "market": None, "fetched": 0, "oldest": None, "newest": None, "error": None,
+}
+
+
+def _1m_collector():
+    """
+    기동 시 백그라운드에서 최근 MINUTE_1M_ROLLING_DAYS일치 1분봉을 수집·유지.
+    - 최초: bootstrap(unit=1, max_days=롤링기간)
+    - 이후: sync(unit=1) 증분
+    - 완료 후: MINUTE_1M_PURGE_OLD=True 면 롤링 윈도우 초과 1m 자동 삭제
+    - API 실패(403 등)는 조용히 기록하고 종료 — 5m 기반 폴백 유지
+    """
+    log = logging.getLogger("api_server")
+    try:
+        from config import MINUTE_1M_COLLECT, MINUTE_1M_ROLLING_DAYS, MINUTE_1M_PURGE_OLD
+    except Exception:
+        MINUTE_1M_COLLECT, MINUTE_1M_ROLLING_DAYS, MINUTE_1M_PURGE_OLD = True, 90, True
+
+    if not MINUTE_1M_COLLECT:
+        _1m_status["state"] = "disabled"
+        log.info("[1m] MINUTE_1M_COLLECT=False — 1분봉 수집 비활성")
+        return
+
+    _1m_status["state"] = "collecting"
+    log.info("[1m] 1분봉 롤링 수집 시작 (최근 %d일)", MINUTE_1M_ROLLING_DAYS)
+    total = 0
+    try:
+        for market in minute_data.MARKETS:
+            _1m_status["market"] = market
+
+            def _prog(fetched, oldest, m=market):
+                _1m_status["fetched"] = total + fetched
+                _1m_status["oldest"] = oldest
+                log.info("[1m] %s 수집 중: %d개 (최고 %s)", m, total + fetched, oldest)
+
+            if minute_data.has_data(market, unit=1):
+                n = minute_data.sync(market, unit=1)
+                log.info("[1m] %s 증분 sync: %d행 추가", market, n)
+            else:
+                n = minute_data.bootstrap(
+                    market, unit=1,
+                    max_days=MINUTE_1M_ROLLING_DAYS,
+                    progress_cb=_prog,
+                )
+                log.info("[1m] %s bootstrap 완료: %d행", market, n)
+            total += n
+            _1m_status["fetched"] = total
+
+            # 롤링 윈도우 초과분 삭제
+            if MINUTE_1M_PURGE_OLD:
+                from datetime import datetime as _dt, timedelta as _td
+                cutoff = (_dt.now() - _td(days=MINUTE_1M_ROLLING_DAYS)).strftime("%Y-%m-%dT%H:%M:%S")
+                deleted = minute_data.purge_before(market, unit=1, before_ts=cutoff)
+                if deleted:
+                    log.info("[1m] %s 롤링 정리: %d행 삭제 (<%s)", market, deleted, cutoff[:10])
+
+        stats = minute_data.get_stats()
+        s1m = {k: v for k, v in stats.items() if v.get("unit") == 1}
+        if s1m:
+            _1m_status["oldest"] = min(v["oldest"] for v in s1m.values())
+            _1m_status["newest"] = max(v["newest"] for v in s1m.values())
+        _1m_status["state"] = "done"
+        log.info("[1m] 완료: 신규 %d행 / DB %s",
+                 total,
+                 " | ".join(f"{k}: {v['count']}행" for k, v in s1m.items()) if s1m else "0행")
+    except Exception as e:
+        _1m_status["state"] = "error"
+        _1m_status["error"] = str(e)
+        log.warning("[1m] 수집 실패 (5m 기반 폴백 유지): %s", e)
+
+
 def _train_ml_sigma():
     """ML σ 보정 모델 학습 — 일봉 캐시가 준비된 후 백그라운드에서 실행."""
     import logging as _lg
@@ -502,16 +575,20 @@ def _preload_usdt_history():
 @app.on_event("startup")
 def _start_minute_collector():
     # 시드 복원은 분봉 수집보다 먼저, 동기적으로 실행
-    # (DB가 비어있고 data/dataset_seed.zip 이 있을 때만 동작)
     restore_from_seed()
-    threading.Thread(target=_minute_collector, daemon=True, name="minute-collector").start()
+    threading.Thread(target=_minute_collector,    daemon=True, name="minute-collector").start()
+    threading.Thread(target=_1m_collector,        daemon=True, name="1m-collector").start()
     threading.Thread(target=_preload_usdt_history, daemon=True, name="usdt-preload").start()
     threading.Thread(target=_sync_global_then_train, daemon=True, name="global-sync-ml-train").start()
 
 
 @app.get("/api/minutes/status")
 def minutes_status():
-    return {"status": dict(_minute_status), "stats": minute_data.get_stats()}
+    return {
+        "status_5m": dict(_minute_status),
+        "status_1m": dict(_1m_status),
+        "stats": minute_data.get_stats(),
+    }
 
 
 @app.get("/api/minutes")
