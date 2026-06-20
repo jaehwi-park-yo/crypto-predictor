@@ -77,7 +77,8 @@ def _daily_csv(market: str = "BTC") -> Optional[bytes]:
 def _minute_csv(market: str, unit: int = 5) -> Optional[bytes]:
     try:
         from utils import minute_data
-        candles = minute_data.get_candles(market, unit=unit)
+        # derive=False: 네이티브 데이터만 내보낸다 (파생 데이터 제외)
+        candles = minute_data.get_candles(market, unit=unit, derive=False)
     except Exception as e:
         logger.warning("[내보내기] 분봉 조회 실패 (%s): %s", market, e)
         return None
@@ -310,9 +311,12 @@ def export_dataset(out_path: Path | str = DEFAULT_OUT) -> Dict:
             zf.writestr("daily_usdt.csv", daily_usdt)
             meta["files"]["daily_usdt.csv"] = daily_usdt.count(b"\n") - 1
 
-        # 수집된 모든 분봉 단위를 내보낸다(1분봉 통합 재설계 — 1m/5m 공존).
+        # 네이티브로 수집된 분봉 단위만 내보낸다 (파생 단위 제외).
+        from utils.minute_data import has_data as _has_minute
         for market in ("KRW-BTC", "KRW-USDT"):
             for unit in (1, 3, 5, 10, 15, 30, 60):
+                if not _has_minute(market, unit):
+                    continue
                 mb = _minute_csv(market, unit=unit)
                 if mb:
                     name = f"minute_{market}_{unit}m.csv"

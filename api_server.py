@@ -495,7 +495,7 @@ def _1m_collector():
                 _1m_status["oldest"] = oldest
                 log.info("[1m] %s 수집 중: %d개 (최고 %s)", m, total + fetched, oldest)
 
-            if minute_data.has_data(market, unit=1):
+            if minute_data.has_sufficient_history(market, unit=1, min_days=MINUTE_1M_ROLLING_DAYS):
                 n = minute_data.sync(market, unit=1)
                 log.info("[1m] %s 증분 sync: %d행 추가", market, n)
             else:

@@ -119,6 +119,26 @@ def _max_ts(conn: sqlite3.Connection, market: str, unit: int) -> Optional[str]:
     return row[0] if row and row[0] else None
 
 
+def _min_ts(conn: sqlite3.Connection, market: str, unit: int) -> Optional[str]:
+    row = conn.execute(
+        "SELECT MIN(ts) FROM minute_candles WHERE market=? AND unit=?",
+        (market, unit)).fetchone()
+    return row[0] if row and row[0] else None
+
+
+def has_sufficient_history(market: str, unit: int, min_days: int) -> bool:
+    """DB의 oldest 행이 min_days 이전까지 거슬러 올라가면 True."""
+    conn = _connect()
+    try:
+        oldest = _min_ts(conn, market, unit)
+    finally:
+        conn.close()
+    if oldest is None:
+        return False
+    threshold = (datetime.now() - timedelta(days=min_days - 1)).strftime("%Y-%m-%dT%H:%M:%S")
+    return oldest <= threshold
+
+
 def bootstrap(market: str, unit: int = 5, max_days: int = 3650,
               progress_cb: Optional[Callable] = None) -> int:
     """과거 방향으로 페이지네이션하며 최대 max_days까지 전체 수집.
