@@ -63,10 +63,14 @@ _BTC_SEARCH = {
     "boost":  {"buy": (0.10, 0.40, 0.01), "sell_pct": (0.1, 1.0)},   # 좁은 간격
     "normal": {"buy": (0.30, 1.20, 0.05), "sell_pct": (0.3, 3.0)},   # 넓은 간격
 }
-# USDT: 원 단위 (내부는 % 환산)
+# USDT: 매수 1원 고정 + 매도 간격만 탐색.
+#   실측 검증(2026-03~06 1m): 매수 1원 고정 시 동일 매도간격 대비 거래량 +27~40%,
+#   봇당 자본 1/2~1/3로 더 촘촘한 수익실현. 순익은 동일하거나 우월.
+#   → 매수는 최소틱(1원)으로 고정하고 매도간격(부스트=좁게/일반=넓게)만 최적화.
+_USDT_BUY_KRW = 1                       # 매수 간격 고정 (최소틱)
 _USDT_SEARCH = {
-    "boost":  {"buy_krw": (1, 5,  1), "sell_krw": (1, 8)},
-    "normal": {"buy_krw": (3, 15, 1), "sell_krw": (3, 20)},
+    "boost":  {"sell_krw": (2, 4)},     # 좁은 매도 → 거래량 극대화
+    "normal": {"sell_krw": (4, 8)},     # 넓은 매도 → 스프레드 수익 극대화
 }
 _USDT_REF = 1450.0   # 원/달러 환산 기준 (BTC 단위 통일용)
 
@@ -299,19 +303,14 @@ def optimize_intervals(
         ref = _USDT_REF
         def _krw_to_pct(krw): return krw / ref * 100
 
-        boost_buy_range = (
-            _krw_to_pct(_USDT_SEARCH["boost"]["buy_krw"][0]),
-            _krw_to_pct(_USDT_SEARCH["boost"]["buy_krw"][1]),
-            _krw_to_pct(_USDT_SEARCH["boost"]["buy_krw"][2]),
-        )
+        # 매수 1원 고정: buy_range = (고정값, 고정값, step) — 격자가 1점만 생성
+        buy_pct = _krw_to_pct(_USDT_BUY_KRW)
+        fixed_buy_range = (buy_pct, buy_pct, max(buy_pct, 1e-6))
+        boost_buy_range = fixed_buy_range
+        normal_buy_range = fixed_buy_range
         boost_sell_range = (
             _krw_to_pct(_USDT_SEARCH["boost"]["sell_krw"][0]),
             _krw_to_pct(_USDT_SEARCH["boost"]["sell_krw"][1]),
-        )
-        normal_buy_range = (
-            _krw_to_pct(_USDT_SEARCH["normal"]["buy_krw"][0]),
-            _krw_to_pct(_USDT_SEARCH["normal"]["buy_krw"][1]),
-            _krw_to_pct(_USDT_SEARCH["normal"]["buy_krw"][2]),
         )
         normal_sell_range = (
             _krw_to_pct(_USDT_SEARCH["normal"]["sell_krw"][0]),
