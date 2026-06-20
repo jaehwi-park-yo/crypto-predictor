@@ -621,6 +621,41 @@
             </div>
           </div>
 
+          <!-- ── 1분봉 기반 최적 매수/매도 간격 추정 ── -->
+          <div>
+            <div class="section-title" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+              🎯 최적 매수/매도 간격 추정 <small style="font-weight:400;color:var(--muted)">(1분봉 단일인벤토리 시뮬)</small>
+              <span style="margin-left:auto;display:flex;align-items:center;gap:8px">
+                <label style="font-size:.74rem;color:var(--muted)">전월 거래량
+                  <select id="iv-prevvol" style="font-size:.74rem;padding:2px 4px;background:var(--card);color:var(--text);border:1px solid var(--border);border-radius:4px">
+                    <option value="100000000">1억+</option>
+                    <option value="1000000000" selected>10억+</option>
+                    <option value="10000000000">100억+</option>
+                    <option value="100000000000">1,000억+</option>
+                  </select>
+                </label>
+                <button id="iv-run-btn" onclick="fetchIntervals(true)" style="padding:3px 10px;font-size:.78rem;background:rgba(255,165,0,0.15);color:#ffa500;border:1px solid rgba(255,165,0,0.4);border-radius:5px;cursor:pointer">⚙️ 추정 실행</button>
+                <span id="iv-loading" style="display:none;color:var(--muted);font-size:.78rem">계산 중…</span>
+              </span>
+            </div>
+            <div id="iv-hint" style="font-size:.76rem;color:var(--muted);margin-bottom:10px">
+              ⚙️ 추정 실행 버튼을 누르면 최근 3개월 1분봉으로 부스트/일반 모드 최적 간격을 산출합니다 (BTC·USDT, 각 수 초).
+            </div>
+            <div class="info-grid" id="iv-panel" style="display:none">
+              <div class="info-card">
+                <h3>🚀 BTC — 부스트 / 일반</h3>
+                <table class="data" id="iv-btc"></table>
+              </div>
+              <div class="info-card">
+                <h3>💵 USDT — 부스트 / 일반</h3>
+                <table class="data" id="iv-usdt"></table>
+              </div>
+            </div>
+            <div style="font-size:.72rem;color:var(--muted);margin-top:6px">
+              ※ 부스트=거래량 극대화(월초 리워드 조기달성) · 일반=스프레드 수익 극대화(목표 달성 후). 월별 1회 캐시 — 재실행 시 강제 재계산.
+            </div>
+          </div>
+
           <div class="info-grid">
             <div class="info-card">
               <h3>📦 BTC 박스권 상세 <small id="btc-sigma-badge" style="font-size:.75em;color:#8b929e;font-weight:400">σ↑─ / σ↓─</small></h3>
@@ -3245,6 +3280,68 @@ async function fetchDashboard() {
 // fetchLivePrediction → fetchDashboard 위임 (기존 호출 호환성 유지)
 async function fetchLivePrediction() {
   return fetchDashboard();
+}
+
+// ── 최적 매수/매도 간격 추정 (1분봉) ──
+function _ivFmtBTC(res) {
+  if (!res) return '<span style="color:var(--muted)">데이터 부족</span>';
+  return `매수 <b>${res.buy_pct.toFixed(2)}%</b> / 매도 <b>${res.sell_pct.toFixed(2)}%</b>`;
+}
+function _ivFmtUSDT(res) {
+  if (!res) return '<span style="color:var(--muted)">데이터 부족</span>';
+  return `매수 <b>${res.buy_krw}원</b> / 매도 <b>${res.sell_krw}원</b>`;
+}
+function _ivRow(label, res, isUsdt) {
+  if (!res) return `<tr><td>${label}</td><td><span style="color:var(--muted)">데이터 부족</span></td></tr>`;
+  const interval = isUsdt ? _ivFmtUSDT(res) : _ivFmtBTC(res);
+  const net = (res.net/1e4).toFixed(1);
+  const vol = (res.vol/1e8).toFixed(2);
+  const netColor = res.net >= 0 ? 'var(--pos,#2ca02c)' : 'var(--neg,#d62728)';
+  return `<tr><td style="vertical-align:top">${label}</td><td style="text-align:right">
+    ${interval}<br>
+    <span style="font-size:.74rem;color:var(--muted)">월거래량 ${vol}억 · 월순익 </span><span style="font-size:.74rem;color:${netColor}">${net>=0?'+':''}${net}만</span>
+  </td></tr>`;
+}
+function _ivRender(tblId, data, isUsdt) {
+  const el = document.getElementById(tblId);
+  if (!el) return;
+  if (!data || data.error) {
+    el.innerHTML = `<tr><td colspan="2" style="color:var(--muted)">${data?.error || '추정 실패'}</td></tr>`;
+    return;
+  }
+  const tag = data.unit === 1 ? '1m' : `${data.unit}m(폴백)`;
+  el.innerHTML =
+    _ivRow('🚀 부스트', data.boost, isUsdt) +
+    _ivRow('📊 일반', data.normal, isUsdt) +
+    `<tr><td style="color:var(--muted);font-size:.72rem">박스 / 데이터</td>
+     <td style="text-align:right;font-size:.72rem;color:var(--muted)">${Math.round(data.box_lower).toLocaleString()}~${Math.round(data.box_upper).toLocaleString()} · ${tag} ${data.months_used?.length||0}개월</td></tr>`;
+}
+async function fetchIntervals(force) {
+  const btn = document.getElementById('iv-run-btn');
+  const loading = document.getElementById('iv-loading');
+  const hint = document.getElementById('iv-hint');
+  const panel = document.getElementById('iv-panel');
+  if (loading) loading.style.display = 'inline';
+  if (btn) btn.disabled = true;
+  try {
+    const capital = +document.getElementById('capital').value || 40000000;
+    const prevVol = +document.getElementById('iv-prevvol').value || 1e9;
+    const qs = `capital=${capital}&prev_vol=${prevVol}&months=3${force ? '&refresh=true' : ''}`;
+    const [btcRes, usdtRes] = await Promise.all([
+      fetch(`${API_BASE}/api/intervals?market=KRW-BTC&btc_ratio=0.6&${qs}`, {signal: AbortSignal.timeout(60000)}).then(r => r.ok ? r.json() : {error:'서버 오류 '+r.status}),
+      fetch(`${API_BASE}/api/intervals?market=KRW-USDT&btc_ratio=0.6&${qs}`, {signal: AbortSignal.timeout(60000)}).then(r => r.ok ? r.json() : {error:'서버 오류 '+r.status}),
+    ]);
+    _ivRender('iv-btc', btcRes, false);
+    _ivRender('iv-usdt', usdtRes, true);
+    if (panel) panel.style.display = 'grid';
+    if (hint) hint.style.display = 'none';
+  } catch(e) {
+    console.warn('[간격 추정 실패]', e);
+    if (hint) { hint.style.display = 'block'; hint.textContent = '⚠️ 간격 추정 실패 — 서버 연결 또는 1분봉 데이터를 확인하세요.'; }
+  } finally {
+    if (loading) loading.style.display = 'none';
+    if (btn) btn.disabled = false;
+  }
 }
 
 async function fetchLivePrice() {
