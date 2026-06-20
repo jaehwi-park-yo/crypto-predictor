@@ -80,10 +80,18 @@ def fetch_minutes_upbit(market: str, unit: int = 5,
                 logger.warning("[minute_data] 429 재시도 소진: %s", market)
                 return []
             if r.status_code == 403:
-                logger.warning("[minute_data] 403 차단 (네트워크 환경 제한): %s", market)
+                logger.warning("[minute_data] 403 차단 (%s unit=%d to=%s) — 네트워크 환경 제한",
+                               market, unit, to)
                 return []
-            r.raise_for_status()
+            if r.status_code != 200:
+                snippet = r.text[:300] if r.text else "(빈 응답)"
+                logger.warning("[minute_data] HTTP %d (%s unit=%d to=%s): %s",
+                               r.status_code, market, unit, to, snippet)
+                r.raise_for_status()
             data = r.json()
+            if not data:
+                logger.debug("[minute_data] 빈 배열 응답 (%s unit=%d to=%s) — 수집 종료",
+                             market, unit, to)
             return [
                 {
                     "ts":     c["candle_date_time_kst"],
@@ -98,11 +106,11 @@ def fetch_minutes_upbit(market: str, unit: int = 5,
         except Exception as e:
             if attempt < max_attempts - 1:
                 wait = 0.5 * (2 ** attempt)
-                logger.warning("[minute_data] 분봉 수집 실패 (%s): %s — %.1f초 후 재시도(%d/%d)",
-                               market, e, wait, attempt + 1, max_attempts - 1)
+                logger.warning("[minute_data] 분봉 수집 실패 (%s unit=%d): %s — %.1f초 후 재시도(%d/%d)",
+                               market, unit, e, wait, attempt + 1, max_attempts - 1)
                 time.sleep(wait)
                 continue
-            logger.warning("[minute_data] 분봉 수집 재시도 소진 (%s): %s", market, e)
+            logger.warning("[minute_data] 분봉 수집 재시도 소진 (%s unit=%d): %s", market, unit, e)
             return []
     return []
 
@@ -166,22 +174,35 @@ def bootstrap(market: str, unit: int = 5, max_days: int = 3650,
         while True:
             rows = fetch_minutes_upbit(market, unit, to=to)
             if not rows:
+                logger.info("[minute_data] bootstrap %s unit=%d 페이지%d: 빈 응답 — 수집 종료 (to=%s)",
+                            market, unit, page + 1, to)
                 break
             fetched += len(rows)
             n = _insert(conn, market, unit, rows)
             inserted += n
             oldest = min(r["ts"] for r in rows)
+            newest = max(r["ts"] for r in rows)
             page += 1
+            # 처음 3페이지와 10페이지마다 상세 로그
+            if page <= 3 or page % 10 == 0:
+                logger.info("[minute_data] bootstrap %s unit=%d 페이지%d: "
+                            "%d행 수집 / %d행 삽입 / oldest=%s",
+                            market, unit, page, len(rows), n, oldest)
             if progress_cb and page % 10 == 0:
                 progress_cb(fetched, oldest)
             # 종료 조건: 페이지 전체가 이미 DB에 존재(이전 부트스트랩 도달) 또는 cutoff 초과
             if n == 0:
+                logger.info("[minute_data] bootstrap %s unit=%d 페이지%d: "
+                            "전체 중복 — 이전 수집 도달 (oldest=%s)", market, unit, page, oldest)
                 break
             if oldest <= cutoff:
+                logger.info("[minute_data] bootstrap %s unit=%d 페이지%d: "
+                            "cutoff 도달 (%s)", market, unit, page, cutoff[:10])
                 break
             to = oldest.replace("T", " ")  # 다음 페이지: 가장 오래된 캔들 이전
             time.sleep(_REQ_SLEEP)
-        logger.info("[minute_data] bootstrap %s: %d행 삽입", market, inserted)
+        logger.info("[minute_data] bootstrap %s unit=%d 완료: %d행 삽입 (%d페이지)",
+                    market, unit, inserted, page)
         return inserted
     finally:
         conn.close()

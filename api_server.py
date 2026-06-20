@@ -574,10 +574,29 @@ def _preload_usdt_history():
 
 @app.on_event("startup")
 def _start_minute_collector():
+    log = logging.getLogger("api_server")
     # 시드 복원은 분봉 수집보다 먼저, 동기적으로 실행
     restore_from_seed()
+
+    # 1분봉 데이터가 부족하면 서버 기동 전에 먼저 동기 수집
+    try:
+        from config import MINUTE_1M_COLLECT, MINUTE_1M_ROLLING_DAYS
+    except Exception:
+        MINUTE_1M_COLLECT, MINUTE_1M_ROLLING_DAYS = True, 90
+
+    need_bootstrap = MINUTE_1M_COLLECT and any(
+        not minute_data.has_sufficient_history(m, 1, MINUTE_1M_ROLLING_DAYS)
+        for m in minute_data.MARKETS
+    )
+    if need_bootstrap:
+        log.info("[startup] 1분봉 데이터 부족 — 수집 후 서버를 기동합니다 (최대 10분 소요)")
+        _1m_collector()  # 동기 실행: 완료 전까지 서버 기동 대기
+        log.info("[startup] 1분봉 수집 완료 — 서버 기동")
+    else:
+        # 충분한 데이터 있으면 백그라운드 증분 sync만 실행
+        threading.Thread(target=_1m_collector, daemon=True, name="1m-collector").start()
+
     threading.Thread(target=_minute_collector,    daemon=True, name="minute-collector").start()
-    threading.Thread(target=_1m_collector,        daemon=True, name="1m-collector").start()
     threading.Thread(target=_preload_usdt_history, daemon=True, name="usdt-preload").start()
     threading.Thread(target=_sync_global_then_train, daemon=True, name="global-sync-ml-train").start()
 
