@@ -118,6 +118,17 @@ def fetch_minutes_upbit(market: str, unit: int = 5,
 # ──────────────────────────────────────────────────────────────
 # 수집 로직
 # ──────────────────────────────────────────────────────────────
+def _to_param(ts_kst: str) -> str:
+    """KST 캔들 시각(YYYY-MM-DDTHH:MM:SS)을 업비트 `to` 파라미터용 UTC 문자열로 변환.
+
+    DB에 저장하는 ts는 candle_date_time_kst(KST)지만, 업비트 `to` 파라미터는
+    UTC로 해석된다. 변환 없이 KST 값을 그대로 넘기면 업비트가 9시간 미래로 인식해
+    항상 최신 캔들을 반환 → 페이지네이션이 같은 구간을 맴돌게 된다. (KST=UTC+9)
+    """
+    dt = datetime.strptime(ts_kst, "%Y-%m-%dT%H:%M:%S") - timedelta(hours=9)
+    return dt.strftime("%Y-%m-%d %H:%M:%S")
+
+
 def _insert(conn: sqlite3.Connection, market: str, unit: int, rows: List[Dict]) -> int:
     cur = conn.executemany(
         "INSERT OR IGNORE INTO minute_candles(market, unit, ts, open, high, low, close, volume) "
@@ -199,7 +210,7 @@ def bootstrap(market: str, unit: int = 5, max_days: int = 3650,
                 logger.info("[minute_data] bootstrap %s unit=%d 페이지%d: "
                             "cutoff 도달 (%s)", market, unit, page, cutoff[:10])
                 break
-            to = oldest.replace("T", " ")  # 다음 페이지: 가장 오래된 캔들 이전
+            to = _to_param(oldest)  # 다음 페이지: 가장 오래된 캔들 이전 (UTC 변환)
             time.sleep(_REQ_SLEEP)
         logger.info("[minute_data] bootstrap %s unit=%d 완료: %d행 삽입 (%d페이지)",
                     market, unit, inserted, page)
@@ -230,7 +241,7 @@ def sync(market: str, unit: int = 5) -> int:
             oldest = min(r["ts"] for r in rows)
             if oldest <= last:
                 break
-            to = oldest.replace("T", " ")
+            to = _to_param(oldest)  # UTC 변환 (KST 그대로 넘기면 페이지네이션 정지)
             time.sleep(_REQ_SLEEP)
         logger.info("[minute_data] sync %s: %d행 삽입", market, inserted)
         return inserted
