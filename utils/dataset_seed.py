@@ -63,6 +63,26 @@ def _db_has_data() -> bool:
         return False
 
 
+def _db_has_1m() -> bool:
+    """SQLite에 1분봉이 양 마켓 모두 있으면 True.
+
+    시드 복원 skip 판정용. 기존 설치는 5m만 있어 _db_has_data()=True지만
+    1m이 없으므로, 1m을 포함한 새 시드를 받을 수 있도록 별도 판정한다.
+    """
+    if not DB_PATH.exists():
+        return False
+    try:
+        conn = sqlite3.connect(str(DB_PATH), timeout=10)
+        rows = conn.execute(
+            "SELECT market, COUNT(*) FROM minute_candles WHERE unit=1 GROUP BY market"
+        ).fetchall()
+        conn.close()
+        markets = {m for m, c in rows if c > 0}
+        return {"KRW-BTC", "KRW-USDT"}.issubset(markets)
+    except Exception:
+        return False
+
+
 def _cache_has_data() -> bool:
     """BTC 일봉 캐시가 100건 이상이면 True."""
     if not BTC_CACHE.exists():
@@ -192,11 +212,11 @@ def restore_from_seed(force: bool = False) -> bool:
     if seed is None:
         return False
 
-    # 일봉 캐시·분봉 DB가 모두 차 있을 때만 건너뜀.
-    # 시드가 분봉을 포함하므로, 일봉만 있는 기존 설치자도 분봉을 자동 복원받는다.
+    # 일봉 캐시·분봉 DB(1m 포함)가 모두 차 있을 때만 건너뜀.
+    # 시드가 1m을 포함하므로, 5m만 있는 기존 설치자도 1m을 자동 복원받는다.
     # (복원 후 zip → .imported rename + INSERT OR IGNORE라 중복 위험 없음)
-    if not force and _cache_has_data() and _db_has_data():
-        logger.info("[시드] 일봉 캐시·분봉 DB 모두 존재 — 시드 복원 건너뜀 (%s)", seed.name)
+    if not force and _cache_has_data() and _db_has_1m():
+        logger.info("[시드] 일봉 캐시·1분봉 DB 모두 존재 — 시드 복원 건너뜀 (%s)", seed.name)
         return False
 
     logger.info("[시드] 복원 시작: %s (%.1f MB)", seed, seed.stat().st_size / 1e6)

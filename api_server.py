@@ -351,6 +351,67 @@ def health():
     return {"status": "ok", "date": date.today().isoformat()}
 
 
+# 최적 간격 추정 결과 월별 캐시 (key: f"{market}_{target_month}_{deployed}_{prev_vol}")
+_intervals_cache: Dict[str, dict] = {}
+
+
+@app.get("/api/intervals")
+def get_intervals(
+    market: Literal["KRW-BTC", "KRW-USDT"] = Query(default="KRW-BTC"),
+    capital: float = Query(default=40_000_000, ge=1_000_000),
+    btc_ratio: float = Query(default=0.60, ge=0.0, le=1.0),
+    krw_hold: float = Query(default=0.30, ge=0.0, le=0.7),
+    months: int = Query(default=3, ge=1, le=12),
+    prev_vol: float = Query(default=1e9, ge=0.0),
+    target_month: Optional[str] = Query(default=None, description="YYYY-MM (기본: 이번달)"),
+    refresh: bool = Query(default=False, description="캐시 무시하고 재계산"),
+):
+    """1분봉 기반 부스트/일반 모드 최적 매수·매도 간격 추정.
+
+    매월 1회 산출 후 캐시 — target_month가 같으면 재계산하지 않는다(refresh=true 예외).
+    box_lower/upper는 prediction_service.predict_as_of로 자동 산출.
+    """
+    from utils.interval_optimizer import optimize_intervals
+
+    today = date.today()
+    if target_month is None:
+        target_month = today.strftime("%Y-%m")
+
+    # as_of = 대상 월 전달 말일 (해당 시점까지 데이터로 예측·시뮬)
+    try:
+        tm = date.fromisoformat(f"{target_month}-01")
+    except ValueError:
+        raise HTTPException(status_code=400, detail="target_month는 YYYY-MM 형식이어야 합니다")
+    as_of = (tm - timedelta(days=1)).isoformat()
+
+    # 투입 자본 = capital × (1-krw_hold) × 자산비중
+    deployed = capital * (1 - krw_hold)
+    deployed *= (1 - btc_ratio) if market.endswith("USDT") else btc_ratio
+
+    cache_key = f"{market}_{target_month}_{int(deployed)}_{int(prev_vol)}_{months}"
+    if not refresh and cache_key in _intervals_cache:
+        cached = dict(_intervals_cache[cache_key])
+        cached["cached"] = True
+        return cached
+
+    try:
+        result = optimize_intervals(
+            market=market,
+            as_of=as_of,
+            deployed_krw=deployed,
+            lookback_months=months,
+            prev_vol_monthly=prev_vol,
+        )
+    except Exception as e:
+        raise HTTPException(status_code=422, detail=f"간격 추정 실패: {e}")
+
+    result["target_month"] = target_month
+    result["deployed_krw"] = round(deployed)
+    result["cached"] = False
+    _intervals_cache[cache_key] = dict(result)
+    return result
+
+
 @app.get("/api/ml/status")
 def ml_status():
     """ML σ 모델 상태 및 walk-forward OOS 평가 결과 반환."""
