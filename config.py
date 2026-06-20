@@ -212,9 +212,12 @@ USE_INTRADAY_VOLUME_CALIB = True
 # 5분봉 거래량 과소측정 보정 계수
 # ──────────────────────────────────────────────────────────
 # 단일인벤토리 5m 시뮬은 캔들 내부 왕복을 흡수해 거래량을 과소측정.
-# 해상도 스케일링 실측: osc ∝ Δt^-0.60 → 1m은 5m 대비 약 2.7배 진동 포착.
-# BTC_COEF·USDT_EFF 양쪽에 동일 계수 적용. 실거래 데이터로 재검증 시 조정 권장.
-VOLUME_RESOLUTION_COEF = 2.7   # 5m 과소측정 보정 — index.html BTC_COEF/USDT_EFF에도 동일 적용
+# 실측(2026-03~06, 90일 1m·5m 비교):
+#   로그수익률 기반 그리드 교차 비율 1m/5m = 2.11 (gi=0.2~1.0% 전구간 일치)
+#   실현변동성 비율 = 1.03 → 미세구조 노이즈 무시 가능, 1m 신뢰도 확인
+#   BTC 일평균 총이동거리: 49.1%/일 (3개월 평균, 4월 43.8%~6월 64.5%)
+# BTC_COEF·USDT_EFF 양쪽에 동일 계수 적용. index.html VOL_RES_COEF와 동일값 유지.
+VOLUME_RESOLUTION_COEF = 2.1   # 5m 과소측정 보정 (실측 2.11, index.html VOL_RES_COEF와 동일값 유지)
 # 기동 시 백그라운드로 수집할 분봉 단위. 5m 유지.
 MINUTE_COLLECT_UNIT = 5
 DERIVE_DAILY_FROM_MINUTE = False
