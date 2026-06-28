@@ -683,6 +683,105 @@ def minutes_api(
     return {"market": market, "unit": unit, "count": len(candles), "candles": candles}
 
 
+@app.get("/api/data/status")
+def data_status_api():
+    """데이터 현황 종합: 일봉/분봉/환율 보유 내역(봉 종류·기간·행수) + 실시간 수집 상태.
+
+    '데이터 현황' 탭에서 한눈에 보여주기 위한 집계 엔드포인트.
+    """
+    from pathlib import Path as _Path
+
+    def _range(rows, key):
+        """rows에서 (oldest, newest, count) 추출. 비면 (None,None,0)."""
+        if not rows:
+            return None, None, 0
+        try:
+            return rows[0].get(key), rows[-1].get(key), len(rows)
+        except Exception:
+            return None, None, len(rows)
+
+    daily = []
+    # BTC/USDT 일봉
+    try:
+        btc = get_history()
+        o, n, c = _range(btc, "date")
+        daily.append({"name": "BTC/KRW 일봉", "market": "KRW-BTC", "unit": "1d",
+                      "count": c, "oldest": o, "newest": n})
+    except Exception as e:
+        daily.append({"name": "BTC/KRW 일봉", "unit": "1d", "count": 0, "error": str(e)})
+    try:
+        usdt = get_usdt_history()
+        o, n, c = _range(usdt, "date")
+        daily.append({"name": "USDT/KRW 일봉", "market": "KRW-USDT", "unit": "1d",
+                      "count": c, "oldest": o, "newest": n})
+    except Exception as e:
+        daily.append({"name": "USDT/KRW 일봉", "unit": "1d", "count": 0, "error": str(e)})
+
+    # 환율 / 달러BTC / 김프
+    macro = []
+    try:
+        from utils.fx_data import get_fx_history, get_btc_usd_history, kimchi_premium_series
+        fx = get_fx_history()
+        o, n, c = _range(fx, "date")
+        macro.append({"name": "원/달러 환율(USD/KRW)", "unit": "1d", "count": c, "oldest": o, "newest": n})
+        usd = get_btc_usd_history()
+        o, n, c = _range(usd, "date")
+        macro.append({"name": "달러 BTC(BTC/USD)", "unit": "1d", "count": c, "oldest": o, "newest": n})
+        kimp = kimchi_premium_series()
+        o, n, c = _range(kimp, "date")
+        macro.append({"name": "김치프리미엄(%)", "unit": "1d", "count": c, "oldest": o, "newest": n})
+    except Exception as e:
+        macro.append({"name": "환율/김프", "count": 0, "error": str(e)})
+
+    # 분봉 (SQLite)
+    minute = []
+    try:
+        stats = minute_data.get_stats()
+        label = {"KRW-BTC": "BTC", "KRW-USDT": "USDT"}
+        for key in sorted(stats.keys()):
+            s = stats[key]
+            minute.append({
+                "name": f"{label.get(s['market'], s['market'])} {s['unit']}분봉",
+                "market": s["market"], "unit": f"{s['unit']}m",
+                "count": s["count"], "oldest": s["oldest"], "newest": s["newest"],
+            })
+    except Exception as e:
+        minute.append({"name": "분봉", "count": 0, "error": str(e)})
+
+    # 실시간 가격 수집 상태
+    live = {}
+    try:
+        btc_px = fetch_current_price(fallback_price=None)
+        live["btc"] = {"price": btc_px.price, "is_live": btc_px.is_live,
+                       "source": getattr(btc_px, "source", None)}
+    except Exception as e:
+        live["btc"] = {"is_live": False, "error": str(e)}
+    try:
+        usdt_px = fetch_usdt_price(fallback_price=None)
+        live["usdt"] = {"price": usdt_px.price, "is_live": usdt_px.is_live,
+                        "source": getattr(usdt_px, "source", None)}
+    except Exception as e:
+        live["usdt"] = {"is_live": False, "error": str(e)}
+
+    # 시드 파일 현황
+    seed_path = _Path(__file__).parent / "data" / "dataset_seed.zip"
+    seed_done = _Path(__file__).parent / "data" / "dataset_seed.zip.imported"
+    seed = {
+        "pending": seed_path.exists(),       # 아직 복원 전 시드 대기 중
+        "imported": seed_done.exists(),      # 복원 완료 표시 존재
+    }
+
+    return {
+        "daily": daily,
+        "macro": macro,
+        "minute": minute,
+        "minute_collection": {"status_5m": dict(_minute_status), "status_1m": dict(_1m_status)},
+        "live": live,
+        "seed": seed,
+        "as_of": date.today().isoformat(),
+    }
+
+
 @app.get("/api/export/dataset")
 def export_dataset_api():
     """ML 학습용 데이터셋 ZIP 생성 후 다운로드.

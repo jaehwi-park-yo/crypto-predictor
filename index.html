@@ -387,6 +387,7 @@
         <div class="tab" onclick="switchTab('btc',this)">₿ BTC/KRW</div>
         <div class="tab" onclick="switchTab('usdt',this)">💵 USDT/KRW</div>
         <div class="tab" onclick="switchTab('monitor',this)">📡 모니터</div>
+        <div class="tab" onclick="switchTab('data',this)">🗂️ 데이터 현황</div>
         <div class="tab" onclick="switchTab('feedback',this)">💬 피드백</div>
       </div>
 
@@ -572,7 +573,6 @@
             <span>기준 시점: <b id="predict-as-of">─</b></span>
             <span>잔여: <b id="predict-days-left">─</b></span>
             <button onclick="fetchDashboard()" style="margin-left:4px;padding:3px 10px;font-size:.78rem;background:rgba(79,142,247,0.18);color:#4f8ef7;border:1px solid rgba(79,142,247,0.4);border-radius:5px;cursor:pointer">🔄 예측 새로고침</button>
-            <button onclick="downloadDataset(this)" title="일봉·분봉·월별 라벨셋을 ZIP으로 내보냅니다 (ML 학습용)" style="padding:3px 10px;font-size:.78rem;background:rgba(44,160,44,0.15);color:#2ca02c;border:1px solid rgba(44,160,44,0.4);border-radius:5px;cursor:pointer">📤 데이터셋 내보내기</button>
             <span id="predict-loading" style="display:none;color:var(--muted)">불러오는 중…</span>
           </div>
 
@@ -1161,6 +1161,64 @@
         </div>
       </div>
 
+      <!-- ═══════════════════════════════════ 탭: 데이터 현황 ═══════════════════════ -->
+      <div id="tab-data" class="tab-panel">
+        <div style="margin-top:16px;display:flex;flex-direction:column;gap:16px">
+          <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+            <h2 style="margin:0;font-size:1.05rem">🗂️ 데이터 현황</h2>
+            <span id="data-asof" style="font-size:.78rem;color:var(--muted)">로딩 중…</span>
+            <span style="margin-left:auto;display:flex;gap:8px">
+              <button onclick="fetchDataStatus()" style="padding:4px 12px;font-size:.78rem;background:rgba(79,142,247,0.18);color:#4f8ef7;border:1px solid rgba(79,142,247,0.4);border-radius:5px;cursor:pointer">🔄 새로고침</button>
+              <button onclick="downloadDataset(this)" title="일봉·분봉·월별 라벨셋을 ZIP으로 내보냅니다 (ML 학습용)" style="padding:4px 12px;font-size:.78rem;background:rgba(44,160,44,0.15);color:#2ca02c;border:1px solid rgba(44,160,44,0.4);border-radius:5px;cursor:pointer">📤 데이터셋 내보내기</button>
+            </span>
+          </div>
+
+          <!-- 실시간 수집 상태 -->
+          <div class="info-card">
+            <h3>📡 실시간 수집 상태</h3>
+            <div id="data-live" class="info-grid" style="margin-top:4px">
+              <div style="color:var(--muted);font-size:.82rem">로딩 중…</div>
+            </div>
+          </div>
+
+          <!-- 일봉 -->
+          <div class="info-card">
+            <h3>📅 일봉 데이터</h3>
+            <table class="zone-tbl" style="margin-top:6px">
+              <thead><tr><th>데이터</th><th>봉</th><th>기간</th><th style="text-align:right">행수</th></tr></thead>
+              <tbody id="data-daily-body"></tbody>
+            </table>
+          </div>
+
+          <!-- 분봉 -->
+          <div class="info-card">
+            <h3>⏱️ 분봉 데이터 (SQLite)</h3>
+            <table class="zone-tbl" style="margin-top:6px">
+              <thead><tr><th>데이터</th><th>봉</th><th>기간</th><th style="text-align:right">행수</th></tr></thead>
+              <tbody id="data-minute-body"></tbody>
+            </table>
+          </div>
+
+          <!-- 거시지표 -->
+          <div class="info-card">
+            <h3>🌐 거시지표 (환율·달러BTC·김프)</h3>
+            <table class="zone-tbl" style="margin-top:6px">
+              <thead><tr><th>데이터</th><th>봉</th><th>기간</th><th style="text-align:right">행수</th></tr></thead>
+              <tbody id="data-macro-body"></tbody>
+            </table>
+          </div>
+
+          <!-- 시드 상태 -->
+          <div id="data-seed" style="font-size:.8rem;color:var(--muted)"></div>
+
+          <div style="font-size:.72rem;color:var(--muted)">
+            ※ 일봉/분봉은 시드(dataset_seed.zip) 복원 + 업비트 공개 API 증분 수집으로 채워집니다.
+            내보내기 ZIP을 다른 설치본의 <b>data/dataset_seed.zip</b>으로 두면 동일 데이터셋을 이식할 수 있습니다
+            (docs/데이터셋_적용_매뉴얼.txt 참고).
+          </div>
+        </div>
+      </div>
+
       <!-- ═══════════════════════════════════ 탭5: 피드백 ═══════════════════════ -->
       <div id="tab-feedback" class="tab-panel">
         <div style="margin-top:16px" class="feedback-section">
@@ -1406,6 +1464,7 @@ function switchTab(id, el) {
     window._chartM ? Plotly.Plots.resize('chart-monitor') : buildMonitorChart();
     updateUsdtMonitorPanel();
   }
+  if (id === 'data') { fetchDataStatus(); }
 }
 
 // ─── 모니터 서브탭 (BTC / USDT) ─────────────────────────────────────────────
@@ -3230,6 +3289,78 @@ async function downloadDataset(btn) {
     console.warn('[데이터셋 내보내기 실패]', e);
   } finally {
     setTimeout(() => { btn.textContent = orig; btn.disabled = false; }, 2500);
+  }
+}
+
+// ─── 🗂️ 데이터 현황 ──────────────────────────────────────────────────────────
+function _fmtRange(oldest, newest) {
+  if (!oldest && !newest) return '<span style="color:var(--muted)">없음</span>';
+  const trim = s => (s || '').replace('T', ' ').slice(0, 16);
+  return `${trim(oldest)} ~ ${trim(newest)}`;
+}
+function _dataRows(tbodyId, rows) {
+  const tb = document.getElementById(tbodyId);
+  if (!tb) return;
+  if (!rows || !rows.length) { tb.innerHTML = '<tr><td colspan="4" style="color:var(--muted)">데이터 없음</td></tr>'; return; }
+  tb.innerHTML = rows.map(r => {
+    const cnt = (r.count || 0).toLocaleString();
+    const period = r.error ? `<span style="color:#c96e6e">오류: ${r.error}</span>` : _fmtRange(r.oldest, r.newest);
+    return `<tr><td>${r.name || '-'}</td><td style="color:var(--muted)">${r.unit || '-'}</td>`
+      + `<td>${period}</td><td style="text-align:right;font-weight:600">${cnt}</td></tr>`;
+  }).join('');
+}
+async function fetchDataStatus() {
+  const asof = document.getElementById('data-asof');
+  if (asof) asof.textContent = '불러오는 중…';
+  try {
+    const res = await fetch(`${API_BASE}/api/data/status`, {signal: AbortSignal.timeout(20000)});
+    if (!res.ok) throw new Error('status ' + res.status);
+    const d = await res.json();
+
+    _dataRows('data-daily-body', d.daily);
+    _dataRows('data-minute-body', d.minute);
+    _dataRows('data-macro-body', d.macro);
+
+    // 실시간 수집 상태
+    const liveEl = document.getElementById('data-live');
+    if (liveEl) {
+      const card = (label, q) => {
+        if (!q) return '';
+        const ok = q.is_live;
+        const dot = ok ? '🟢' : '⚪';
+        const px = q.price > 0 ? q.price.toLocaleString() + '원' : '─';
+        const src = q.error ? `<span style="color:#c96e6e">오류</span>` : (q.source || '-');
+        return `<div class="info-card" style="padding:10px 14px">
+          <div style="font-size:.78rem;color:var(--muted)">${label}</div>
+          <div style="font-size:.95rem;font-weight:700">${dot} ${px}</div>
+          <div style="font-size:.72rem;color:var(--muted)">소스: ${src} · ${ok ? '실시간' : '폴백/캐시'}</div>
+        </div>`;
+      };
+      const mc = d.minute_collection || {};
+      const st5 = mc.status_5m?.state || '-';
+      const st1 = mc.status_1m?.state || '-';
+      liveEl.innerHTML = card('BTC/KRW', d.live?.btc) + card('USDT/KRW', d.live?.usdt)
+        + `<div class="info-card" style="padding:10px 14px">
+            <div style="font-size:.78rem;color:var(--muted)">분봉 수집기</div>
+            <div style="font-size:.82rem;font-weight:600">5분봉: ${st5}</div>
+            <div style="font-size:.82rem;font-weight:600">1분봉: ${st1}</div>
+          </div>`;
+    }
+
+    // 시드 상태
+    const seedEl = document.getElementById('data-seed');
+    if (seedEl && d.seed) {
+      let msg;
+      if (d.seed.pending) msg = '🟡 시드 대기 중 — data/dataset_seed.zip 존재. 다음 서버 기동 시 복원됩니다.';
+      else if (d.seed.imported) msg = '✅ 시드 복원 완료 — dataset_seed.zip.imported 표시 존재. (재적용하려면 .imported 삭제 후 새 ZIP 배치)';
+      else msg = 'ℹ️ 시드 파일 없음 — API 증분 수집만으로 운영 중.';
+      seedEl.textContent = msg;
+    }
+
+    if (asof) asof.textContent = `기준: ${d.as_of || ''} · 업데이트 ${new Date().toLocaleTimeString('ko-KR', {hour:'2-digit', minute:'2-digit'})}`;
+  } catch (e) {
+    console.warn('[데이터 현황 로딩 실패]', e);
+    if (asof) asof.textContent = '⚠️ 서버 연결 실패 — api_server.py 실행 확인';
   }
 }
 
