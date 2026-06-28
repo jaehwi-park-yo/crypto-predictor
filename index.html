@@ -598,7 +598,7 @@
                 <tbody>
                   <tr class="inner-row">
                     <td><span style="color:var(--inner-border);font-weight:700">1σ 내부 (보수)</span></td>
-                    <td id="btc-inner-range2">269M ~ 364M원</td>
+                    <td id="btc-inner-range2">─</td>
                     <td id="btc-inner-int" title="매도간격이 수익 결정, 매수간격이 거래량 결정">매수 0.5% / 매도 1.0%</td>
                     <td id="btc-inner-cap">10.1M</td>
                     <td id="btc-inner-bots">71개</td>
@@ -608,7 +608,7 @@
                   </tr>
                   <tr class="outer-row">
                     <td><span style="color:var(--outer-border);font-weight:700">2σ 전체 (1σ포함 공격)</span></td>
-                    <td id="btc-outer-range2">231M~424M (1σ 중첩)</td>
+                    <td id="btc-outer-range2">─</td>
                     <td id="btc-outer-int" title="매도간격이 수익 결정, 매수간격이 거래량 결정">매수 0.3% / 매도 0.5%</td>
                     <td id="btc-outer-cap">6.7M</td>
                     <td id="btc-outer-bots">82개</td>
@@ -1798,11 +1798,13 @@ function updateCapitalDisplay(val) {
   const el = document.getElementById('capitalDisplay');
   if (el) el.textContent = n >= 1e8 ? (n/1e8).toFixed(1) + '억원' : Math.round(n/1e4) + '만원';
 }
+const CAPITAL_MAX = 1e11;     // 자본 상한 1,000억 (비현실 입력·추천 전수탐색 폭주 방지)
+const PREV_VOL_MAX = 1e13;    // 전월 거래량 상한 (리워드 최고 티어를 한참 넘는 값)
 function bumpCapital(delta, reset) {
   const el = document.getElementById('capital');
   if (!el) return;
   const cur = +el.value || 0;
-  el.value = reset ? 0 : Math.max(0, cur + delta);
+  el.value = reset ? 0 : Math.min(CAPITAL_MAX, Math.max(0, cur + delta));
   updateCapitalDisplay(el.value);
   onCapitalChange();
 }
@@ -1810,7 +1812,7 @@ function bumpPrevVol(delta, reset) {
   const el = document.getElementById('prevVol');
   if (!el) return;
   const cur = +el.value || 0;
-  el.value = reset ? 0 : Math.max(0, cur + delta);
+  el.value = reset ? 0 : Math.min(PREV_VOL_MAX, Math.max(0, cur + delta));
   onPrevVolChange();
 }
 function onPrevVolChange() {
@@ -2581,23 +2583,41 @@ function stepVolTarget(delta) {
   sl.value = next;
   onVolTargetChange(next);
 }
+// 자동추천 모드 진입 전 사용자가 직접 맞춘 슬라이더 값 백업 (해제 시 원복용)
+let _manualSliderBackup = null;
 function onVolTargetChange(val) {
   const target = Math.max(0, Math.min(200, Math.round(+val) || 0));
   // 슬라이더·직접입력 양방향 동기화
   document.getElementById('volTarget').value = target;
   document.getElementById('volTargetInput').value = target;
   const status = document.getElementById('volTargetStatus');
-  if (target === 0) {
-    status.textContent = '0 = 수동 모드 · 1~200억 설정 시 아래 3개 변수 자동 추천';
-    status.style.color = 'var(--muted)';
-    return;
-  }
-  const { pick, reached } = recommendParams(target * 1e8);
-  // 추천값으로 슬라이더 이동
   const setSlider = (id, v, lblId) => {
     document.getElementById(id).value = v;
     document.getElementById(lblId).textContent = v + '%';
   };
+  if (target === 0) {
+    // 수동 모드 복귀 — 자동추천이 덮어쓴 슬라이더를 진입 전 값으로 원복
+    if (_manualSliderBackup) {
+      setSlider('btcRatio',   _manualSliderBackup.b, 'btcRatioVal');
+      setSlider('innerRatio', _manualSliderBackup.i, 'innerRatioVal');
+      setSlider('krwHold',    _manualSliderBackup.k, 'krwHoldVal');
+      _manualSliderBackup = null;
+      updateMetrics();
+    }
+    status.textContent = '0 = 수동 모드 · 1~200억 설정 시 아래 3개 변수 자동 추천';
+    status.style.color = 'var(--muted)';
+    return;
+  }
+  // 자동 모드 최초 진입 시 현재(수동) 값 백업
+  if (!_manualSliderBackup) {
+    _manualSliderBackup = {
+      b: +document.getElementById('btcRatio').value,
+      i: +document.getElementById('innerRatio').value,
+      k: +document.getElementById('krwHold').value,
+    };
+  }
+  const { pick, reached } = recommendParams(target * 1e8);
+  // 추천값으로 슬라이더 이동
   setSlider('btcRatio', pick.b, 'btcRatioVal');
   setSlider('innerRatio', pick.i, 'innerRatioVal');
   setSlider('krwHold', pick.k, 'krwHoldVal');
@@ -3318,7 +3338,10 @@ function _dataRows(tbodyId, rows) {
   tb.innerHTML = rows.map(r => {
     const cnt = (r.count || 0).toLocaleString();
     const period = r.error ? `<span style="color:#c96e6e">오류: ${r.error}</span>` : _fmtRange(r.oldest, r.newest);
-    return `<tr><td>${r.name || '-'}</td><td style="color:var(--muted)">${r.unit || '-'}</td>`
+    // 합성 폴백(실데이터·캐시 모두 없을 때)은 실데이터처럼 신뢰하지 않도록 배지 표기
+    const synthBadge = r.synthetic
+      ? ` <span title="실데이터·캐시 없음 → 합성 폴백" style="color:#d4b44a;font-size:.72rem">⚠ 합성</span>` : '';
+    return `<tr><td>${r.name || '-'}${synthBadge}</td><td style="color:var(--muted)">${r.unit || '-'}</td>`
       + `<td>${period}</td><td style="text-align:right;font-weight:600">${cnt}</td></tr>`;
   }).join('');
 }
@@ -3339,14 +3362,21 @@ async function fetchDataStatus() {
     if (liveEl) {
       const card = (label, q) => {
         if (!q) return '';
+        // 수집 오류는 '폴백/캐시'로 뭉뚱그리지 않고 명시적으로 '수집 실패'(빨강)로 구분
+        if (q.error) {
+          return `<div class="info-card" style="padding:10px 14px;border-color:#5a1a1a">
+            <div style="font-size:.78rem;color:var(--muted)">${label}</div>
+            <div style="font-size:.95rem;font-weight:700;color:#c96e6e">⚠ 수집 실패</div>
+            <div style="font-size:.72rem;color:var(--muted)">실시간·캐시 모두 확인 불가</div>
+          </div>`;
+        }
         const ok = q.is_live;
         const dot = ok ? '🟢' : '⚪';
         const px = q.price > 0 ? q.price.toLocaleString() + '원' : '─';
-        const src = q.error ? `<span style="color:#c96e6e">오류</span>` : (q.source || '-');
         return `<div class="info-card" style="padding:10px 14px">
           <div style="font-size:.78rem;color:var(--muted)">${label}</div>
           <div style="font-size:.95rem;font-weight:700">${dot} ${px}</div>
-          <div style="font-size:.72rem;color:var(--muted)">소스: ${src} · ${ok ? '실시간' : '폴백/캐시'}</div>
+          <div style="font-size:.72rem;color:var(--muted)">소스: ${q.source || '-'} · ${ok ? '실시간' : '폴백/캐시'}</div>
         </div>`;
       };
       const mc = d.minute_collection || {};
@@ -3374,6 +3404,14 @@ async function fetchDataStatus() {
   } catch (e) {
     console.warn('[데이터 현황 로딩 실패]', e);
     if (asof) asof.textContent = '⚠️ 서버 연결 실패 — api_server.py 실행 확인';
+    // 헤더만 에러로 바꾸고 표에 옛 값이 남으면 혼동 → 표 본문도 실패 상태로 통일
+    const failRow = '<tr><td colspan="4" style="color:#c96e6e">서버 연결 실패</td></tr>';
+    ['data-daily-body', 'data-minute-body', 'data-macro-body'].forEach(id => {
+      const tb = document.getElementById(id);
+      if (tb) tb.innerHTML = failRow;
+    });
+    const liveEl = document.getElementById('data-live');
+    if (liveEl) liveEl.innerHTML = '<div style="color:#c96e6e;font-size:.82rem">실시간 상태 확인 불가 (서버 연결 실패)</div>';
   }
 }
 

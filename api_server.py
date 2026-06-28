@@ -763,20 +763,28 @@ def data_status_api():
         except Exception:
             return None, None, len(rows)
 
+    # 캐시 파일이 없는데 일봉이 잡히면 합성 폴백(_synthetic_realistic)이라는 뜻 —
+    # 실데이터처럼 신뢰하지 않도록 표식한다. (get_history는 합성을 캐시에 저장하지 않음)
+    _data_dir = _Path(__file__).parent / "data"
+    btc_cache_exists = (_data_dir / "btc_history.json").exists()
+    usdt_cache_exists = (_data_dir / "usdt_history.json").exists()
+
     daily = []
     # BTC/USDT 일봉
     try:
         btc = get_history()
         o, n, c = _range(btc, "date")
         daily.append({"name": "BTC/KRW 일봉", "market": "KRW-BTC", "unit": "1d",
-                      "count": c, "oldest": o, "newest": n})
+                      "count": c, "oldest": o, "newest": n,
+                      "synthetic": c > 0 and not btc_cache_exists})
     except Exception as e:
         daily.append({"name": "BTC/KRW 일봉", "unit": "1d", "count": 0, "error": str(e)})
     try:
         usdt = get_usdt_history()
         o, n, c = _range(usdt, "date")
         daily.append({"name": "USDT/KRW 일봉", "market": "KRW-USDT", "unit": "1d",
-                      "count": c, "oldest": o, "newest": n})
+                      "count": c, "oldest": o, "newest": n,
+                      "synthetic": c > 0 and not usdt_cache_exists})
     except Exception as e:
         daily.append({"name": "USDT/KRW 일봉", "unit": "1d", "count": 0, "error": str(e)})
 
