@@ -1317,7 +1317,9 @@ let D = {
   meas_in:{x:[],o:[],h:[],l:[],c:[]},
   meas_w:{x:[],o:[],h:[],l:[],c:[]},
   meas_bu:{x:[],o:[],h:[],l:[],c:[]},
-  meas_bl:{x:[],o:[],h:[],l:[],c:[]}
+  meas_bl:{x:[],o:[],h:[],l:[],c:[]},
+  // 모니터 탭 전용 — 진행 중인 현재 월(백엔드 monitor 블록). 미수신 시 폴백.
+  monitor:null
 };
 
 // ─── USDT/KRW 박스 모델 — 실시간 가격 기준으로 동적 갱신 ────────────────────
@@ -2722,29 +2724,33 @@ function buildUSDTChart() {
 // ─── 모니터 차트 ─────────────────────────────────────────────────────────────
 function buildMonitorChart() {
   window._chartM = true;
-  const s = D.snap; const m = D.mon;
-  const pre30 = {x:D.pre_x.slice(-30),o:D.pre_o.slice(-30),h:D.pre_h.slice(-30),
-                 l:D.pre_l.slice(-30),c:D.pre_c.slice(-30)};
+  // 모니터 탭은 '진행 중인 현재 월' 데이터(D.monitor)를 쓴다 — 예측 탭(다음달)과 분리.
+  // 구버전 백엔드 호환: D.monitor 없으면 최상위 키로 폴백.
+  const MD = D.monitor || D;
+  const s = (D.monitor && D.monitor.snap) || D.snap;
+  const m = (D.monitor && D.monitor.mon) || D.mon;
+  const pre30 = {x:MD.pre_x.slice(-30),o:MD.pre_o.slice(-30),h:MD.pre_h.slice(-30),
+                 l:MD.pre_l.slice(-30),c:MD.pre_c.slice(-30)};
 
   const traces = [
     {type:'candlestick', x:pre30.x, open:pre30.o, high:pre30.h, low:pre30.l, close:pre30.c,
      name:'사전 히스토리', opacity:0.3,
      increasing:{line:{color:'#d24f45'}}, decreasing:{line:{color:'#4169e1'}}},
     ...[
-      [D.meas_in,'#2ca02c','🟢 박스 내'],
-      [D.meas_w,'#ff7f0e','🟡 경고'],
-      [D.meas_bu,'#d62728','🔴 상방이탈'],
-      [D.meas_bl,'#8b0000','🔴 하방이탈'],
+      [MD.meas_in,'#2ca02c','🟢 박스 내'],
+      [MD.meas_w,'#ff7f0e','🟡 경고'],
+      [MD.meas_bu,'#d62728','🔴 상방이탈'],
+      [MD.meas_bl,'#8b0000','🔴 하방이탈'],
     ].filter(([d])=>d.x.length).map(([d,color,name])=>({
       type:'candlestick', x:d.x, open:d.o, high:d.h, low:d.l, close:d.c,
       name, increasing:{line:{color}}, decreasing:{line:{color}},
     })),
-    ...(D.fut_rem.length ? [{
-      type:'scatter', x:[...D.fut_rem,...[...D.fut_rem].reverse()],
-      y:[...D.fut_rem.map(()=>m.rev_u2),...[...D.fut_rem].reverse().map(()=>m.rev_l2)],
+    ...(MD.fut_rem.length ? [{
+      type:'scatter', x:[...MD.fut_rem,...[...MD.fut_rem].reverse()],
+      y:[...MD.fut_rem.map(()=>m.rev_u2),...[...MD.fut_rem].reverse().map(()=>m.rev_l2)],
       fill:'toself', fillcolor:'rgba(255,165,0,0.08)', line:{width:0}, name:'수정 2σ 존', hoverinfo:'skip',
     }] : []),
-    ...D.fut_rem.length ? [
+    ...MD.fut_rem.length ? [
       [s.ru,'#2ca02c','원본 권장 상단','dot',1.5],
       [s.rl,'#2ca02c','원본 권장 하단','dot',1.5],
       [m.rev_ru,'#ff7f0e','수정 권장 상단','solid',2.5],
@@ -2752,17 +2758,17 @@ function buildMonitorChart() {
       [m.rev_u2,'#d4a017','수정 2σ 상단','dot',1.5],
       [m.rev_l2,'#d4a017','수정 2σ 하단','dot',1.5],
     ].filter(([y])=>y>0).map(([y,color,name,dash,width])=>({
-      type:'scatter', x:D.fut_rem, y:D.fut_rem.map(()=>y), mode:'lines',
+      type:'scatter', x:MD.fut_rem, y:MD.fut_rem.map(()=>y), mode:'lines',
       line:{color,width,dash}, name,
       hovertemplate:`${name}: %{y:,.0f}원<extra></extra>`,
     })) : [],
-    {type:'scatter', x:[m.today || D.pre_x[D.pre_x.length-1]], y:[m.cur_price], mode:'markers+text',
+    {type:'scatter', x:[m.today || MD.pre_x[MD.pre_x.length-1]], y:[m.cur_price], mode:'markers+text',
      marker:{size:12, color:'gold', symbol:'diamond'},
      text:['  현재가<br>  '+fmt(m.cur_price)+'원'], textposition:'middle right',
      name:'현재가'},
   ];
 
-  const todayMark = m.today || D.pre_x[D.pre_x.length-1] || '';
+  const todayMark = m.today || MD.pre_x[MD.pre_x.length-1] || '';
   Plotly.newPlot('chart-monitor', traces, {
     paper_bgcolor:'#1a1d23', plot_bgcolor:'#1a1d23',
     font:{color:'#e0e0e0'}, height:480,
@@ -2779,7 +2785,10 @@ function buildMonitorChart() {
 
 // ─── 모니터 탭 패널 갱신 ─────────────────────────────────────────────────────
 function updateMonitorPanel() {
-  const s = D.snap; const m = D.mon;
+  // 모니터 탭은 '진행 중인 현재 월'(D.monitor) 기준. 예측 탭(다음달)과 분리.
+  const MD = D.monitor || D;
+  const s = (D.monitor && D.monitor.snap) || D.snap;
+  const m = (D.monitor && D.monitor.mon) || D.mon;
   const set = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
 
   // 헤딩
@@ -2925,7 +2934,7 @@ function updateMonitorPanel() {
   }
 
   // 일별 측정 테이블 헤딩
-  const allMeasDates = [...D.meas_in.x, ...D.meas_w.x, ...D.meas_bu.x, ...D.meas_bl.x].sort();
+  const allMeasDates = [...MD.meas_in.x, ...MD.meas_w.x, ...MD.meas_bu.x, ...MD.meas_bl.x].sort();
   if (allMeasDates.length) {
     set('meas-table-heading', `📅 일별 측정 내역 (${allMeasDates[0]} ~ ${allMeasDates[allMeasDates.length-1]})`);
   } else {
@@ -3217,17 +3226,19 @@ function updateUsdtRevisionNotice() {
 function buildMeasTable() {
   const tbody = document.getElementById('meas-table');
   if (!tbody) return;
-  const inner_set = new Set(D.meas_in.x);
-  const warn_set  = new Set(D.meas_w.x);
-  const bu_set    = new Set(D.meas_bu.x);
-  const bl_set    = new Set(D.meas_bl.x);
+  // 모니터 탭의 일별 측정 — 진행 중인 현재 월(D.monitor) 기준.
+  const MD = D.monitor || D;
+  const inner_set = new Set(MD.meas_in.x);
+  const warn_set  = new Set(MD.meas_w.x);
+  const bu_set    = new Set(MD.meas_bu.x);
+  const bl_set    = new Set(MD.meas_bl.x);
   const closes = {};
-  D.meas_in.x.forEach((d,i)=>closes[d]=D.meas_in.c[i]);
-  D.meas_w.x.forEach((d,i)=>closes[d]=D.meas_w.c[i]);
-  D.meas_bu.x.forEach((d,i)=>closes[d]=D.meas_bu.c[i]);
-  D.meas_bl.x.forEach((d,i)=>closes[d]=D.meas_bl.c[i]);
+  MD.meas_in.x.forEach((d,i)=>closes[d]=MD.meas_in.c[i]);
+  MD.meas_w.x.forEach((d,i)=>closes[d]=MD.meas_w.c[i]);
+  MD.meas_bu.x.forEach((d,i)=>closes[d]=MD.meas_bu.c[i]);
+  MD.meas_bl.x.forEach((d,i)=>closes[d]=MD.meas_bl.c[i]);
 
-  const allDates = [...D.meas_in.x,...D.meas_w.x,...D.meas_bu.x,...D.meas_bl.x].sort();
+  const allDates = [...MD.meas_in.x,...MD.meas_w.x,...MD.meas_bu.x,...MD.meas_bl.x].sort();
   tbody.innerHTML = '';
   allDates.forEach(d=>{
     const c = closes[d]||0;

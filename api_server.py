@@ -143,95 +143,9 @@ def get_predict(
     }
 
 
-@app.get("/api/dashboard")
-def get_dashboard(
-    capital: float = Query(default=40_000_000, ge=1_000_000),
-    krw_hold: float = Query(default=0.30, ge=0.0, le=0.7),
-    aggressiveness: Literal["conservative", "balanced", "aggressive"] = Query(default="balanced"),
-    history_days: int = Query(default=120, ge=30, le=365),
-):
-    """대시보드 전체 데이터: 예측 스냅, 모니터링, 차트용 캔들, 그리드 라인."""
-    # 실시간 가격을 먼저 확보 → 캐시가 실가격과 30% 이상 괴리되면 강제 재수집
-    # (합성 데이터로 오염된 캐시가 영구 사용되는 것을 방지)
-    live_check = fetch_current_price(fallback_price=None)
-    live_px = live_check.price if (live_check.is_live and live_check.price > 0) else None
-    history = get_history(live_price=live_px)
-    today = date.today()
-
-    # 예측 시점 결정
-    last_day_of_month = monthrange(today.year, today.month)[1]
-    days_left = last_day_of_month - today.day
-
-    if days_left >= 8:
-        # 이번달 예측: as_of = 전달 말일
-        first_of_this_month = date(today.year, today.month, 1)
-        as_of = (first_of_this_month - timedelta(days=1)).isoformat()
-    else:
-        # 다음달 예측: as_of = 어제
-        as_of = (today - timedelta(days=1)).isoformat()
-
-    try:
-        snap = predict_as_of(
-            history, as_of,
-            capital_krw=capital,
-            krw_hold_ratio=krw_hold,
-            aggressiveness=aggressiveness,
-            use_ml_sigma=True,
-        )
-    except ValueError as e:
-        raise HTTPException(status_code=422, detail=str(e))
-
-    # monitor() 호출
-    mon_obj = None  # 아래 meas_* 루프에서 참조하므로 None으로 초기화
-    try:
-        history_fallback = get_history()
-        fallback_btc = float(history_fallback[-1]["close"]) if history_fallback else None
-        price_obj = fetch_current_price(fallback_price=fallback_btc)
-        # 실시간 가격이 없으면 폴백 가격도 전달 (monitor가 latest close 대신 사용)
-        live_price = price_obj.price if price_obj.price and price_obj.price > 0 else None
-
-        mon_obj = monitor_prediction(snap, history, today.isoformat(), live_price=live_price)
-        mon_data = {
-            "elapsed":     mon_obj.elapsed_days,
-            "total":       mon_obj.total_days,
-            "progress":    round(mon_obj.progress_pct, 1),
-            "containment": round(mon_obj.measured_containment_pct, 1),
-            "status":      mon_obj.overall_status,
-            "detail":      mon_obj.status_detail,
-            "sigma_change": round(mon_obj.sigma_change_pct, 2),
-            "box_shift":   round(mon_obj.box_center_shift_pct, 2),
-            "cur_price":   mon_obj.current_price,
-            "rev_ru":      mon_obj.forecast_revised_upper,
-            "rev_rl":      mon_obj.forecast_revised_lower,
-            "rev_u1":      mon_obj.forecast_upper_1s,
-            "rev_l1":      mon_obj.forecast_lower_1s,
-            "rev_u2":      mon_obj.forecast_upper_2s,
-            "rev_l2":      mon_obj.forecast_lower_2s,
-            "today":       today.isoformat(),
-            # 데드존/그리드락 카운터
-            "consec_dn":   mon_obj.consec_breach_lower,
-            "consec_up":   mon_obj.consec_breach_upper,
-            "reset_rec":   mon_obj.reset_recommended,
-        }
-    except Exception as e:
-        import logging as _log
-        _log.getLogger("api_server").warning("[dashboard] monitor() 실패: %s", e)
-        history_fallback2 = get_history()
-        fallback_price = float(history_fallback2[-1]["close"]) if history_fallback2 else snap.reference_price
-        mon_data = {
-            "elapsed": 0, "total": 31, "progress": 0, "containment": 100,
-            "status": "PREDICTED", "detail": "예측 단계",
-            "sigma_change": 0, "box_shift": 0, "cur_price": fallback_price,
-            "rev_ru": snap.recommended_upper, "rev_rl": snap.recommended_lower,
-            "rev_u1": snap.box_upper_1s_asym or snap.box_upper_1s,
-            "rev_l1": snap.box_lower_1s_asym or snap.box_lower_1s,
-            "rev_u2": snap.box_upper_2s_asym or snap.box_upper_2s,
-            "rev_l2": snap.box_lower_2s_asym or snap.box_lower_2s,
-            "today": today.isoformat(),
-        }
-
-    # snap 직렬화
-    snap_data = {
+def _serialize_snap(snap):
+    """예측 스냅을 대시보드/모니터가 쓰는 JSON dict로 직렬화."""
+    return {
         "as_of":          snap.as_of_date,
         "target":         snap.target_month,
         "ref":            snap.reference_price,
@@ -272,26 +186,72 @@ def get_dashboard(
         "reset_days":     snap.dead_zone_reset_days,
     }
 
+
+def _monitor_chart_bundle(snap, history, today, history_days):
+    """주어진 예측 스냅(snap)에 대해 monitor() 호출 + 차트용 배열을 묶어 반환.
+
+    예측 탭(BTC)과 모니터 탭이 서로 다른 대상월을 쓸 수 있으므로(예: 월말엔
+    예측=다음달, 모니터=진행 중인 이번달) 동일 로직을 두 스냅에 각각 적용한다.
+    반환: {mon, total_days, target_month, pre_x/o/h/l/c, fut, fut_rem, glines, meas_*}.
+    """
+    # monitor() 호출
+    mon_obj = None
+    try:
+        history_fallback = get_history()
+        fallback_btc = float(history_fallback[-1]["close"]) if history_fallback else None
+        price_obj = fetch_current_price(fallback_price=fallback_btc)
+        live_price = price_obj.price if price_obj.price and price_obj.price > 0 else None
+
+        mon_obj = monitor_prediction(snap, history, today.isoformat(), live_price=live_price)
+        mon_data = {
+            "elapsed":     mon_obj.elapsed_days,
+            "total":       mon_obj.total_days,
+            "progress":    round(mon_obj.progress_pct, 1),
+            "containment": round(mon_obj.measured_containment_pct, 1),
+            "status":      mon_obj.overall_status,
+            "detail":      mon_obj.status_detail,
+            "sigma_change": round(mon_obj.sigma_change_pct, 2),
+            "box_shift":   round(mon_obj.box_center_shift_pct, 2),
+            "cur_price":   mon_obj.current_price,
+            "rev_ru":      mon_obj.forecast_revised_upper,
+            "rev_rl":      mon_obj.forecast_revised_lower,
+            "rev_u1":      mon_obj.forecast_upper_1s,
+            "rev_l1":      mon_obj.forecast_lower_1s,
+            "rev_u2":      mon_obj.forecast_upper_2s,
+            "rev_l2":      mon_obj.forecast_lower_2s,
+            "today":       today.isoformat(),
+            "consec_dn":   mon_obj.consec_breach_lower,
+            "consec_up":   mon_obj.consec_breach_upper,
+            "reset_rec":   mon_obj.reset_recommended,
+        }
+    except Exception as e:
+        import logging as _log
+        _log.getLogger("api_server").warning("[dashboard] monitor() 실패: %s", e)
+        history_fallback2 = get_history()
+        fallback_price = float(history_fallback2[-1]["close"]) if history_fallback2 else snap.reference_price
+        mon_data = {
+            "elapsed": 0, "total": 31, "progress": 0, "containment": 100,
+            "status": "PREDICTED", "detail": "예측 단계",
+            "sigma_change": 0, "box_shift": 0, "cur_price": fallback_price,
+            "rev_ru": snap.recommended_upper, "rev_rl": snap.recommended_lower,
+            "rev_u1": snap.box_upper_1s_asym or snap.box_upper_1s,
+            "rev_l1": snap.box_lower_1s_asym or snap.box_lower_1s,
+            "rev_u2": snap.box_upper_2s_asym or snap.box_upper_2s,
+            "rev_l2": snap.box_lower_2s_asym or snap.box_lower_2s,
+            "today": today.isoformat(),
+        }
+
     # 대상 월 파싱
     ty, tm = map(int, snap.target_month.split("-"))
     total_target_days = monthrange(ty, tm)[1]
 
-    # pre_* 배열: history_days일치 캔들 중 대상 월 시작 전 데이터
+    # pre_*: 대상 월 시작 전 history_days일치 캔들
     target_month_start = f"{ty:04d}-{tm:02d}-01"
-    pre_candles = [c for c in history if c["date"] < target_month_start]
-    pre_candles = pre_candles[-history_days:]
+    pre_candles = [c for c in history if c["date"] < target_month_start][-history_days:]
 
-    pre_x = [c["date"] for c in pre_candles]
-    pre_o = [c["open"]  for c in pre_candles]
-    pre_h = [c["high"]  for c in pre_candles]
-    pre_l = [c["low"]   for c in pre_candles]
-    pre_c = [c["close"] for c in pre_candles]
-
-    # fut: 대상 월 모든 날짜
+    # fut: 대상 월 모든 날짜 / fut_rem: 오늘 이후
     pad2 = lambda n: str(n).zfill(2)
     fut = [f"{ty:04d}-{pad2(tm)}-{pad2(d)}" for d in range(1, total_target_days + 1)]
-
-    # fut_rem: 오늘 이후 대상 월 날짜
     today_iso = today.isoformat()
     fut_rem = [d for d in fut if d >= today_iso]
 
@@ -305,22 +265,17 @@ def get_dashboard(
             price *= (1 + step)
 
     # meas_*: measured_candles 분류
-    meas_in  = {"x": [], "o": [], "h": [], "l": [], "c": []}
-    meas_w   = {"x": [], "o": [], "h": [], "l": [], "c": []}
-    meas_bu  = {"x": [], "o": [], "h": [], "l": [], "c": []}
-    meas_bl  = {"x": [], "o": [], "h": [], "l": [], "c": []}
-
-    # Build lookup dict for history by date
+    meas_in = {"x": [], "o": [], "h": [], "l": [], "c": []}
+    meas_w  = {"x": [], "o": [], "h": [], "l": [], "c": []}
+    meas_bu = {"x": [], "o": [], "h": [], "l": [], "c": []}
+    meas_bl = {"x": [], "o": [], "h": [], "l": [], "c": []}
     hist_by_date = {c["date"]: c for c in history}
-
     zone_map = {"inner": meas_in, "warning": meas_w, "breach_upper": meas_bu, "breach_lower": meas_bl}
     if mon_obj is not None:
         for ds in mon_obj.measured_candles:
             bucket = zone_map.get(ds.zone)
-            if bucket is None:
-                continue
             candle = hist_by_date.get(ds.date)
-            if candle is None:
+            if bucket is None or candle is None:
                 continue
             bucket["x"].append(ds.date)
             bucket["o"].append(candle["open"])
@@ -329,20 +284,128 @@ def get_dashboard(
             bucket["c"].append(candle["close"])
 
     return {
-        "snap":    snap_data,
-        "mon":     mon_data,
-        "pre_x":   pre_x,
-        "pre_o":   pre_o,
-        "pre_h":   pre_h,
-        "pre_l":   pre_l,
-        "pre_c":   pre_c,
-        "fut":     fut,
+        "mon": mon_data,
+        "total_days": total_target_days,
+        "target_month": snap.target_month,
+        "pre_x": [c["date"] for c in pre_candles],
+        "pre_o": [c["open"] for c in pre_candles],
+        "pre_h": [c["high"] for c in pre_candles],
+        "pre_l": [c["low"] for c in pre_candles],
+        "pre_c": [c["close"] for c in pre_candles],
+        "fut": fut,
         "fut_rem": fut_rem,
-        "glines":  glines,
+        "glines": glines,
         "meas_in": meas_in,
-        "meas_w":  meas_w,
+        "meas_w": meas_w,
         "meas_bu": meas_bu,
         "meas_bl": meas_bl,
+    }
+
+
+@app.get("/api/dashboard")
+def get_dashboard(
+    capital: float = Query(default=40_000_000, ge=1_000_000),
+    krw_hold: float = Query(default=0.30, ge=0.0, le=0.7),
+    aggressiveness: Literal["conservative", "balanced", "aggressive"] = Query(default="balanced"),
+    history_days: int = Query(default=120, ge=30, le=365),
+):
+    """대시보드 전체 데이터: 예측 스냅, 모니터링, 차트용 캔들, 그리드 라인."""
+    # 실시간 가격을 먼저 확보 → 캐시가 실가격과 30% 이상 괴리되면 강제 재수집
+    # (합성 데이터로 오염된 캐시가 영구 사용되는 것을 방지)
+    live_check = fetch_current_price(fallback_price=None)
+    live_px = live_check.price if (live_check.is_live and live_check.price > 0) else None
+    history = get_history(live_price=live_px)
+    today = date.today()
+
+    # 예측 시점 결정
+    last_day_of_month = monthrange(today.year, today.month)[1]
+    days_left = last_day_of_month - today.day
+
+    if days_left >= 8:
+        # 이번달 예측: as_of = 전달 말일
+        first_of_this_month = date(today.year, today.month, 1)
+        as_of = (first_of_this_month - timedelta(days=1)).isoformat()
+    else:
+        # 다음달 예측: as_of = 어제
+        as_of = (today - timedelta(days=1)).isoformat()
+
+    try:
+        snap = predict_as_of(
+            history, as_of,
+            capital_krw=capital,
+            krw_hold_ratio=krw_hold,
+            aggressiveness=aggressiveness,
+            use_ml_sigma=True,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+
+    # 예측 탭(BTC) 차트·모니터 번들 — snap(다음달 모드면 7월) 기준
+    pred_bundle = _monitor_chart_bundle(snap, history, today, history_days)
+    mon_data = pred_bundle["mon"]
+
+    # 모니터 탭은 '진행 중인 현재 월'(today가 속한 달)을 측정 대상으로 한다.
+    # days_left>=8이면 예측 스냅이 곧 이번달이므로 그대로 재사용. 아니면(월말 다음달
+    # 예측 모드) 이번달 예측을 별도로 산출해 모니터가 빈 화면이 되지 않게 한다.
+    if days_left >= 8:
+        monitor_bundle = pred_bundle
+        monitor_snap_used = snap
+    else:
+        first_of_this_month = date(today.year, today.month, 1)
+        monitor_as_of = (first_of_this_month - timedelta(days=1)).isoformat()
+        try:
+            monitor_snap = predict_as_of(
+                history, monitor_as_of,
+                capital_krw=capital, krw_hold_ratio=krw_hold,
+                aggressiveness=aggressiveness, use_ml_sigma=True,
+            )
+            monitor_bundle = _monitor_chart_bundle(monitor_snap, history, today, history_days)
+            monitor_snap_used = monitor_snap
+        except ValueError:
+            monitor_bundle = pred_bundle
+            monitor_snap_used = snap
+
+    # snap 직렬화 (예측 탭) + 모니터 스냅 직렬화 (모니터 탭)
+    snap_data = _serialize_snap(snap)
+    monitor_snap_data = _serialize_snap(monitor_snap_used)
+
+    # 최상위 키(snap/mon/pre_*/fut/glines/meas_*)는 예측 탭(BTC) 차트가 그대로
+    # 사용하므로 pred_bundle(예측 대상월) 기준을 유지한다. 모니터 탭은 별도
+    # 'monitor' 블록(진행 중인 현재 월)을 읽어 빈 화면 문제를 피한다.
+    return {
+        "snap":    snap_data,
+        "mon":     mon_data,
+        "pre_x":   pred_bundle["pre_x"],
+        "pre_o":   pred_bundle["pre_o"],
+        "pre_h":   pred_bundle["pre_h"],
+        "pre_l":   pred_bundle["pre_l"],
+        "pre_c":   pred_bundle["pre_c"],
+        "fut":     pred_bundle["fut"],
+        "fut_rem": pred_bundle["fut_rem"],
+        "glines":  pred_bundle["glines"],
+        "meas_in": pred_bundle["meas_in"],
+        "meas_w":  pred_bundle["meas_w"],
+        "meas_bu": pred_bundle["meas_bu"],
+        "meas_bl": pred_bundle["meas_bl"],
+        # 모니터 탭 전용 — 진행 중인 현재 월(today가 속한 달) 측정 데이터.
+        # days_left>=8이면 예측과 동일.
+        "monitor": {
+            "snap":    monitor_snap_data,
+            "mon":     monitor_bundle["mon"],
+            "target":  monitor_bundle["target_month"],
+            "total":   monitor_bundle["total_days"],
+            "pre_x":   monitor_bundle["pre_x"],
+            "pre_o":   monitor_bundle["pre_o"],
+            "pre_h":   monitor_bundle["pre_h"],
+            "pre_l":   monitor_bundle["pre_l"],
+            "pre_c":   monitor_bundle["pre_c"],
+            "fut":     monitor_bundle["fut"],
+            "fut_rem": monitor_bundle["fut_rem"],
+            "meas_in": monitor_bundle["meas_in"],
+            "meas_w":  monitor_bundle["meas_w"],
+            "meas_bu": monitor_bundle["meas_bu"],
+            "meas_bl": monitor_bundle["meas_bl"],
+        },
     }
 
 
