@@ -640,7 +640,7 @@
             </div>
             <div id="iv-hint" style="font-size:.76rem;color:var(--muted);margin-bottom:10px">
               ⚙️ 추정 실행 버튼을 누르면 최근 3개월 1분봉으로 부스트/일반 모드 최적 간격을 산출합니다 (BTC·USDT, 각 수 초).
-              다음달 예측 시점(월말 잔여 8일+)에는 자동 산출됩니다. <b>USDT는 매수 1원 고정, 매도 간격만 최적화</b>.
+              다음달 예측 시점(월말 잔여 8일 미만, D-7~)에는 자동 산출됩니다. <b>USDT는 매수 1원 고정, 매도 간격만 최적화</b>.
             </div>
             <div class="info-grid" id="iv-panel" style="display:none">
               <div class="info-card">
@@ -3105,7 +3105,9 @@ function applyUsdtRevisedBox() {
   // 현재 박스를 새 원본(orig)으로 저장 — 이후 비교 기준이 됨
   const newOrig = { ref: USDT.ref, u1: USDT.u1, l1: USDT.l1, u2: USDT.u2, l2: USDT.l2 };
   USDT.orig = newOrig;
-  try { localStorage.setItem('usdt_orig_box', JSON.stringify(newOrig)); } catch(e) {}
+  // 저장 키는 로드(updateUsdtModel) 시 읽는 키와 동일하게 대상월 suffix를 붙인다.
+  // (안 맞추면 새로고침 시 적용한 수정 박스가 사라짐)
+  try { localStorage.setItem('usdt_orig_box_' + getPredictionContext().targetMonth, JSON.stringify(newOrig)); } catch(e) {}
 
   // USDT 탭·모니터 패널·포트폴리오 재계산
   updatePnlTable();
@@ -3409,9 +3411,10 @@ async function fetchDashboard() {
     updateBtcRevisionNotice();
     updateRevisionBtnState();
 
-    // 익월 예측 모드(월말 잔여 8일+ → 다음달 박스권 예측 시점)에는
-    // 거래량·매수/매도 간격 추정도 함께 자동 산출 (월별 캐시 활용, 비차단).
-    if (daysLeft >= 8) {
+    // 다음달 예측 모드(월말 잔여 8일 미만, D-7~)에는 거래량·매수/매도 간격
+    // 추정도 함께 자동 산출 (월별 캐시 활용, 비차단). 이 시점이 다음달 그리드
+    // 세팅을 결정하는 핵심 구간이므로 자동으로 7월 대상 추정을 띄운다.
+    if (getPredictionContext().nextMonthMode) {
       fetchIntervals(false).catch(() => {});
     }
 
@@ -3486,7 +3489,10 @@ async function fetchIntervals(force) {
   try {
     const capital = +document.getElementById('capital').value || 40000000;
     const prevVol = +document.getElementById('iv-prevvol').value || 1e9;
-    const qs = `capital=${capital}&prev_vol=${prevVol}&months=3${force ? '&refresh=true' : ''}`;
+    // 예측 대상월(다음달 모드면 7월)을 명시 전달 — 미전달 시 백엔드가 이번달로 추정해
+    // 화면의 예측 박스권과 다른 달 기준이 되는 불일치를 막는다.
+    const tgtMonth = getPredictionContext().targetMonth;
+    const qs = `capital=${capital}&prev_vol=${prevVol}&months=3&target_month=${tgtMonth}${force ? '&refresh=true' : ''}`;
     const [btcRes, usdtRes] = await Promise.all([
       fetch(`${API_BASE}/api/intervals?market=KRW-BTC&btc_ratio=0.6&${qs}`, {signal: AbortSignal.timeout(60000)}).then(r => r.ok ? r.json() : {error:'서버 오류 '+r.status}),
       fetch(`${API_BASE}/api/intervals?market=KRW-USDT&btc_ratio=0.6&${qs}`, {signal: AbortSignal.timeout(60000)}).then(r => r.ok ? r.json() : {error:'서버 오류 '+r.status}),
@@ -3516,10 +3522,15 @@ async function fetchLivePrice() {
     const usdtEl = document.getElementById('live-usdt-price');
     const srcEl  = document.getElementById('live-source');
     if (btcEl) {
-      const sign = btc.change_pct >= 0 ? '+' : '';
-      btcEl.innerHTML = `${Math.round(btc.price).toLocaleString('ko-KR')}원
-        <span style="font-size:.75rem;color:${btc.change_pct>=0?'#4ec94e':'#d62728'}">
-          ${sign}${btc.change_pct.toFixed(2)}%</span>`;
+      if (btc.price > 0) {
+        const sign = btc.change_pct >= 0 ? '+' : '';
+        btcEl.innerHTML = `${Math.round(btc.price).toLocaleString('ko-KR')}원
+          <span style="font-size:.75rem;color:${btc.change_pct>=0?'#4ec94e':'#d62728'}">
+            ${sign}${btc.change_pct.toFixed(2)}%</span>`;
+      } else {
+        // 폴백가=0(실시간·캐시 모두 실패) → 0원을 실가처럼 노출하지 않는다
+        btcEl.innerHTML = `<span style="color:var(--muted)">가격 확인 불가</span>`;
+      }
     }
     if (usdtEl) usdtEl.textContent = btc.price > 0 ? `USDT ${usdt.price.toFixed(1)}원` : '';
     // USDT 박스 모델을 실시간 가격으로 갱신 (기준가 1% 이상 변동 시에만)
