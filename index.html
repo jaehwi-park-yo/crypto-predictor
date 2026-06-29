@@ -639,21 +639,21 @@
               </span>
             </div>
             <div id="iv-hint" style="font-size:.76rem;color:var(--muted);margin-bottom:10px">
-              ⚙️ 추정 실행 버튼을 누르면 최근 3개월 1분봉으로 부스트/일반 모드 최적 간격을 산출합니다 (BTC·USDT, 각 수 초).
+              ⚙️ 추정 실행 버튼을 누르면 최근 3개월 1분봉으로 일반·부스트·듀얼 3개 모드 최적 간격을 산출합니다 (BTC·USDT, 각 수 초).
               다음달 예측 시점(월말 잔여 8일 미만, D-7~)에는 자동 산출됩니다. <b>USDT는 매수 1원 고정, 매도 간격만 최적화</b>.
             </div>
             <div class="info-grid" id="iv-panel" style="display:none">
               <div class="info-card">
-                <h3>🚀 BTC — 부스트 / 일반</h3>
+                <h3>🚀 BTC — 일반 / 부스트 / 듀얼</h3>
                 <table class="data" id="iv-btc"></table>
               </div>
               <div class="info-card">
-                <h3>💵 USDT — 부스트 / 일반</h3>
+                <h3>💵 USDT — 일반 / 부스트 / 듀얼</h3>
                 <table class="data" id="iv-usdt"></table>
               </div>
             </div>
             <div style="font-size:.72rem;color:var(--muted);margin-top:6px">
-              ※ 부스트=거래량 극대화(월초 리워드 조기달성) · 일반=스프레드 수익 극대화(목표 달성 후). 월별 1회 캐시 — 재실행 시 강제 재계산.
+              ※ 일반=스프레드 수익 극대화 · 부스트=거래량 극대화(월초~중기 리워드 조기달성) · 듀얼=1σ 부스트+2σ 일반(월 하순 거래량·수익 병행). 월별 1회 캐시 — 재실행 시 강제 재계산.
             </div>
           </div>
 
@@ -3514,6 +3514,20 @@ function _ivRow(label, res, isUsdt) {
     <span style="font-size:.74rem;color:var(--muted)">월거래량 ${vol}억 · 월순익 </span><span style="font-size:.74rem;color:${netColor}">${net>=0?'+':''}${net}만</span>
   </td></tr>`;
 }
+// 듀얼: 1σ 부스트 leg + 2σ 일반 leg을 한 행에 합산 표시
+function _ivDualRow(dl, isUsdt) {
+  if (!dl) return _ivRow('🔀 듀얼', null, isUsdt);
+  const fmtLeg = r => r ? (isUsdt ? _ivFmtUSDT(r) : _ivFmtBTC(r)) : '<span style="color:var(--muted)">─</span>';
+  const net = (dl.net/1e4).toFixed(1);
+  const vol = (dl.vol/1e8).toFixed(2);
+  const netColor = dl.net >= 0 ? 'var(--pos,#2ca02c)' : 'var(--neg,#d62728)';
+  const ratio = dl.inner_ratio ? Math.round(dl.inner_ratio*100) : 60;
+  return `<tr><td style="vertical-align:top">🔀 듀얼 <span style="font-size:.68rem;color:var(--muted)">1σ자본 ${ratio}%</span></td><td style="text-align:right">
+    <span style="font-size:.74rem;color:var(--muted)">1σ 부스트 </span>${fmtLeg(dl.inner)}<br>
+    <span style="font-size:.74rem;color:var(--muted)">2σ 일반 </span>${fmtLeg(dl.outer)}<br>
+    <span style="font-size:.74rem;color:var(--muted)">합산 거래량 ${vol}억 · 순익 </span><span style="font-size:.74rem;color:${netColor}">${net>=0?'+':''}${net}만</span>
+  </td></tr>`;
+}
 function _ivRender(tblId, data, isUsdt) {
   const el = document.getElementById(tblId);
   if (!el) return;
@@ -3525,6 +3539,7 @@ function _ivRender(tblId, data, isUsdt) {
   el.innerHTML =
     _ivRow('🚀 부스트', data.boost, isUsdt) +
     _ivRow('📊 일반', data.normal, isUsdt) +
+    _ivDualRow(data.dual, isUsdt) +
     `<tr><td style="color:var(--muted);font-size:.72rem">박스 / 데이터</td>
      <td style="text-align:right;font-size:.72rem;color:var(--muted)">${Math.round(data.box_lower).toLocaleString()}~${Math.round(data.box_upper).toLocaleString()} · ${tag} ${data.months_used?.length||0}개월</td></tr>`;
 }

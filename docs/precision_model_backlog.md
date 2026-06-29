@@ -94,6 +94,16 @@
 잔여(보류):
 - (LOW) USDT 차트 '월초' 라벨이 다음달 모드에서 의미상 '예측 시작 기준'과 다름 — 표기 개선 여지(영향 경미).
 
+## BTC 3모드(일반/부스트/듀얼) — 개념정의 & 앱 준비 (2026-06-29)
+
+- 개념정의 문서: `docs/btc_trading_modes.md` (3모드 목적·목적함수·운영구간·USDT 비유·비교표).
+- 듀얼모드 구현: `utils/interval_optimizer.py`에 `dual` 산출 추가
+  (1σ 밴드=부스트/volume + 2σ 밴드=일반/net, 자본 `dual_inner_ratio`(기본 0.6) 분할,
+  거래량 합산 후 리워드 1회·상한 적용). `_combine_dual` 헬퍼.
+- `/api/intervals` 응답에 `dual` 포함(시그니처 변경 없음), `index.html` 간격 패널에 듀얼 행 추가.
+- **확정 대기(거래내역 후)**: 부스트 매도 하한/일반 상한, `dual_inner_ratio` 기본값,
+  `VOLUME_SIM_CALIB`를 실측 왕복·체결가 분포로 재보정. (docs/btc_trading_modes.md "확정 대기" 참조)
+
 ## 관련 수정 이력
 
 - **2026-06**: 월말 D-8부터 USDT/KRW 탭도 다음달 박스권을 표시하도록 수정

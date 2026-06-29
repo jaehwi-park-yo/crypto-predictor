@@ -273,6 +273,36 @@ def _best_interval(
     return best
 
 
+def _combine_dual(inner: Optional[Dict], outer: Optional[Dict],
+                  prev_vol_monthly: float) -> Optional[Dict]:
+    """듀얼모드 결합: 1σ 부스트(inner) + 2σ 일반(outer) leg을 합산.
+
+    거래량은 두 leg 합산, 리워드는 합산 거래량에 1회만 요율·상한 적용(중복 방지).
+    grid/mtm은 리워드와 무관하므로 단순 합산.
+    """
+    if not inner and not outer:
+        return None
+    legs = [x for x in (inner, outer) if x]
+    total_vol  = sum(x["vol"]  for x in legs)
+    total_grid = sum(x["grid"] for x in legs)   # 이미 수수료 차감됨
+    total_mtm  = sum(x["mtm"]  for x in legs)
+    rate = _reward_rate(prev_vol_monthly)
+    reward = min(total_vol * rate, MAX_REWARD)
+    net = total_grid + reward + total_mtm
+    return {
+        "net":    net,
+        "grid":   total_grid,
+        "reward": reward,
+        "mtm":    total_mtm,
+        "vol":    total_vol,
+        "rate":   rate,
+        "n_months": max((x.get("n_months", 0) for x in legs), default=0),
+        # 1σ(부스트) / 2σ(일반) leg 상세 — UI 표시·캘리브레이션용
+        "inner":  inner,   # 1σ 부스트 leg
+        "outer":  outer,   # 2σ 일반 leg
+    }
+
+
 def optimize_intervals(
     market: str = "KRW-BTC",
     as_of: Optional[str] = None,
@@ -281,6 +311,7 @@ def optimize_intervals(
     deployed_krw: float = 16_800_000,
     lookback_months: int = 3,
     prev_vol_monthly: float = 1e9,
+    dual_inner_ratio: float = 0.6,
 ) -> Dict:
     """
     1분봉(또는 5분봉 폴백)으로 부스트/일반 모드 최적 간격을 각각 산출.
@@ -295,6 +326,9 @@ def optimize_intervals(
     if as_of is None:
         as_of = datetime.now().strftime("%Y-%m-%d")
 
+    # 듀얼모드용 1σ/2σ 밴드 (자동산출 시 snap에서 확보). 명시 박스만 주면 None → 듀얼 생략.
+    band_1s = band_2s = None
+
     # 박스 자동 산출
     if box_lower is None or box_upper is None:
         try:
@@ -305,7 +339,16 @@ def optimize_intervals(
             snap = predict_as_of(hist, as_of, symbol=symbol)
             box_lower = snap.recommended_lower
             box_upper = snap.recommended_upper
-            logger.info("[optimizer] 박스 자동산출: %.0f ~ %.0f", box_lower, box_upper)
+            # 비대칭 σ 우선, 없으면 대칭 σ 밴드
+            l1 = snap.box_lower_1s_asym or snap.box_lower_1s
+            u1 = snap.box_upper_1s_asym or snap.box_upper_1s
+            l2 = snap.box_lower_2s_asym or snap.box_lower_2s
+            u2 = snap.box_upper_2s_asym or snap.box_upper_2s
+            if l1 and u1 and l2 and u2 and u1 > l1 and u2 > l2:
+                band_1s = (l1, u1)
+                band_2s = (l2, u2)
+            logger.info("[optimizer] 박스 자동산출: %.0f ~ %.0f (1σ %.0f~%.0f / 2σ %.0f~%.0f)",
+                        box_lower, box_upper, l1 or 0, u1 or 0, l2 or 0, u2 or 0)
         except Exception as e:
             raise ValueError(f"box_lower/upper 미지정이고 자동산출 실패: {e}")
 
@@ -362,6 +405,30 @@ def optimize_intervals(
                             normal_buy_range, normal_sell_range, prev_vol_monthly,
                             objective="net")       # 일반 = 매매순익 최대화
 
+    # 듀얼모드: 1σ 밴드=부스트(거래량) + 2σ 밴드=일반(순익), 자본 분할 후 거래량 합산.
+    # 1σ/2σ 밴드를 확보한 경우(자동산출)에만 계산.
+    dual = None
+    if band_1s and band_2s:
+        r = min(0.95, max(0.05, dual_inner_ratio))
+        cap_inner = deployed_krw * r            # 1σ 부스트
+        cap_outer = deployed_krw * (1 - r)      # 2σ 일반
+        dual_inner = _best_interval(monthly, band_1s[0], band_1s[1], cap_inner,
+                                    boost_buy_range, boost_sell_range, prev_vol_monthly,
+                                    objective="volume")
+        dual_outer = _best_interval(monthly, band_2s[0], band_2s[1], cap_outer,
+                                    normal_buy_range, normal_sell_range, prev_vol_monthly,
+                                    objective="net")
+        if is_usdt:
+            for leg in (dual_inner, dual_outer):
+                if leg:
+                    leg["buy_krw"]  = round(leg["buy_pct"]  / 100 * ref, 1)
+                    leg["sell_krw"] = round(leg["sell_pct"] / 100 * ref, 1)
+        dual = _combine_dual(dual_inner, dual_outer, prev_vol_monthly)
+        if dual:
+            dual["inner_ratio"] = r
+            dual["band_1s"] = list(band_1s)
+            dual["band_2s"] = list(band_2s)
+
     # USDT는 원 단위로 역환산해서 표시 필드 추가
     for res in (boost, normal):
         if res and is_usdt:
@@ -377,6 +444,7 @@ def optimize_intervals(
         "months_used": months_used,
         "boost":       boost,
         "normal":      normal,
+        "dual":        dual,
     }
 
 
@@ -442,5 +510,13 @@ if __name__ == "__main__":
         print(_fmt(r.get("boost"), is_u))
         print("▶ 일반 모드  (스프레드 수익 극대화 — 목표 달성 후)")
         print(_fmt(r.get("normal"), is_u))
+        dl = r.get("dual")
+        if dl:
+            print(f"▶ 듀얼 모드  (1σ 부스트 + 2σ 일반 · 1σ자본 {dl.get('inner_ratio',0)*100:.0f}%)")
+            print(f"  · 1σ 부스트 leg:\n{_fmt(dl.get('inner'), is_u)}")
+            print(f"  · 2σ 일반 leg:\n{_fmt(dl.get('outer'), is_u)}")
+            print(f"  → 합산 월순익 {dl['net']/1e4:+.1f}만 "
+                  f"(그리드 {dl['grid']/1e4:.1f} + 리워드 {dl['reward']/1e4:.1f} + MTM {dl['mtm']/1e4:+.1f})"
+                  f" · 월거래량 {dl['vol']/1e8:.2f}억")
         print(f"{'='*64}")
         print(f"  소요: {time.time()-t0:.1f}s")
