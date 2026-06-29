@@ -369,11 +369,35 @@ def get_dashboard(
     snap_data = _serialize_snap(snap)
     monitor_snap_data = _serialize_snap(monitor_snap_used)
 
+    # USDT 박스 예측 — 프론트가 상수 σ 대신 데이터 기반 σ(FX 블렌딩 포함)를 쓰도록 제공.
+    # USDT/KRW 표본이 짧아 실패할 수 있으므로 graceful (실패 시 프론트가 상수 σ 폴백).
+    usdt_snap = None
+    try:
+        usdt_hist = get_usdt_history()
+        u = predict_as_of(
+            usdt_hist, as_of, capital_krw=capital, krw_hold_ratio=krw_hold,
+            aggressiveness=aggressiveness, use_ml_sigma=True, symbol="USDT",
+        )
+        usdt_snap = {
+            "target":       u.target_month,
+            "as_of":        u.as_of_date,
+            "ref":          u.reference_price,
+            "sigma_pct":    round(u.monthly_sigma_pct, 3),   # 1σ 월간 σ(%) — 프론트 기준 σ
+            "u1": u.box_upper_1s, "l1": u.box_lower_1s,
+            "u2": u.box_upper_2s, "l2": u.box_lower_2s,
+            "u1a": u.box_upper_1s_asym, "l1a": u.box_lower_1s_asym,
+            "u2a": u.box_upper_2s_asym, "l2a": u.box_lower_2s_asym,
+        }
+    except Exception as e:
+        import logging as _log
+        _log.getLogger("api_server").warning("[dashboard] USDT 예측 실패(상수 σ 폴백): %s", e)
+
     # 최상위 키(snap/mon/pre_*/fut/glines/meas_*)는 예측 탭(BTC) 차트가 그대로
     # 사용하므로 pred_bundle(예측 대상월) 기준을 유지한다. 모니터 탭은 별도
     # 'monitor' 블록(진행 중인 현재 월)을 읽어 빈 화면 문제를 피한다.
     return {
         "snap":    snap_data,
+        "usdt_snap": usdt_snap,
         "mon":     mon_data,
         "pre_x":   pred_bundle["pre_x"],
         "pre_o":   pred_bundle["pre_o"],

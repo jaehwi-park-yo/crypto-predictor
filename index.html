@@ -690,7 +690,7 @@
           <div style="font-size:.8rem;color:var(--muted)">
             기준 시점: <b id="usdt-asof">로딩 중…</b> &nbsp;|&nbsp;
             기준가: <b style="color:var(--usdt)" id="usdt-ref-label">─</b> &nbsp;|&nbsp;
-            1σ: <b id="usdt-1s-label">─</b> (±2.2%) &nbsp;|&nbsp; 2σ: <b id="usdt-2s-label">─</b> (≈±3.3%)
+            1σ: <b id="usdt-1s-label">─</b> <span id="usdt-1s-label-pct">(±2.2%)</span> &nbsp;|&nbsp; 2σ: <b id="usdt-2s-label">─</b> (≈±3.3%)
           </div>
 
           <div id="usdt-revision-notice" style="display:none;border-radius:8px;padding:10px 14px;font-size:.82rem;font-weight:600;border:1px solid transparent"></div>
@@ -1355,6 +1355,12 @@ function getPredictionContext(now = new Date()) {
 }
 function updateUsdtModel(livePrice, isLive = true) {
   if (!livePrice || livePrice <= 0) return;
+  // 백엔드 USDT 예측 σ(FX 블렌딩 포함)가 있으면 상수 2.2% 대신 사용 — 데이터 기반.
+  // (백엔드 미연결/USDT 표본부족 시 상수 σ 폴백)
+  const beSigma = (typeof D !== 'undefined' && D.usdt_snap && D.usdt_snap.sigma_pct > 0)
+    ? D.usdt_snap.sigma_pct : null;
+  if (beSigma) USDT.sigma_pct = +beSigma.toFixed(2);
+  USDT.sigma_src = beSigma ? '예측σ' : '기본σ';
   const s = USDT.sigma_pct / 100;
   USDT.ref = livePrice;
   USDT.u1 = +(livePrice * (1 + USDT_SIGMA_UP * s)).toFixed(1);
@@ -1387,8 +1393,10 @@ function updateUsdtModel(livePrice, isLive = true) {
   const _modeLabel = _ctx.nextMonthMode
     ? `${_ctx.targetMonth} 다음달 예측 (월말 D-${_ctx.daysLeft})`
     : `${_ctx.targetMonth} 이번달 수정예측 (잔여 ${_ctx.daysLeft}일)`;
-  set('usdt-asof', (isLive ? '실시간 (' : '참고값 (') + new Date().toLocaleDateString('ko-KR') + ') · ' + _modeLabel);
+  const _sigSrc = USDT.sigma_src ? ` · σ ${USDT.sigma_pct}%(${USDT.sigma_src})` : '';
+  set('usdt-asof', (isLive ? '실시간 (' : '참고값 (') + new Date().toLocaleDateString('ko-KR') + ') · ' + _modeLabel + _sigSrc);
   set('usdt-ref-label', fmt1(USDT.ref) + '원');
+  set('usdt-1s-label-pct', `(±${USDT.sigma_pct}%)`);
   set('usdt-1s-label', `${fmt1(USDT.l1)}~${fmt1(USDT.u1)}원`);
   set('usdt-2s-label', `${fmt1(USDT.l2)}~${fmt1(USDT.u2)}원`);
   set('usdt-inner-range', `${fmt1(USDT.l1)} ~ ${fmt1(USDT.u1)}원`);
