@@ -1,12 +1,18 @@
 """
 utils/interval_optimizer.py — 1분봉 기반 최적 매수/매도 간격 추정
 ==================================================================
-1분봉 단일인벤토리 시뮬레이션으로 두 가지 운영 모드의 최적 간격을 산출한다.
+1분봉 단일인벤토리 시뮬레이션으로 시장별 운영 전략을 산출한다.
 
+BTC (3모드 탐색):
   · 부스트 모드: 월초 목표 거래량 조기 달성 목적. 간격을 좁혀 거래량 극대화.
-                탐색 공간을 '좁은 간격' 영역으로 제한.
   · 일반 모드:  목표 달성 후 매매 스프레드 수익 극대화. 간격을 넓혀 왕복 순익 극대화.
-                탐색 공간을 '넓은 간격' 영역으로 제한.
+  · 듀얼 모드:  1σ 밴드=부스트 + 2σ 밴드=일반 자본분할 병행.
+
+USDT (고정 트리플 오버레이 — 탐색 없음):
+  · T1: 1σ 밴드 · 1원/1원  (거래량·리워드)
+  · T2: 1.5σ 밴드 · 1원/2원 (균형)
+  · T3: 2σ 밴드 · 1원/3원  (스프레드 수익)
+  세 leg 동시 중복 운영, 자본 3등분, 거래량 합산 후 리워드 1회 적용.
 
 시뮬 모델 (grid_interval_backtest.py 와 동일):
   - 라인 j 하락 → 매수 (단일인벤토리, 동일 라인 재매수 금지)
@@ -72,16 +78,19 @@ _BTC_SEARCH = {
     "boost":  {"buy": (0.02, 0.30, 0.01), "sell_pct": (0.08, 0.80)},  # 초촘촘
     "normal": {"buy": (0.30, 1.20, 0.05), "sell_pct": (0.30, 3.0)},   # 넓은 간격
 }
-# USDT: 매수 1원 고정 + 매도 간격만 탐색.
-#   실측 검증(2026-03~06 1m): 매수 1원 고정 시 동일 매도간격 대비 거래량 +27~40%,
-#   봇당 자본 1/2~1/3로 더 촘촘한 수익실현. 순익은 동일하거나 우월.
-#   → 매수는 최소틱(1원)으로 고정하고 매도간격(부스트=좁게/일반=넓게)만 최적화.
-#   부스트는 매도 하한을 1원(≈0.07%, 수수료 수준)까지 허용.
+# USDT: 고정 트리플 오버레이 전략 (탐색 없음 — 2026-06 재구성).
+#   부스트/일반 간격 탐색을 폐지하고, 예측 박스권 기반 3개 leg를 동시에 중복 운영:
+#     T1: 1σ   밴드 · 1원 매수 / 1원 매도  (거래량·리워드 담당, 그리드 자체는 수수료 상쇄)
+#     T2: 1.5σ 밴드 · 1원 매수 / 2원 매도  (균형)
+#     T3: 2σ   밴드 · 1원 매수 / 3원 매도  (스프레드 수익 담당)
+#   자본은 3등분(기본). 거래량은 합산 후 리워드 1회(월 300만 상한) 적용.
 _USDT_BUY_KRW = 1                       # 매수 간격 고정 (최소틱)
-_USDT_SEARCH = {
-    "boost":  {"sell_krw": (1, 4)},     # 좁은 매도 → 거래량 극대화
-    "normal": {"sell_krw": (4, 8)},     # 넓은 매도 → 스프레드 수익 극대화
-}
+_USDT_TRIPLE = [
+    # (이름, 매도간격 KRW, 밴드 종류)
+    ("1σ",   1, "1s"),
+    ("1.5σ", 2, "15"),
+    ("2σ",   3, "2s"),
+]
 _USDT_REF = 1450.0   # 원/달러 환산 기준 (BTC 단위 통일용)
 
 
@@ -376,27 +385,82 @@ def optimize_intervals(
     is_usdt = market.endswith("USDT")
 
     if is_usdt:
+        # ── USDT: 고정 트리플 오버레이 (탐색 없음) ──────────────────────
+        # 1σ 1/1원 + 1.5σ 1/2원 + 2σ 1/3원을 동시에 중복 운영. 자본 3등분.
         ref = _USDT_REF
         def _krw_to_pct(krw): return krw / ref * 100
 
-        # 매수 1원 고정: buy_range = (고정값, 고정값, step) — 격자가 1점만 생성
+        # 밴드: 자동산출 시 band_1s/2s 확보. 1.5σ는 선형 중간값(밴드가 ref(1±k·σ)라 정확).
+        if band_1s and band_2s:
+            bands = {
+                "1s": band_1s,
+                "15": ((band_1s[0] + band_2s[0]) / 2, (band_1s[1] + band_2s[1]) / 2),
+                "2s": band_2s,
+            }
+        else:
+            # 명시 박스만 주어진 경우: 세 leg 모두 같은 박스에서 평가 (밴드 정보 없음)
+            bands = {k: (box_lower, box_upper) for k in ("1s", "15", "2s")}
+
         buy_pct = _krw_to_pct(_USDT_BUY_KRW)
-        fixed_buy_range = (buy_pct, buy_pct, max(buy_pct, 1e-6))
-        boost_buy_range = fixed_buy_range
-        normal_buy_range = fixed_buy_range
-        boost_sell_range = (
-            _krw_to_pct(_USDT_SEARCH["boost"]["sell_krw"][0]),
-            _krw_to_pct(_USDT_SEARCH["boost"]["sell_krw"][1]),
-        )
-        normal_sell_range = (
-            _krw_to_pct(_USDT_SEARCH["normal"]["sell_krw"][0]),
-            _krw_to_pct(_USDT_SEARCH["normal"]["sell_krw"][1]),
-        )
-    else:
-        boost_buy_range  = tuple(_BTC_SEARCH["boost"]["buy"])
-        boost_sell_range = tuple(_BTC_SEARCH["boost"]["sell_pct"])
-        normal_buy_range = tuple(_BTC_SEARCH["normal"]["buy"])
-        normal_sell_range = tuple(_BTC_SEARCH["normal"]["sell_pct"])
+        fixed_buy = (buy_pct, buy_pct, max(buy_pct, 1e-6))
+        cap_leg = deployed_krw / len(_USDT_TRIPLE)
+
+        legs = []
+        for name, sell_krw, band_key in _USDT_TRIPLE:
+            lo, hi = bands[band_key]
+            target = _krw_to_pct(sell_krw)
+            # 매도 목표 주변만 허용 → m(매도 스텝)이 정확히 sell_krw원에 대응하는 1점만 평가
+            leg = _best_interval(monthly, lo, hi, cap_leg,
+                                 fixed_buy, (target * 0.75, target * 1.25),
+                                 prev_vol_monthly, objective="net")
+            if leg:
+                leg["sigma"]    = name
+                leg["buy_krw"]  = float(_USDT_BUY_KRW)
+                leg["sell_krw"] = float(sell_krw)
+                leg["cap"]      = cap_leg
+                leg["band"]     = [lo, hi]
+                # leg 순익에서 리워드 제외 (리워드는 합산 거래량에 1회만 적용)
+                leg["net_excl_reward"] = leg["grid"] + leg["mtm"]
+            legs.append(leg)
+
+        valid = [l for l in legs if l]
+        rate = _reward_rate(prev_vol_monthly)
+        total_vol  = sum(l["vol"]  for l in valid)
+        total_grid = sum(l["grid"] for l in valid)
+        total_mtm  = sum(l["mtm"]  for l in valid)
+        reward = min(total_vol * rate, MAX_REWARD)
+        triple = {
+            "legs":   legs,
+            "vol":    total_vol,
+            "grid":   total_grid,
+            "mtm":    total_mtm,
+            "reward": reward,
+            "net":    total_grid + reward + total_mtm,
+            "rate":   rate,
+            "cap_per_leg": cap_leg,
+            "n_months": max((l.get("n_months", 0) for l in valid), default=0),
+        } if valid else None
+
+        return {
+            "market":      market,
+            "as_of":       as_of,
+            "box_lower":   box_lower,
+            "box_upper":   box_upper,
+            "unit":        unit_used,
+            "months_used": months_used,
+            "strategy":    "triple",
+            "triple":      triple,
+            # 구 모드 폐지 — 프론트 하위호환용 키 유지
+            "boost":       None,
+            "normal":      None,
+            "dual":        None,
+        }
+
+    # ── BTC: 기존 일반/부스트/듀얼 3모드 ────────────────────────────────
+    boost_buy_range  = tuple(_BTC_SEARCH["boost"]["buy"])
+    boost_sell_range = tuple(_BTC_SEARCH["boost"]["sell_pct"])
+    normal_buy_range = tuple(_BTC_SEARCH["normal"]["buy"])
+    normal_sell_range = tuple(_BTC_SEARCH["normal"]["sell_pct"])
 
     boost  = _best_interval(monthly, box_lower, box_upper, deployed_krw,
                             boost_buy_range,  boost_sell_range,  prev_vol_monthly,
@@ -406,34 +470,20 @@ def optimize_intervals(
                             objective="net")       # 일반 = 매매순익 최대화
 
     # 듀얼모드: 1σ 밴드=부스트(거래량) + 2σ 밴드=일반(순익), 자본 분할 후 거래량 합산.
-    # 1σ/2σ 밴드를 확보한 경우(자동산출)에만 계산.
     dual = None
     if band_1s and band_2s:
         r = min(0.95, max(0.05, dual_inner_ratio))
-        cap_inner = deployed_krw * r            # 1σ 부스트
-        cap_outer = deployed_krw * (1 - r)      # 2σ 일반
-        dual_inner = _best_interval(monthly, band_1s[0], band_1s[1], cap_inner,
+        dual_inner = _best_interval(monthly, band_1s[0], band_1s[1], deployed_krw * r,
                                     boost_buy_range, boost_sell_range, prev_vol_monthly,
                                     objective="volume")
-        dual_outer = _best_interval(monthly, band_2s[0], band_2s[1], cap_outer,
+        dual_outer = _best_interval(monthly, band_2s[0], band_2s[1], deployed_krw * (1 - r),
                                     normal_buy_range, normal_sell_range, prev_vol_monthly,
                                     objective="net")
-        if is_usdt:
-            for leg in (dual_inner, dual_outer):
-                if leg:
-                    leg["buy_krw"]  = round(leg["buy_pct"]  / 100 * ref, 1)
-                    leg["sell_krw"] = round(leg["sell_pct"] / 100 * ref, 1)
         dual = _combine_dual(dual_inner, dual_outer, prev_vol_monthly)
         if dual:
             dual["inner_ratio"] = r
             dual["band_1s"] = list(band_1s)
             dual["band_2s"] = list(band_2s)
-
-    # USDT는 원 단위로 역환산해서 표시 필드 추가
-    for res in (boost, normal):
-        if res and is_usdt:
-            res["buy_krw"]  = round(res["buy_pct"]  / 100 * ref, 1)
-            res["sell_krw"] = round(res["sell_pct"] / 100 * ref, 1)
 
     return {
         "market":      market,
@@ -442,6 +492,7 @@ def optimize_intervals(
         "box_upper":   box_upper,
         "unit":        unit_used,
         "months_used": months_used,
+        "strategy":    "modes",
         "boost":       boost,
         "normal":      normal,
         "dual":        dual,
@@ -506,17 +557,31 @@ if __name__ == "__main__":
         print(f"  {args.market}  [{tag}]  {r.get('months_used',['?'])[0]}~{r.get('months_used',['?'])[-1]}")
         print(f"  박스: {r['box_lower']:,.0f} ~ {r['box_upper']:,.0f}  투입자본: {deployed/1e6:.1f}M")
         print(f"{'='*64}")
-        print("▶ 부스트 모드 (거래량 극대화 — 월초 목표 조기 달성)")
-        print(_fmt(r.get("boost"), is_u))
-        print("▶ 일반 모드  (스프레드 수익 극대화 — 목표 달성 후)")
-        print(_fmt(r.get("normal"), is_u))
-        dl = r.get("dual")
-        if dl:
-            print(f"▶ 듀얼 모드  (1σ 부스트 + 2σ 일반 · 1σ자본 {dl.get('inner_ratio',0)*100:.0f}%)")
-            print(f"  · 1σ 부스트 leg:\n{_fmt(dl.get('inner'), is_u)}")
-            print(f"  · 2σ 일반 leg:\n{_fmt(dl.get('outer'), is_u)}")
-            print(f"  → 합산 월순익 {dl['net']/1e4:+.1f}만 "
-                  f"(그리드 {dl['grid']/1e4:.1f} + 리워드 {dl['reward']/1e4:.1f} + MTM {dl['mtm']/1e4:+.1f})"
-                  f" · 월거래량 {dl['vol']/1e8:.2f}억")
+        tp = r.get("triple")
+        if tp:
+            print("▶ USDT 트리플 오버레이 (1σ 1/1 + 1.5σ 1/2 + 2σ 1/3 동시 운영)")
+            for leg in tp["legs"]:
+                if not leg:
+                    print("  · leg 결과 없음 (데이터 부족)")
+                    continue
+                print(f"  · {leg['sigma']:4} 매수 {leg['buy_krw']:.0f}원/매도 {leg['sell_krw']:.0f}원 "
+                      f"[{leg['band'][0]:,.0f}~{leg['band'][1]:,.0f}] "
+                      f"→ 거래량 {leg['vol']/1e8:.2f}억 · 그리드+MTM {leg['net_excl_reward']/1e4:+.1f}만")
+            print(f"  → 합산 월순익 {tp['net']/1e4:+.1f}만 "
+                  f"(그리드 {tp['grid']/1e4:.1f} + 리워드 {tp['reward']/1e4:.1f} + MTM {tp['mtm']/1e4:+.1f})"
+                  f" · 월거래량 {tp['vol']/1e8:.2f}억")
+        else:
+            print("▶ 부스트 모드 (거래량 극대화 — 월초 목표 조기 달성)")
+            print(_fmt(r.get("boost"), is_u))
+            print("▶ 일반 모드  (스프레드 수익 극대화 — 목표 달성 후)")
+            print(_fmt(r.get("normal"), is_u))
+            dl = r.get("dual")
+            if dl:
+                print(f"▶ 듀얼 모드  (1σ 부스트 + 2σ 일반 · 1σ자본 {dl.get('inner_ratio',0)*100:.0f}%)")
+                print(f"  · 1σ 부스트 leg:\n{_fmt(dl.get('inner'), is_u)}")
+                print(f"  · 2σ 일반 leg:\n{_fmt(dl.get('outer'), is_u)}")
+                print(f"  → 합산 월순익 {dl['net']/1e4:+.1f}만 "
+                      f"(그리드 {dl['grid']/1e4:.1f} + 리워드 {dl['reward']/1e4:.1f} + MTM {dl['mtm']/1e4:+.1f})"
+                      f" · 월거래량 {dl['vol']/1e8:.2f}억")
         print(f"{'='*64}")
         print(f"  소요: {time.time()-t0:.1f}s")
