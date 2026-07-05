@@ -452,8 +452,10 @@ def get_intervals(
     prev_vol: float = Query(default=1e9, ge=0.0),
     target_month: Optional[str] = Query(default=None, description="YYYY-MM (기본: 이번달)"),
     refresh: bool = Query(default=False, description="캐시 무시하고 재계산"),
+    vol_target: float = Query(default=0.0, ge=0.0,
+                              description="USDT 트리플 배분 탐색용 월 거래량 목표(KRW). 0=순익 최대"),
 ):
-    """1분봉 기반 부스트/일반 모드 최적 매수·매도 간격 추정.
+    """1분봉 기반 최적 전략 추정 (BTC: 3모드 간격 / USDT: 트리플 + 최적 자본배분).
 
     매월 1회 산출 후 캐시 — target_month가 같으면 재계산하지 않는다(refresh=true 예외).
     box_lower/upper는 prediction_service.predict_as_of로 자동 산출.
@@ -475,7 +477,7 @@ def get_intervals(
     deployed = capital * (1 - krw_hold)
     deployed *= (1 - btc_ratio) if market.endswith("USDT") else btc_ratio
 
-    cache_key = f"{market}_{target_month}_{int(deployed)}_{int(prev_vol)}_{months}"
+    cache_key = f"{market}_{target_month}_{int(deployed)}_{int(prev_vol)}_{months}_{int(vol_target)}"
     if not refresh and cache_key in _intervals_cache:
         cached = dict(_intervals_cache[cache_key])
         cached["cached"] = True
@@ -488,6 +490,7 @@ def get_intervals(
             deployed_krw=deployed,
             lookback_months=months,
             prev_vol_monthly=prev_vol,
+            usdt_vol_target=vol_target,
         )
     except Exception as e:
         raise HTTPException(status_code=422, detail=f"간격 추정 실패: {e}")

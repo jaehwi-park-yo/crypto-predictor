@@ -745,13 +745,16 @@
               </div>
             </div>
             <div class="sim-out" id="sim-triple-total" style="margin-top:10px;background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:10px 14px"></div>
+            <div id="usdt-alloc-reco" style="margin-top:8px;background:var(--panel);border:1px dashed rgba(38,161,123,.45);border-radius:8px;padding:9px 14px;font-size:.82rem"></div>
             <div class="sim-note">
               🔱 세 전략이 <b>같은 가격대에 중복으로</b> 걸립니다: 1σ 구간에서는 T1+T2+T3 모두 체결(거래량 극대),
               1σ~1.5σ는 T2+T3, 1.5σ~2σ는 T3만 동작(하락 방어·수익).<br>
               📐 T1(1/1원)은 그리드 자체는 수수료(왕복 ≈1.12원)에 못 미쳐 손실이지만 <b>거래량→리워드</b>로 만회하는 구조.
               T3(1/3원)가 스프레드 순익을 담당합니다.<br>
               ⚠️ 리워드는 세 leg <b>합산 거래량</b>에 티어 요율 1회 적용(월 300만 상한) — leg별 중복 계산하지 않습니다.
-              간격은 고정 전략이며 조정 기능은 제거되었습니다.
+              간격은 고정 전략이며 조정 기능은 제거되었습니다.<br>
+              ⚖️ <b>최적 배분 추정</b>: 5% 단위·leg 최소 10% 격자 탐색. 사이드바 <b>거래량 목표</b>가 설정돼 있으면
+              "목표 충족 중 순익 최대", 없으면 "순익 최대" 배분을 추천합니다. 적용 시 카드·P&L·도넛에 반영.
             </div>
           </div>
 
@@ -1604,8 +1607,8 @@ function updateMetrics() {
   const usdtCap  = investable * (1 - btcRatio);
   const innerBtc  = btcCap * innerRatio;
   const outerBtc  = btcCap * (1 - innerRatio);
-  // USDT 트리플: 내부존 비율 슬라이더와 무관하게 3 leg 균등 배분 (고정 전략)
-  const usdtLegCap = usdtCap / 3;
+  // USDT 트리플: 내부존 비율 슬라이더와 무관 — 적용 중인 배분 가중치(기본 균등) 사용
+  const usdtLegCaps = usdtAllocWeights.map(w => usdtCap * w);
 
   const btcInnerBots = btcZoneBots('inner');
   const btcOuterBots = btcZoneBots('outer');
@@ -1627,7 +1630,7 @@ function updateMetrics() {
   setEl('si-btco-bots', btcOuterBots + '개');
   setEl('si-btco-pbot', fmt(Math.round(outerBtc/btcOuterBots)) + '원');
 
-  for (const k of USDT_LEGS) setEl(`si-${k}-cap`, fmtM(usdtLegCap)+'원');
+  USDT_LEGS.forEach((k, i) => setEl(`si-${k}-cap`, fmtM(usdtLegCaps[i])+'원'));
   // USDT 카드 봇수/봇당자본/순익은 updatePnlTable()이 트리플 계산 기준으로 갱신
 
   // BTC tab zone table
@@ -1641,7 +1644,7 @@ function updateMetrics() {
   setEl('btc-outer-pct',  Math.round((1-innerRatio)*100)+'%');
 
   // USDT 트리플 leg 자본 동기화 (3등분) + 존별 상세 테이블
-  for (const k of USDT_LEGS) usdtSim[k].cap = usdtLegCap;
+  USDT_LEGS.forEach((k, i) => { usdtSim[k].cap = usdtLegCaps[i]; });
   syncUsdtDetail();
   if (typeof syncBhCapDisplay === 'function') syncBhCapDisplay();
   if (window._chartUSDT) renderUsdtTriple();
@@ -1654,18 +1657,18 @@ function updateMetrics() {
   const pct = (v) => Math.round(v/investable*100);
   setEl('leg-btc-inner',  `BTC 내부존 (1σ) — ${fmtM(innerBtc)} (${pct(innerBtc)}%)`);
   setEl('leg-btc-outer',  `BTC 외부존 (2σ) — ${fmtM(outerBtc)} (${pct(outerBtc)}%)`);
-  setEl('leg-usdt-t1', `USDT T1 (1σ 1/1) — ${fmtM(usdtLegCap)} (${pct(usdtLegCap)}%)`);
-  setEl('leg-usdt-t2', `USDT T2 (1.5σ 1/2) — ${fmtM(usdtLegCap)} (${pct(usdtLegCap)}%)`);
-  setEl('leg-usdt-t3', `USDT T3 (2σ 1/3) — ${fmtM(usdtLegCap)} (${pct(usdtLegCap)}%)`);
+  setEl('leg-usdt-t1', `USDT T1 (1σ 1/1) — ${fmtM(usdtLegCaps[0])} (${pct(usdtLegCaps[0])}%)`);
+  setEl('leg-usdt-t2', `USDT T2 (1.5σ 1/2) — ${fmtM(usdtLegCaps[1])} (${pct(usdtLegCaps[1])}%)`);
+  setEl('leg-usdt-t3', `USDT T3 (2σ 1/3) — ${fmtM(usdtLegCaps[2])} (${pct(usdtLegCaps[2])}%)`);
   setEl('leg-krw', `KRW 예비금 — ${fmtM(totalCap * krwHold)} (총자본 ${Math.round(krwHold*100)}%)`);
 
   // Redraw donut
   drawDonut([
-    {value: innerBtc,   color: '#4f8ef7'},
-    {value: outerBtc,   color: '#ff7f0e'},
-    {value: usdtLegCap, color: '#26a17b'},
-    {value: usdtLegCap, color: '#5bc5a5'},
-    {value: usdtLegCap, color: '#a0d8a0'},
+    {value: innerBtc,       color: '#4f8ef7'},
+    {value: outerBtc,       color: '#ff7f0e'},
+    {value: usdtLegCaps[0], color: '#26a17b'},
+    {value: usdtLegCaps[1], color: '#5bc5a5'},
+    {value: usdtLegCaps[2], color: '#a0d8a0'},
   ]);
 }
 
@@ -1773,6 +1776,8 @@ const USDT_LEGS = ['t1', 't2', 't3'];
 // 하방 집중 배분(BH) 시뮬 호환 별칭 — inner=T1(1σ), outer=T3(2σ 전체 밴드)
 usdtSim.inner = usdtSim.t1;
 usdtSim.outer = usdtSim.t3;
+// 적용 중인 leg 자본배분 가중치 (기본 균등 1/3) — '⚖️ 최적 배분 적용' 시 갱신
+let usdtAllocWeights = [1/3, 1/3, 1/3];
 // 5분봉 해상도 과소측정 보정계수 — 실측(2026-03~06, 90일 1m/5m):
 //   로그수익률 기반 그리드 교차 비율 1m/5m = 2.11 (gi=0.2~1.0% 전구간 일치)
 //   실현변동성 비율 1.03 → 미세구조 노이즈 무시 가능. config.py VOLUME_RESOLUTION_COEF와 동일값 유지.
@@ -2527,11 +2532,11 @@ function estimatePortfolio(totalCap, btcRatio, innerRatio, krwHold) {
   const bi = calcBtcStrat(btcCap * innerRatio, 'inner');
   const bo = calcBtcStrat(btcCap * (1 - innerRatio), 'outer', true);  // combined: P&L표와 동일 모델
   let btcVol = bi.vol + bo.vol, usdtVol = 0, net = bi.net + bo.net;
-  // USDT 트리플: innerRatio 무관, leg 균등(1/3) 배분 고정
-  for (const k of USDT_LEGS) {
-    const r = calcUsdt({ ...usdtSim[k], cap: usdtCap / 3 });
+  // USDT 트리플: innerRatio 무관 — 적용 중인 배분 가중치 사용
+  USDT_LEGS.forEach((k, i) => {
+    const r = calcUsdt({ ...usdtSim[k], cap: usdtCap * usdtAllocWeights[i] });
     usdtVol += r.vol; net += r.totalNet;
-  }
+  });
   return { vol: btcVol + usdtVol, net, btcVol, usdtVol };
 }
 function recommendParams(targetVolKrw) {
@@ -2651,7 +2656,9 @@ function renderUsdtTriple() {
   const tot = document.getElementById('sim-triple-total');
   if (tot) {
     const col = tp.totalNet >= 0 ? '#4ec94e' : '#d62728';
+    const wStr = usdtAllocWeights.map(w => Math.round(w*100) + '%').join(' / ');
     tot.innerHTML =
+      `<div class="so-item"><span>적용 배분 (T1/T2/T3)</span><span>${wStr}</span></div>`+
       `<div class="so-item"><span>합산 월 거래량</span><span>${(tp.vol/1e8).toFixed(2)}억</span></div>`+
       `<div class="so-item"><span>합산 그리드 순익</span><span style="color:${tp.netGrid>=0?'#4ec94e':'#d62728'}">${sign(tp.netGrid)}</span></div>`+
       `<div class="so-item"><span>월 리워드 (합산 거래량 1회)</span><span>${fmt(Math.round(tp.reward))}원</span></div>`+
@@ -2659,7 +2666,79 @@ function renderUsdtTriple() {
         `<span style="font-weight:700;color:var(--text)">트리플 월 총순익</span>`+
         `<span style="font-size:1.05rem;color:${col}">${sign(tp.totalNet)} (월 ${tp.monthlyPct.toFixed(2)}%)</span></div>`;
   }
+  renderUsdtAllocReco();   // 최적 배분 추정 갱신
   updateBhSim();   // BH 시뮬(T1/T3 별칭) 연동 갱신
+}
+
+// ─── ⚖️ USDT 트리플 최적 자본배분 추정 ─────────────────────────────────────
+// leg 결과가 자본에 선형(거래횟수는 자본과 무관)이므로 가중치 격자 탐색으로 충분.
+// 5% 스텝 · leg 최소 10%. 목적: 거래량 목표(사이드바 volTarget) 있으면
+// '목표 충족 중 순익 최대'(미달 시 거래량 최대 폴백), 없으면 '순익 최대'.
+function recommendUsdtAlloc() {
+  const totalCap = USDT_LEGS.reduce((a, k) => a + usdtSim[k].cap, 0);
+  if (totalCap <= 0) return null;
+  const volTarget = (+(document.getElementById('volTarget')?.value) || 0) * 1e8;
+  // 자본 1원당 계수 (선형 스케일)
+  const per = USDT_LEGS.map(k => {
+    const r = calcUsdt({ ...usdtSim[k], cap: totalCap / 3 });
+    return { vol: r.vol / (totalCap / 3), grid: r.netGrid / (totalCap / 3) };
+  });
+  const evalW = ws => {
+    const vol  = ws.reduce((a, w, i) => a + per[i].vol  * w * totalCap, 0);
+    const grid = ws.reduce((a, w, i) => a + per[i].grid * w * totalCap, 0);
+    const net  = grid + usdtReward(vol);
+    return { vol, net };
+  };
+  const STEP = 0.05, MIN_W = 0.10;
+  let best = null, bestVol = null;
+  for (let w1 = MIN_W; w1 <= 1 - 2*MIN_W + 1e-9; w1 += STEP) {
+    for (let w2 = MIN_W; w2 <= 1 - w1 - MIN_W + 1e-9; w2 += STEP) {
+      const ws = [w1, w2, 1 - w1 - w2].map(w => Math.round(w*100)/100);
+      const { vol, net } = evalW(ws);
+      const cand = { weights: ws, vol, net };
+      if (!bestVol || vol > bestVol.vol) bestVol = cand;
+      const feasible = volTarget <= 0 || vol >= volTarget;
+      if (feasible && (!best || net > best.net)) best = cand;
+    }
+  }
+  const pick = best || bestVol;
+  const eq = evalW([1/3, 1/3, 1/3]);
+  return { ...pick, reached: !!best, volTarget,
+           dNet: pick.net - eq.net, dVol: pick.vol - eq.vol };
+}
+function renderUsdtAllocReco() {
+  const el = document.getElementById('usdt-alloc-reco');
+  if (!el) return;
+  const r = recommendUsdtAlloc();
+  if (!r) { el.innerHTML = '<span style="color:var(--muted)">자본 미설정</span>'; return; }
+  const wStr = r.weights.map(w => Math.round(w*100) + '%').join(' / ');
+  const isApplied = usdtAllocWeights.every((w, i) => Math.abs(w - r.weights[i]) < 0.005);
+  const goalStr = r.volTarget > 0
+    ? (r.reached ? `목표 ${(r.volTarget/1e8).toFixed(0)}억 충족 중 순익 최대`
+                 : `⚠️ 목표 미달 — 거래량 최대 조합`)
+    : '순익 최대 (거래량 목표 미설정)';
+  const dN = (r.dNet/1e4).toFixed(1), dV = (r.dVol/1e8).toFixed(2);
+  el.innerHTML =
+    `<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+      <span>추천 배분 <b style="color:var(--usdt)">T1/T2/T3 = ${wStr}</b>
+        <span style="font-size:.72rem;color:var(--muted)">(${goalStr})</span></span>
+      <span style="font-size:.76rem;color:var(--muted)">균등 대비: 순익 <span style="color:${r.dNet>=0?'#4ec94e':'#d62728'}">${r.dNet>=0?'+':''}${dN}만</span> · 거래량 <span style="color:${r.dVol>=0?'#4ec94e':'#d62728'}">${r.dVol>=0?'+':''}${dV}억</span></span>
+      ${isApplied
+        ? '<span style="font-size:.76rem;color:#4ec94e">✔ 적용 중</span>'
+        : `<button onclick="applyUsdtAlloc()" style="padding:3px 10px;font-size:.76rem;background:rgba(38,161,123,.18);color:var(--usdt);border:1px solid rgba(38,161,123,.45);border-radius:5px;cursor:pointer">⚖️ 이 배분 적용</button>`}
+      ${usdtAllocWeights.some(w => Math.abs(w - 1/3) > 0.005)
+        ? `<button onclick="resetUsdtAlloc()" style="padding:3px 10px;font-size:.76rem;background:transparent;color:var(--muted);border:1px solid var(--border);border-radius:5px;cursor:pointer">균등 복원</button>` : ''}
+    </div>`;
+}
+function applyUsdtAlloc() {
+  const r = recommendUsdtAlloc();
+  if (!r) return;
+  usdtAllocWeights = r.weights.slice();
+  updateMetrics();   // 자본 재배분 → 카드/P&L/도넛/시뮬 전체 갱신
+}
+function resetUsdtAlloc() {
+  usdtAllocWeights = [1/3, 1/3, 1/3];
+  updateMetrics();
 }
 
 // ─── USDT 차트 ──────────────────────────────────────────────────────────────
@@ -3541,9 +3620,23 @@ function _ivTripleRows(tp) {
   }).join('');
   const net = (tp.net/1e4).toFixed(1);
   const netColor = tp.net >= 0 ? 'var(--pos,#2ca02c)' : 'var(--neg,#d62728)';
-  return rows + `<tr><td style="font-weight:700">🔱 합산</td><td style="text-align:right">
+  let out = rows + `<tr><td style="font-weight:700">🔱 합산 (균등)</td><td style="text-align:right">
     <span style="font-size:.74rem;color:var(--muted)">거래량 ${(tp.vol/1e8).toFixed(2)}억 · 리워드 ${(tp.reward/1e4).toFixed(1)}만 · 순익 </span><span style="font-size:.74rem;color:${netColor}">${net>=0?'+':''}${net}만</span>
   </td></tr>`;
+  // 백엔드 최적 배분 추정 (1분봉 시뮬 기반)
+  const al = tp.alloc;
+  if (al && al.weights) {
+    const wStr = al.weights.map(w => Math.round(w*100) + '%').join('/');
+    const aNet = (al.net/1e4).toFixed(1);
+    const dNet = (al.vs_equal?.net_delta/1e4 || 0).toFixed(1);
+    const goal = al.vol_target > 0 ? (al.target_reached ? `목표 ${(al.vol_target/1e8).toFixed(0)}억 충족` : '⚠️ 목표 미달') : '순익 최대';
+    out += `<tr><td style="font-weight:700;color:var(--usdt)">⚖️ 최적 배분</td><td style="text-align:right">
+      <b>${wStr}</b> <span style="font-size:.68rem;color:var(--muted)">(${goal})</span><br>
+      <span style="font-size:.74rem;color:var(--muted)">거래량 ${(al.vol/1e8).toFixed(2)}억 · 순익 </span><span style="font-size:.74rem;color:${al.net>=0?'var(--pos,#2ca02c)':'var(--neg,#d62728)'}">${aNet>=0?'+':''}${aNet}만</span>
+      <span style="font-size:.7rem;color:var(--muted)"> (균등 대비 ${dNet>=0?'+':''}${dNet}만)</span>
+    </td></tr>`;
+  }
+  return out;
 }
 function _ivRender(tblId, data, isUsdt) {
   const el = document.getElementById(tblId);
@@ -3575,7 +3668,9 @@ async function fetchIntervals(force) {
     // 예측 대상월(다음달 모드면 7월)을 명시 전달 — 미전달 시 백엔드가 이번달로 추정해
     // 화면의 예측 박스권과 다른 달 기준이 되는 불일치를 막는다.
     const tgtMonth = getPredictionContext().targetMonth;
-    const qs = `capital=${capital}&prev_vol=${prevVol}&months=3&target_month=${tgtMonth}${force ? '&refresh=true' : ''}`;
+    // 거래량 목표(사이드바)가 설정돼 있으면 USDT 트리플 배분 탐색 목적함수로 전달
+    const volTgtKrw = (+(document.getElementById('volTarget')?.value) || 0) * 1e8;
+    const qs = `capital=${capital}&prev_vol=${prevVol}&months=3&target_month=${tgtMonth}&vol_target=${volTgtKrw}${force ? '&refresh=true' : ''}`;
     const [btcRes, usdtRes] = await Promise.all([
       fetch(`${API_BASE}/api/intervals?market=KRW-BTC&btc_ratio=0.6&${qs}`, {signal: AbortSignal.timeout(60000)}).then(r => r.ok ? r.json() : {error:'서버 오류 '+r.status}),
       fetch(`${API_BASE}/api/intervals?market=KRW-USDT&btc_ratio=0.6&${qs}`, {signal: AbortSignal.timeout(60000)}).then(r => r.ok ? r.json() : {error:'서버 오류 '+r.status}),

@@ -78,8 +78,22 @@
 - **리워드**: 세 leg 합산 거래량에 티어 요율 1회 적용(월 300만 상한) — leg별 중복 계산 금지.
 - **활동률(잠정)**: T1=1.0 / T2=0.82 / T3=0.64 — 밴드가 넓을수록 가장자리 봇 유휴 증가.
   2σ=0.64는 기존 가중활성 실측치, 1.5σ=0.82는 선형 보간. **7월 실측으로 캘리브레이션 예정.**
-- 산출: `optimize_intervals(market="KRW-USDT")` → `{"strategy":"triple", "triple":{legs, vol, grid, reward, net}}`
+- 산출: `optimize_intervals(market="KRW-USDT")` → `{"strategy":"triple", "triple":{legs, vol, grid, reward, net, alloc}}`
   (boost/normal/dual은 USDT에서 항상 None).
+
+### 최적 자본배분 추정 (alloc)
+
+- leg 시뮬 결과(거래량·그리드·MTM)가 **자본에 선형**(거래횟수는 자본과 무관, 봇당자본 ∝ 자본)임을
+  이용해, leg당 1회 시뮬 후 **가중치 격자 탐색**(5% 스텝, leg 최소 10%)으로 최적 배분을 찾는다.
+  리워드만 비선형(합산 거래량 티어 요율 × 300만 상한)이라 조합별 직접 평가.
+- **목적함수**:
+  - 거래량 목표 설정 시(`vol_target`/사이드바 거래량 목표): **목표 충족 조합 중 순익 최대**
+    (전 조합 미달 시 거래량 최대 조합 폴백 + 미달 표시)
+  - 목표 없음: **순익(그리드+MTM+리워드) 최대**
+- 산출 경로 2곳 (동일 로직):
+  - 백엔드 `_optimize_triple_alloc` → `/api/intervals` 응답 `triple.alloc` (1분봉 시뮬 기반, 간격 추정 패널 표시)
+  - 프론트 `recommendUsdtAlloc()` → USDT 탭 트리플 패널에 실시간 추천 표시,
+    `⚖️ 이 배분 적용` 시 `usdtAllocWeights` 갱신 → 카드/P&L/도넛/시뮬 전체 반영, `균등 복원` 지원.
 
 ## 로컬 앱 산출 구조
 

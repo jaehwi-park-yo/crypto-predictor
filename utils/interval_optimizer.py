@@ -282,6 +282,60 @@ def _best_interval(
     return best
 
 
+def _optimize_triple_alloc(legs: List[Dict], deployed: float, rate: float,
+                           vol_target: float = 0.0,
+                           step: float = 0.05, min_w: float = 0.10) -> Dict:
+    """트리플 leg 최적 자본배분 탐색 (가중치 격자, 기본 5% 스텝 · leg 최소 10%).
+
+    leg 시뮬 결과(grid/mtm/vol)는 자본에 선형 → 균등배분(1/3) 결과를 단위환산해
+    가중치 조합만 평가한다. 리워드는 합산 거래량에 티어 요율 1회(비선형: 300만 상한).
+
+    목적함수:
+      vol_target > 0 : 거래량 ≥ 목표 조합 중 순익 최대 (미달 시 거래량 최대 폴백)
+      vol_target = 0 : 순익(그리드+MTM+리워드) 최대
+    """
+    # 균등배분 시뮬의 자본 → 자본 1원당 계수
+    per = []
+    for l in legs:
+        c = max(l["cap"], 1e-9)
+        per.append({"vol": l["vol"] / c, "gm": (l["grid"] + l["mtm"]) / c})
+
+    def _eval(ws):
+        vol = sum(per[i]["vol"] * ws[i] * deployed for i in range(3))
+        gm  = sum(per[i]["gm"]  * ws[i] * deployed for i in range(3))
+        reward = min(vol * rate, MAX_REWARD)
+        return vol, gm + reward, reward
+
+    best = None          # 목적 충족 최적
+    best_vol = None      # 폴백: 거래량 최대
+    n_steps = int(round((1 - 3 * min_w) / step)) + 1
+    for i in range(n_steps):
+        w1 = min_w + i * step
+        for j in range(n_steps):
+            w2 = min_w + j * step
+            w3 = 1.0 - w1 - w2
+            if w3 < min_w - 1e-9:
+                continue
+            ws = (round(w1, 2), round(w2, 2), round(w3, 2))
+            vol, net, reward = _eval(ws)
+            cand = {"weights": list(ws), "vol": vol, "net": net, "reward": reward}
+            if best_vol is None or vol > best_vol["vol"]:
+                best_vol = cand
+            feasible = vol_target <= 0 or vol >= vol_target
+            if feasible and (best is None or net > best["net"]):
+                best = cand
+
+    pick = best or best_vol
+    reached = best is not None
+    # 균등배분 대비 개선폭
+    eq_vol, eq_net, _ = _eval((1/3, 1/3, 1/3))
+    pick["caps"] = [round(w * deployed) for w in pick["weights"]]
+    pick["vol_target"] = vol_target
+    pick["target_reached"] = reached
+    pick["vs_equal"] = {"net_delta": pick["net"] - eq_net, "vol_delta": pick["vol"] - eq_vol}
+    return pick
+
+
 def _combine_dual(inner: Optional[Dict], outer: Optional[Dict],
                   prev_vol_monthly: float) -> Optional[Dict]:
     """듀얼모드 결합: 1σ 부스트(inner) + 2σ 일반(outer) leg을 합산.
@@ -321,6 +375,7 @@ def optimize_intervals(
     lookback_months: int = 3,
     prev_vol_monthly: float = 1e9,
     dual_inner_ratio: float = 0.6,
+    usdt_vol_target: float = 0.0,   # USDT 트리플 배분 탐색용 월 거래량 목표(KRW, 0=순익최대)
 ) -> Dict:
     """
     1분봉(또는 5분봉 폴백)으로 부스트/일반 모드 최적 간격을 각각 산출.
@@ -440,6 +495,12 @@ def optimize_intervals(
             "cap_per_leg": cap_leg,
             "n_months": max((l.get("n_months", 0) for l in valid), default=0),
         } if valid else None
+
+        # 최적 자본배분 탐색 — leg 결과가 자본에 선형(거래횟수는 자본과 무관,
+        # 봇당자본 ∝ 자본)이므로 leg당 1회 시뮬 값으로 가중치만 탐색하면 된다.
+        if triple and len(valid) == len(legs):
+            triple["alloc"] = _optimize_triple_alloc(
+                legs, deployed_krw, rate, vol_target=usdt_vol_target)
 
         return {
             "market":      market,
