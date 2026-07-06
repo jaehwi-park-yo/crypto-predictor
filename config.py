@@ -68,6 +68,8 @@ DCA_SIZE_EACH_PCT = 0.33   # Layer B의 33%씩 투입 (3회 = 100%)
 
 # 하방 데드존 재설정 트리거 (연속 이탈일 초과 시 레인지 재설정 권고)
 DEAD_ZONE_RESET_DAYS = 8   # 8일 연속 하단 이탈 → 재설정 권고
+# (2026-07 백테스트: 단축(3/5일)은 최악월 악화 — 손절 후 재진입 연쇄. 8일+서킷 2% 조합이
+#  스윕 내 최적. reports/reset_circuit_backtest.py, docs/mtm_circuit_breaker.md 후속 절 참조)
 
 # MTM 서킷브레이커 (2026-07 백테스트: reports/mtm_circuit_backtest.py, 103개월 walk-forward)
 # 가상 그리드 미실현 손실(MTM)이 투입자본의 θ를 넘으면 "신규 매수 정지" 권고.
