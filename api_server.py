@@ -477,7 +477,10 @@ def get_intervals(
     deployed = capital * (1 - krw_hold)
     deployed *= (1 - btc_ratio) if market.endswith("USDT") else btc_ratio
 
-    cache_key = f"{market}_{target_month}_{int(deployed)}_{int(prev_vol)}_{months}_{int(vol_target)}"
+    # vol_target은 USDT 트리플 배분에만 쓰이므로 BTC 캐시 키에서는 0으로 정규화
+    # (목표 변경 때마다 BTC까지 수십 초 재계산되는 불필요 캐시 미스 방지)
+    _vt_key = int(vol_target) if market.endswith("USDT") else 0
+    cache_key = f"{market}_{target_month}_{int(deployed)}_{int(prev_vol)}_{months}_{_vt_key}"
     if not refresh and cache_key in _intervals_cache:
         cached = dict(_intervals_cache[cache_key])
         cached["cached"] = True

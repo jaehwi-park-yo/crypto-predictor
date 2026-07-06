@@ -253,8 +253,13 @@ def _best_interval(
                     feasible = avg_grid >= 0
                     better = best is None or (feasible and avg_vol > best["vol"])
                     # 적격 후보가 하나도 없을 때를 대비해 net 기준 폴백도 허용
-                    if best is not None and not best.get("_feasible", True) and feasible:
-                        better = True
+                    if best is not None and not best.get("_feasible", True):
+                        if feasible:
+                            better = True
+                        else:
+                            # 전 조합 infeasible이면 net 최대 조합을 폴백으로 유지
+                            # (최초 후보 고수 시 최악의 수수료 잠식 간격이 추천될 수 있음)
+                            better = avg_net > best["net"]
                 else:
                     feasible = True
                     better = best is None or avg_net > best["net"]
@@ -442,7 +447,10 @@ def optimize_intervals(
     if is_usdt:
         # ── USDT: 고정 트리플 오버레이 (탐색 없음) ──────────────────────
         # 1σ 1/1원 + 1.5σ 1/2원 + 2σ 1/3원을 동시에 중복 운영. 자본 3등분.
-        ref = _USDT_REF
+        # ref는 박스 중점 사용 — 상수(1450) 고정 시 실가격과 어긋나 "1원 간격"의
+        # % 환산이 편향돼 거래량·순익이 체계적으로 왜곡됨(±3%대).
+        # buy/sell 목표가 같은 ref를 쓰므로 m 스텝 매핑은 ref와 무관하게 정확.
+        ref = (box_lower + box_upper) / 2 if (box_lower and box_upper) else _USDT_REF
         def _krw_to_pct(krw): return krw / ref * 100
 
         # 밴드: 자동산출 시 band_1s/2s 확보. 1.5σ는 선형 중간값(밴드가 ref(1±k·σ)라 정확).
@@ -611,6 +619,8 @@ if __name__ == "__main__":
 
     if args.json:
         print(json.dumps(r, ensure_ascii=False, indent=2, default=str))
+    elif r.get("error"):
+        print(f"\n⚠️ {r['error']}")
     else:
         is_u = args.market.endswith("USDT")
         tag  = "1m" if r.get("unit") == 1 else f"{r.get('unit','?')}m(폴백)"

@@ -101,7 +101,8 @@
   - `boost`, `normal`: 단일 박스(권장 밴드) 격자 탐색.
   - `dual`: 1σ 밴드 부스트 + 2σ 밴드 일반을 각각 산출 후, 거래량 합산·리워드 1회 적용으로 결합.
     반환에 `inner`(1σ 부스트 leg)·`outer`(2σ 일반 leg) 상세 포함.
-- `/api/intervals` 응답에 세 모드 모두 포함. `index.html` 간격 추정 패널에 3행으로 표시.
+- `/api/intervals` 응답: BTC는 `strategy:'modes'`(boost/normal/dual 3행), USDT는 `strategy:'triple'`
+  (T1/T2/T3 leg + 합산 + alloc — boost/normal/dual은 None). 간격 추정 패널이 자동 분기 렌더.
 
 ## 확정 대기 (거래내역 확보 후 캘리브레이션)
 

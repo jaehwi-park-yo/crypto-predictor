@@ -201,23 +201,49 @@ def _restore_fx(zf: zipfile.ZipFile) -> int:
     return len(converted)
 
 
+def _seed_newer_than_cache(seed: Path) -> bool:
+    """시드 ZIP의 daily_btc 마지막 날짜가 현재 캐시보다 최신이면 True.
+
+    데이터가 이미 찬 설치본이라도 '더 새로운 시드'(패치로 갱신 배포)는 적용해야 한다.
+    판정 실패 시 False (기존 skip 동작 유지 — 보수적).
+    """
+    try:
+        with zipfile.ZipFile(seed, "r") as zf:
+            rows = _read_csv_from_zip(zf, "daily_btc.csv")
+        seed_last = max((r.get("date", "") for r in rows), default="")
+        if not seed_last:
+            return False
+        cached = json.loads(BTC_CACHE.read_text(encoding="utf-8"))
+        cache_last = max((c.get("date", "") for c in cached), default="")
+        return seed_last > cache_last
+    except Exception:
+        return False
+
+
 def restore_from_seed(force: bool = False) -> bool:
     """
-    시드 ZIP이 있고 DB/캐시가 비어있으면 복원한다.
+    시드 ZIP이 있으면 복원한다. DB/캐시가 이미 차 있어도 시드가 더 최신이면 복원
+    (갱신 시드 배포 반영). force=True 면 무조건 복원.
 
-    force=True 면 DB/캐시 유무와 관계없이 강제 복원.
     반환값: 복원 수행 여부.
     """
     seed = _seed_available()
     if seed is None:
         return False
 
-    # 일봉 캐시·분봉 DB(1m 포함)가 모두 차 있을 때만 건너뜀.
-    # 시드가 1m을 포함하므로, 5m만 있는 기존 설치자도 1m을 자동 복원받는다.
-    # (복원 후 zip → .imported rename + INSERT OR IGNORE라 중복 위험 없음)
+    # 일봉 캐시·분봉 DB(1m 포함)가 모두 차 있고, 시드가 더 최신도 아니면 건너뜀.
+    # (INSERT OR IGNORE + 일봉은 최신 시드만 덮어쓰므로 중복/역행 위험 없음)
     if not force and _cache_has_data() and _db_has_1m():
-        logger.info("[시드] 일봉 캐시·1분봉 DB 모두 존재 — 시드 복원 건너뜀 (%s)", seed.name)
-        return False
+        if not _seed_newer_than_cache(seed):
+            logger.info("[시드] 데이터 최신 — 복원 불필요, %s → .imported 처리", seed.name)
+            # skip 상태를 UI가 '대기 중'으로 오인하지 않도록 완료 표시로 전환
+            try:
+                SEED_DONE_PATH.unlink(missing_ok=True)
+                seed.rename(SEED_DONE_PATH)
+            except Exception as e:
+                logger.warning("[시드] rename 실패 (무시): %s", e)
+            return False
+        logger.info("[시드] 갱신 시드 감지(캐시보다 최신) — 복원 진행")
 
     logger.info("[시드] 복원 시작: %s (%.1f MB)", seed, seed.stat().st_size / 1e6)
     try:

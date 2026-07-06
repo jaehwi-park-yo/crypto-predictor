@@ -2,6 +2,7 @@
 title BTC Grid Prediction — 패치 적용
 cd /d "%~dp0"
 chcp 65001 > nul 2>&1
+setlocal enabledelayedexpansion
 
 echo ====================================================
 echo  BTC Grid Prediction — 패치 적용 도구
@@ -64,12 +65,13 @@ echo  start.bat 을 실행해 서버를 다시 시작하세요.
 echo ====================================================
 echo.
 if exist CHANGELOG.md (
-    echo  변경 이력 (CHANGELOG.md):
+    echo  변경 이력 (CHANGELOG.md 최신 항목):
     echo  ──────────────────────────
+    rem 최신 버전 헤더부터 15줄 출력 (첫 줄 제목만 나오던 문제 수정)
+    set /a _cl=0
     for /f "usebackq delims=" %%l in (CHANGELOG.md) do (
-        echo  %%l
-        goto :show_done
+        set /a _cl+=1
+        if !_cl! leq 16 echo  %%l
     )
-    :show_done
 )
 pause

@@ -29,7 +29,9 @@ from pathlib import Path
 ROOT = Path(__file__).parent
 
 # 패치에 포함할 최상위 Python 패키지/모듈 디렉토리
-SRC_DIRS = ["agents", "models", "services", "utils", "gui"]
+# docs 포함 — index.html이 docs/데이터셋_적용_매뉴얼.txt를 안내하므로 배포 필수.
+# utils/update_check.py의 _SRC_DIRS와 동일하게 유지할 것.
+SRC_DIRS = ["agents", "models", "services", "utils", "gui", "docs"]
 SRC_FILES = [
     "api_server.py", "config.py", "main.py", "backtest.py", "make_pdf.py",
     "requirements.txt", "index.html",

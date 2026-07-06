@@ -32,7 +32,7 @@ ROOT = Path(__file__).parent.parent
 _TIMEOUT = 10
 
 # 업데이트로 덮어쓸 대상 — make_patch.py 의 패치 구성과 동일
-_SRC_DIRS = {"agents", "models", "services", "utils", "gui"}
+_SRC_DIRS = {"agents", "models", "services", "utils", "gui", "docs"}  # make_patch.py와 동일 유지
 _SRC_FILES = {
     "api_server.py", "config.py", "main.py", "backtest.py", "make_pdf.py",
     "requirements.txt", "index.html",
