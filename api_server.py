@@ -196,6 +196,35 @@ def _monitor_chart_bundle(snap, history, today, history_days):
     """
     # monitor() 호출
     mon_obj = None
+
+    def _virtual_grid_mtm(closes, lower, upper, buy_pct, sell_pct, cur_price):
+        """월초부터의 일봉 종가로 가상 단일인벤토리 그리드를 재현해
+        현재가 기준 미실현 MTM(투입자본 대비 비율)을 추정한다.
+        MTM 서킷브레이커 권고(config.MTM_CIRCUIT_THRESHOLD)의 입력.
+        """
+        import math as _m
+        if (not closes or not lower or not upper or upper <= lower
+                or not buy_pct or cur_price <= 0):
+            return 0.0
+        b = buy_pct / 100.0
+        m_step = max(1, round((sell_pct or buy_pct) / buy_pct))
+        lvl = lambda p: int(_m.floor(_m.log(min(max(p, lower), upper) / lower) / _m.log(1 + b)))
+        bots = max(1, _m.ceil((upper - lower) / lower * 100 / buy_pct))
+        held = set()
+        prev = lvl(closes[0])
+        for p in closes[1:]:
+            cur = lvl(p)
+            if cur < prev:
+                held.update(range(cur + 1, prev + 1))
+            elif cur > prev:
+                for l in [l for l in held if l <= cur - m_step]:
+                    held.discard(l)
+            prev = cur
+        if not held:
+            return 0.0
+        # 자본 대비 비율: 봇당 자본 = 1/bots
+        return sum(cur_price / (lower * (1 + b) ** l) - 1.0 for l in held) / bots
+
     try:
         history_fallback = get_history()
         fallback_btc = float(history_fallback[-1]["close"]) if history_fallback else None
@@ -224,6 +253,23 @@ def _monitor_chart_bundle(snap, history, today, history_days):
             "consec_up":   mon_obj.consec_breach_upper,
             "reset_rec":   mon_obj.reset_recommended,
         }
+        # MTM 서킷브레이커 — 대상월 내 일봉 종가로 가상 그리드 MTM 추정
+        try:
+            from config import MTM_CIRCUIT_THRESHOLD, MTM_CIRCUIT_RESUME
+            _ty, _tm = map(int, snap.target_month.split("-"))
+            _start = f"{_ty:04d}-{_tm:02d}-01"
+            _closes = [float(c["close"]) for c in history
+                       if _start <= c["date"] <= today.isoformat()]
+            _vm = _virtual_grid_mtm(
+                _closes, snap.recommended_lower, snap.recommended_upper,
+                snap.buy_interval_pct, snap.sell_interval_pct,
+                mon_obj.current_price or (_closes[-1] if _closes else 0))
+            mon_data["vmtm_pct"] = round(_vm * 100, 2)
+            mon_data["vmtm_trip"] = _vm <= -MTM_CIRCUIT_THRESHOLD
+            mon_data["vmtm_th"] = MTM_CIRCUIT_THRESHOLD * 100
+            mon_data["vmtm_resume"] = MTM_CIRCUIT_THRESHOLD * MTM_CIRCUIT_RESUME * 100
+        except Exception:
+            pass  # 가상 MTM은 부가 지표 — 실패해도 모니터 자체는 유지
     except Exception as e:
         import logging as _log
         _log.getLogger("api_server").warning("[dashboard] monitor() 실패: %s", e)

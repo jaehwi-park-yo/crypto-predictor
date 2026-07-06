@@ -69,6 +69,15 @@ DCA_SIZE_EACH_PCT = 0.33   # Layer B의 33%씩 투입 (3회 = 100%)
 # 하방 데드존 재설정 트리거 (연속 이탈일 초과 시 레인지 재설정 권고)
 DEAD_ZONE_RESET_DAYS = 8   # 8일 연속 하단 이탈 → 재설정 권고
 
+# MTM 서킷브레이커 (2026-07 백테스트: reports/mtm_circuit_backtest.py, 103개월 walk-forward)
+# 가상 그리드 미실현 손실(MTM)이 투입자본의 θ를 넘으면 "신규 매수 정지" 권고.
+# 보유분 익절 매도는 계속, MTM이 θ×RESUME 이내로 회복되면 재개(히스테리시스).
+# 근거: 평균 손익은 θ에 둔감(월 ±2만, 노이즈)하나 꼬리 위험이 극적으로 감소 —
+#   최악월 −222만→−102만, 최악 드로다운 −279만→−116만 (θ=2%), 거래량 −24%.
+#   과열 사전필터는 데이터 기각(docs/box_model_review_202607.md) → 사후 대응이 정답.
+MTM_CIRCUIT_THRESHOLD = 0.02   # 투입자본 대비 2% 미실현 손실 시 발동
+MTM_CIRCUIT_RESUME = 0.5       # θ의 50%(=자본 1%) 이내 회복 시 매수 재개
+
 # KRW holding ratio: Layer A 기준으로 계산 (기존 호환)
 KRW_HOLD_RATIO = 1.0 - LAYER_A_RATIO_BTC  # = 0.40 (Layer B+C 합산)
 

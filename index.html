@@ -1013,6 +1013,10 @@
           <div id="deadzone-alert" style="display:none;padding:12px 16px;border-radius:8px;
                background:#3a1a1a;border:1px solid #d62728;font-size:.85rem;line-height:1.6"></div>
 
+          <!-- MTM 서킷브레이커 (가상 그리드 미실현 손실 기반 — 발동/주의 시에만 표시) -->
+          <div id="mtm-circuit-alert" style="display:none;padding:12px 16px;border-radius:8px;
+               font-size:.85rem;line-height:1.6;border:1px solid transparent"></div>
+
           <div class="info-grid">
             <div class="info-card">
               <h3>🏦 듀얼레이어 자본 배분</h3>
@@ -2993,6 +2997,25 @@ function updateMonitorPanel() {
       dzAlert.style.borderColor = m.reset_rec ? '#d62728' : '#d4b44a';
     } else {
       dzAlert.style.display = 'none';
+    }
+  }
+
+  // MTM 서킷브레이커 — 가상 그리드 미실현 손실(자본 대비 %) 기반 신규매수 정지 권고
+  // 근거: 103개월 백테스트 — 평균 손익 중립, 최악월 −222만→−102만 (θ=2%).
+  const mcAlert = document.getElementById('mtm-circuit-alert');
+  if (mcAlert) {
+    const v = m.vmtm_pct, th = m.vmtm_th || 2, rs = m.vmtm_resume || 1;
+    if (typeof v === 'number' && m.vmtm_trip) {
+      mcAlert.innerHTML = `🚨 <b>MTM 서킷브레이커 발동</b> — 가상 그리드 미실현 손실 <b>${v.toFixed(2)}%</b> ≤ −${th}% (투입자본 대비)<br>` +
+        `<b style="color:#ff6b6b">신규 매수 정지 권고.</b> 보유분 익절 매도만 유지하고, MTM이 −${rs}% 이내로 회복되면 재개하세요.`;
+      mcAlert.style.display = 'block';
+      mcAlert.style.background = '#3a1a1a'; mcAlert.style.borderColor = '#d62728'; mcAlert.style.color = '#e8b4b4';
+    } else if (typeof v === 'number' && v <= -(th * 0.5)) {
+      mcAlert.innerHTML = `🟡 <b>MTM 주의</b> — 가상 그리드 미실현 손실 ${v.toFixed(2)}% (발동 기준 −${th}%). 인벤토리 누적 추이를 모니터링하세요.`;
+      mcAlert.style.display = 'block';
+      mcAlert.style.background = '#332a1a'; mcAlert.style.borderColor = '#d4b44a'; mcAlert.style.color = '#d4c49a';
+    } else {
+      mcAlert.style.display = 'none';
     }
   }
 
